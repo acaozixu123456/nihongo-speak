@@ -740,3 +740,30 @@ h2 span { font-family: -apple-system, "PingFang SC", sans-serif; font-size: 12px
 .lv-poster .small-text { color: rgba(255, 255, 255, 0.8); }
 .lv-poster .brush { grid-area: brush; background: rgba(255, 255, 255, 0.2); margin-top: 22px; }
 .lv-poster .brush div { background: #fff; }
+
+/* ---- Quick-response drill ---- */
+.quickgo {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 1fr;
+  margin: 26px 0 0;
+  padding: 18px 20px;
+  border-radius: 22px;
+  background: var(--ink);
+  color: var(--on-ink);
+  text-decoration: none;
+}
+.quickgo:active { transform: scale(0.98); }
+.quickgo-k { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-family: var(--serif-ja); font-size: 110px; line-height: 1; color: var(--accent); }
+.quickgo-t { position: relative; font-family: var(--serif); font-size: 24px; font-weight: 700; }
+.quickgo-d, .quickgo-ms { position: relative; font-size: 13px; opacity: 0.75; }
+.quickgo-ms { opacity: 1; color: var(--accent); font-weight: 600; margin-top: 4px; }
+.qtimer { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-family: var(--serif); font-size: 22px; font-weight: 700; color: var(--accent); }
+.qtimer-bar { flex: 1; height: 8px; border-radius: 4px; background: var(--card-2); overflow: hidden; }
+.qtimer-bar div { height: 100%; background: var(--accent); transition: width 0.1s linear; }
+.qtimer.over { color: var(--muted); font-size: 15px; }
+.qtime { font-weight: 700; margin-bottom: 8px; }
+.qrow { display: flex; gap: 12px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.qrow:last-child { border-bottom: none; }
+.qrow > span { flex: none; width: 44px; font-weight: 700; }

@@ -7,12 +7,13 @@ import { stop as stopAudio, unlock } from "@/lib/client/player";
 type Props = {
   label?: string;
   disabled?: boolean;
+  onStart?: () => void;
   onRecorded: (wav: Blob) => void;
   onError: (message: string) => void;
 };
 
 // Press and hold to record, release to finish.
-export default function HoldButton({ label = "按住说话", disabled, onRecorded, onError }: Props) {
+export default function HoldButton({ label = "按住说话", disabled, onStart, onRecorded, onError }: Props) {
   const recorder = useRef<Recorder | null>(null);
   const starting = useRef<Promise<void> | null>(null);
   const [recording, setRecording] = useState(false);
@@ -25,6 +26,7 @@ export default function HoldButton({ label = "按住说话", disabled, onRecorde
     stopAudio();
     recorder.current ??= new Recorder();
     setRecording(true);
+    onStart?.();
     starting.current = recorder.current.start().catch((err: unknown) => {
       setRecording(false);
       onError(err instanceof Error && err.name === "NotAllowedError" ? "需要允许使用麦克风" : "无法打开麦克风");

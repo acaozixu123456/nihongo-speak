@@ -125,6 +125,19 @@ export default function Stats() {
         <div className="small-text">跟读和复习时 Azure 给的发音分。往上走说明发音在进步。</div>
       </div>
 
+      <h2>瞬间说：平均几秒开口（每周）</h2>
+      <div className="card">
+        <Line
+          unit="秒"
+          data={ws.map((w, i) => ({
+            label: `${md(w.from)}–${md(w.to)}`,
+            tick: i % 2 === 1 ? md(w.to) : undefined,
+            value: w.quickMs === null ? null : Math.round(w.quickMs / 100) / 10,
+          }))}
+        />
+        <div className="small-text">看到中文到开始说日语用了几秒。往下走，说明开口越来越快了。</div>
+      </div>
+
       <h2>开口时长（每周分钟）</h2>
       <div className="card">
         <Bars

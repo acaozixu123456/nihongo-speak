@@ -2,7 +2,16 @@ import { addDays, dayKey, type DiaryEntry, type Progress } from "@/lib/progress-
 
 // Numbers for "how much did I actually practise, and am I getting better".
 
-export type Totals = { speakSec: number; said: number; pron: number | null; listenLines: number; xp: number; days: number };
+export type Totals = {
+  speakSec: number;
+  said: number;
+  pron: number | null;
+  listenLines: number;
+  xp: number;
+  days: number;
+  quickMs: number | null; // average reaction time in the quick-response drill
+  quickSpoke: number;
+};
 
 export function totals(p: Progress, from: string, to: string): Totals {
   let speakSec = 0;
@@ -12,6 +21,8 @@ export function totals(p: Progress, from: string, to: string): Totals {
   let listenLines = 0;
   let xp = 0;
   let days = 0;
+  let quickMsSum = 0;
+  let quickSpoke = 0;
   for (let d = from; d <= to; d = addDays(d, 1)) {
     const s = p.stats[d];
     if (s) {
@@ -20,11 +31,22 @@ export function totals(p: Progress, from: string, to: string): Totals {
       pronSum += s.pronSum ?? 0;
       pronN += s.pronN ?? 0;
       listenLines += s.listenLines ?? 0;
+      quickMsSum += s.quickMsSum ?? 0;
+      quickSpoke += s.quickSpoke ?? 0;
     }
     xp += p.days[d] ?? 0;
     if ((p.days[d] ?? 0) > 0) days++;
   }
-  return { speakSec, said, pron: pronN ? Math.round(pronSum / pronN) : null, listenLines, xp, days };
+  return {
+    speakSec,
+    said,
+    pron: pronN ? Math.round(pronSum / pronN) : null,
+    listenLines,
+    xp,
+    days,
+    quickMs: quickSpoke ? Math.round(quickMsSum / quickSpoke) : null,
+    quickSpoke,
+  };
 }
 
 export const allTime = (p: Progress) => {

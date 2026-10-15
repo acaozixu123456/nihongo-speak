@@ -116,6 +116,13 @@ export default function Today() {
         <Week p={p} />
       </section>
 
+      <Link href="/quick" className="quickgo">
+        <span className="quickgo-k" aria-hidden>瞬</span>
+        <span className="quickgo-t">瞬间说</span>
+        <span className="quickgo-d">看中文，3 秒内开口 · 10 题</span>
+        {t.quickMs !== null && <span className="quickgo-ms">今天平均 {(t.quickMs / 1000).toFixed(1)} 秒</span>}
+      </Link>
+
       <h2 className="big-h">
         課題<span>今日任务 · 向左滑</span>
       </h2>

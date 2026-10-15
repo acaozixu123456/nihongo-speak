@@ -112,7 +112,7 @@ export default function Review() {
               <div style={{ fontSize: 48 }}>✅</div>
               <p>今天没有要复习的了</p>
               <p className="muted">已收藏 {p.cards.length} 句，到期的会自动出现。</p>
-              <Link href="/">回到今天 →</Link>
+              <Link href="/quick">去练瞬间说 →</Link>
             </>
           )}
         </div>

@@ -40,6 +40,7 @@ export const XP = {
   feedback: 10,
   review: 2,
   diary: 15,
+  quick: 2,
   quests: 10,
 };
 
@@ -255,6 +256,79 @@ export function recordSpeech(sec: number, pron?: number) {
       pronN: (s.pronN ?? 0) + (pron === undefined ? 0 : 1),
     })),
   );
+}
+
+// ---- Quick-response drill ----
+
+export const QUICK_LIMIT_MS = 3000;
+
+export type QuickItem = {
+  key: string;
+  ja: string;
+  reading?: string;
+  zh: string;
+  voice: string;
+  scenarioId: string;
+  where: string; // the situation the line comes from, e.g. "☀️ 早会汇报进度 · 佐藤"
+};
+
+// Short lines only: the drill is about getting a sentence out in a few seconds.
+const QUICK_MAX_CHARS = 32;
+
+// Saved cards first, then lines from scenarios the learner has worked on, then the rest.
+export function quickPool(p: Progress): QuickItem[] {
+  const all = allScenarios(p);
+  const byId = new Map(all.map((s) => [s.id, s]));
+  const fromCards: QuickItem[] = p.cards.map((c) => {
+    const s = byId.get(c.scenarioId);
+    return { key: c.id, ja: c.ja, reading: c.reading, zh: c.zh, voice: c.voice, scenarioId: c.scenarioId, where: s ? `${s.icon} ${s.titleZh} · 收藏` : "收藏" };
+  });
+  const touched = (s: Scenario) => {
+    const sp = p.scenarios[s.id];
+    return !!sp && (sp.listened || Object.keys(sp.shadow ?? {}).length > 0 || (sp.talked ?? 0) > 0);
+  };
+  const fromLines = (list: Scenario[]): QuickItem[] =>
+    list.flatMap((s) =>
+      s.lines
+        .filter((l) => l.ja.length <= QUICK_MAX_CHARS)
+        .map((l) => ({
+          key: `${s.id}:${l.ja}`,
+          ja: l.ja,
+          reading: l.kana,
+          zh: l.zh,
+          voice: l.voice,
+          scenarioId: s.id,
+          where: `${s.icon} ${s.titleZh} · ${l.speaker}`,
+        })),
+    );
+  const seen = new Set<string>();
+  return [...fromCards, ...fromLines(all.filter(touched)), ...fromLines(all.filter((s) => !touched(s)))].filter((i) => {
+    if (seen.has(i.ja)) return false;
+    seen.add(i.ja);
+    return true;
+  });
+}
+
+// Pick n prompts, mostly from the front of the pool (cards and practised scenarios).
+export function quickRound(p: Progress, n = 10): QuickItem[] {
+  const pool = quickPool(p);
+  const front = pool.slice(0, Math.max(n * 2, 20));
+  const shuffle = <T,>(x: T[]) => x.map((v) => [Math.random(), v] as const).sort((a, b) => a[0] - b[0]).map(([, v]) => v);
+  return shuffle(front).slice(0, n);
+}
+
+// One prompt answered (or skipped): reaction time in ms, or null if the learner didn't speak.
+export function recordQuick(ms: number | null) {
+  const spoke = ms !== null;
+  let next = bumpStats(read(), (s) => ({
+    ...s,
+    quickN: (s.quickN ?? 0) + 1,
+    quickSpoke: (s.quickSpoke ?? 0) + (spoke ? 1 : 0),
+    quickMsSum: (s.quickMsSum ?? 0) + (ms ?? 0),
+    quickFast: (s.quickFast ?? 0) + (spoke && ms <= QUICK_LIMIT_MS ? 1 : 0),
+  }));
+  if (spoke) next = gainXp(next, XP.quick, "quick");
+  write(next);
 }
 
 export function markListened(s: Scenario) {

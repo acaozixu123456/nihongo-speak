@@ -20,7 +20,7 @@ export type ScenarioProgress = {
   talked?: number; // conversations finished with feedback
 };
 
-export type XpKind = "scene" | "diary" | "review" | "bonus";
+export type XpKind = "scene" | "diary" | "review" | "quick" | "bonus";
 
 // What happened on one day, for the 成长 page.
 export type DayStats = {
@@ -29,6 +29,12 @@ export type DayStats = {
   pronSum?: number; // sum of pronunciation scores, with pronN scored utterances
   pronN?: number;
   listenLines?: number; // dialogue lines played back in full-scenario listening
+  // Quick-response drill: prompts shown, how many the learner answered, total ms
+  // from prompt to starting to speak, and how many answers started within 3s.
+  quickN?: number;
+  quickSpoke?: number;
+  quickMsSum?: number;
+  quickFast?: number;
   xp?: Partial<Record<XpKind, number>>;
 };
 
