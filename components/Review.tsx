@@ -80,8 +80,11 @@ export default function Review() {
     return (
       <main>
         <header className="page-mast">
-          <h1>復習</h1>
-          <p className="muted">复习 · 按 1、3、7、14 天的间隔再说一遍</p>
+          <span className="icon" aria-hidden>⛩️</span>
+          <div>
+            <h1>神社</h1>
+            <p className="muted">复习 · 按 1、3、7、14 天的间隔再说一遍</p>
+          </div>
         </header>
         <div className="card">
           <p style={{ marginTop: 0 }}>还没有收藏的句子。</p>
@@ -90,7 +93,7 @@ export default function Review() {
           </p>
           <Link href="/">去练习 →</Link>
         </div>
-        <Nav on="review" />
+        <Nav on="town" />
       </main>
     );
   }
@@ -99,8 +102,11 @@ export default function Review() {
     return (
       <main>
         <header className="page-mast">
-          <h1>復習</h1>
-          <p className="muted">复习 · 按 1、3、7、14 天的间隔再说一遍</p>
+          <span className="icon" aria-hidden>⛩️</span>
+          <div>
+            <h1>神社</h1>
+            <p className="muted">复习 · 按 1、3、7、14 天的间隔再说一遍</p>
+          </div>
         </header>
         <div className="card flash">
           {due.length > 0 ? (
@@ -119,7 +125,7 @@ export default function Review() {
             </>
           )}
         </div>
-        <Nav on="review" />
+        <Nav on="town" />
       </main>
     );
   }
@@ -128,8 +134,11 @@ export default function Review() {
     return (
       <main>
         <header className="page-mast">
-          <h1>復習</h1>
-          <p className="muted">复习 · 按 1、3、7、14 天的间隔再说一遍</p>
+          <span className="icon" aria-hidden>⛩️</span>
+          <div>
+            <h1>神社</h1>
+            <p className="muted">复习 · 按 1、3、7、14 天的间隔再说一遍</p>
+          </div>
         </header>
         <div className="card flash">
           <div style={{ fontSize: 48 }}>🎉</div>
@@ -140,11 +149,9 @@ export default function Review() {
               <Link href="/weak">看 AI 找出的薄弱点 →</Link>
             </p>
           )}
-          <Link href="/" className="go">
-            <div className="cta" style={{ marginTop: 0 }}>回到今天 →</div>
-          </Link>
+          <Link href="/" className="btn primary next-cta" style={{ display: "block" }}>回到小镇 →</Link>
         </div>
-        <Nav on="review" />
+        <Nav on="town" />
       </main>
     );
   }

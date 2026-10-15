@@ -6,7 +6,11 @@
 
 type AudioSessionNavigator = Navigator & { audioSession?: { type: string } };
 
-function setAudioSession(type: "play-and-record" | "playback") {
+let live = false;
+// True while the mic is open; playback leaves the audio session alone then.
+export const isRecording = () => live;
+
+export function setAudioSession(type: "play-and-record" | "playback") {
   const s = (navigator as AudioSessionNavigator).audioSession;
   if (s) s.type = type;
 }
@@ -18,14 +22,21 @@ export class Recorder {
   private chunks: Float32Array[] = [];
 
   async start() {
+    live = true;
     setAudioSession("play-and-record");
     const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     this.ctx = this.ctx ?? new Ctx();
     // Must happen inside the tap; awaiting getUserMedia first would lose the gesture.
     const resumed = this.ctx.resume();
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-    });
+    try {
+      this.stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+    } catch (e) {
+      live = false;
+      setAudioSession("playback");
+      throw e;
+    }
     await resumed;
     const source = this.ctx.createMediaStreamSource(this.stream);
     this.node = this.ctx.createScriptProcessor(4096, 1, 1);
@@ -38,6 +49,7 @@ export class Recorder {
   }
 
   stop(): Blob {
+    live = false;
     this.node?.disconnect();
     this.node = null;
     // Releasing the mic puts iOS back into normal speaker playback.

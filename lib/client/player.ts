@@ -1,5 +1,7 @@
 "use client";
 
+import { isRecording, setAudioSession } from "./recorder";
+
 // iOS Safari only lets an <audio> element play without a tap once that same element
 // has been played from a tap. So every sound goes through one shared element, and
 // unlock() is called at the start of each tap that will later play audio.
@@ -50,6 +52,9 @@ export function stop() {
 // Resolves when playback ends or is stopped.
 export function play(src: string, playbackRate = rate): Promise<void> {
   stop();
+  // A recording that never closed properly leaves iPhone in call mode, where sound
+  // goes to the quiet earpiece. Playback always switches back to the speaker.
+  if (!isRecording()) setAudioSession("playback");
   const a = el();
   return new Promise((resolve, reject) => {
     const done = () => {

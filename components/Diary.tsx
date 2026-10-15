@@ -236,8 +236,14 @@ export default function Diary() {
 
   return (
     <main>
-      <Link href="/" className="muted">← 今天</Link>
-      <h1>一分钟口语日记</h1>
+      <Link href="/" className="back">← 小镇</Link>
+      <header className="page-mast">
+        <span className="icon" aria-hidden>🏠</span>
+        <div>
+          <h1>自宅</h1>
+          <p className="muted">一分钟口语日记 · 说说今天</p>
+        </div>
+      </header>
 
       {phase !== "done" && (
         <div className="card prompt-card">
@@ -315,7 +321,7 @@ export default function Diary() {
           })}
         </>
       )}
-      <Nav on="today" />
+      <Nav on="town" />
     </main>
   );
 }

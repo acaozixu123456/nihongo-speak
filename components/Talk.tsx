@@ -16,6 +16,7 @@ import {
   wavSeconds,
   type Progress,
 } from "@/lib/client/progress";
+import { npc } from "@/lib/client/game";
 import HoldButton from "./HoldButton";
 
 type Message = Turn & { zh?: string };
@@ -163,13 +164,36 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
   }
 
   const userTurns = messages.filter((m) => m.role === "user").length;
+  const who = npc(scenario);
+  // Affinity grows with every reply the learner manages, up to five hearts.
+  const hearts = Math.min(5, userTurns);
 
   return (
     <div>
-      <div className="card">
-        <div className="muted">对方：{talk.aiRole}</div>
-        <div className="muted">你：{talk.userRole}</div>
-        <p style={{ marginBottom: 0 }}>{talk.goalZh}</p>
+      <div className="npc-top">
+        <div className="win">
+          {who.name} <span className="small-text">好感度</span>
+          <div className="hearts" aria-label={`好感度 ${hearts} / 5`}>
+            {"♥".repeat(hearts)}
+            <span style={{ opacity: 0.35 }}>{"♥".repeat(5 - hearts)}</span>
+          </div>
+        </div>
+        <div className="win">
+          回合 {userTurns}
+          <div className="small-text">EXP +{userTurns * 3}</div>
+        </div>
+      </div>
+      <div className="stage" aria-hidden>
+        <span className="npc">{who.sprite}</span>
+        <span className="me">🧑‍💼</span>
+        {userTurns > 0 && userTurns <= 5 && (
+          <span key={userTurns} className="like">好感度 +1 ♥</span>
+        )}
+      </div>
+      <div className="card goal-win">
+        <div>🎯 目标：{talk.goalZh}</div>
+        <div className="small-text" style={{ marginTop: 4 }}>对方：{talk.aiRole}</div>
+        <div className="small-text">你：{talk.userRole}</div>
         <div className="row" style={{ marginTop: 10 }}>
           <button className="primary" onClick={start} disabled={!!busy}>
             {messages.length ? "重新开始" : "开始对话"}
@@ -254,11 +278,9 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
               </div>
             </div>
           ))}
-          <p className="muted">收藏的句子会出现在「复习」里，隔几天提醒你说一遍。</p>
+          <p className="muted">收藏的句子会出现在神社（复习）里，隔几天提醒你说一遍。</p>
           <div className="row">
-            <Link href="/" className="go" style={{ flex: 1, margin: 0, textAlign: "center" }}>
-              <div className="cta" style={{ marginTop: 0 }}>回到今天 →</div>
-            </Link>
+            <Link href="/" className="btn primary" style={{ flex: 1 }}>回到小镇 →</Link>
             <button onClick={start}>再来一次</button>
           </div>
         </div>

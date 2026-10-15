@@ -10,10 +10,10 @@ const IDEAS = {
   life: ["在区役所办住民票", "手机合约解约", "便利店寄快递", "租房看房问条件", "理发店说想要的发型", "跟邻居打招呼闲聊"],
 };
 
-export default function NewScenario() {
+export default function NewScenario(props: { topic?: string; category?: "work" | "life" }) {
   const router = useRouter();
-  const [category, setCategory] = useState<"work" | "life">("work");
-  const [topic, setTopic] = useState("");
+  const [category, setCategory] = useState<"work" | "life">(props.category ?? "work");
+  const [topic, setTopic] = useState(props.topic ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -40,9 +40,15 @@ export default function NewScenario() {
 
   return (
     <main>
-      <Link href="/scenes" className="muted">← 场景</Link>
-      <h1>生成新场景</h1>
-      <p className="muted" style={{ marginTop: 0 }}>
+      <Link href="/b/custom" className="back">← コンビニ</Link>
+      <header className="page-mast">
+        <span className="icon" aria-hidden>🏪</span>
+        <div>
+          <h1>入荷</h1>
+          <p className="muted">让 AI 写一个新场景</p>
+        </div>
+      </header>
+      <p className="muted">
         写一句你想练的情况，中文日文都行。越具体越好，比如「跟课长说明为什么测试延期了」。
       </p>
       <div className="card">
@@ -66,7 +72,7 @@ export default function NewScenario() {
           ))}
         </div>
         <button className="primary next-cta" onClick={generate} disabled={!topic.trim() || busy}>
-          {busy ? "AI 正在写对话，大约半分钟…" : "生成"}
+          {busy ? "AI 正在写对话，大约半分钟…" : "进货！生成新场景"}
         </button>
         {error && <p className="error">{error}</p>}
       </div>
