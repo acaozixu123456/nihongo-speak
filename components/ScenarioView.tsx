@@ -6,19 +6,24 @@ import type { Scenario } from "@/content/scenarios";
 import { stop } from "@/lib/client/player";
 import { findScenario, stepsDone, useProgress, type Step } from "@/lib/client/progress";
 import { useHydrated } from "@/lib/client/hydrated";
+import { BUILDINGS, buildingOf, buildingScenarios, npc, stars, starText } from "@/lib/client/game";
 import Listen from "./Listen";
 import Shadow from "./Shadow";
 import Talk from "./Talk";
 
 const TABS = [
-  { key: "listen", kanji: "聴", label: "精听" },
-  { key: "shadow", kanji: "読", label: "跟读" },
-  { key: "talk", kanji: "話", label: "对话" },
+  { key: "listen", icon: "👂", label: "偷听" },
+  { key: "shadow", icon: "🦜", label: "模仿说话" },
+  { key: "talk", icon: "💬", label: "对话" },
 ] as const;
 
 export default function ScenarioView({ scenario, step }: { scenario: Scenario; step?: Step }) {
   const [tab, setTab] = useState<Step>(step ?? "listen");
-  const done = stepsDone(useProgress(), scenario);
+  const p = useProgress();
+  const done = stepsDone(p, scenario);
+  const b = buildingOf(scenario, p);
+  const floor = buildingScenarios(p, b).findIndex((s) => s.id === scenario.id) + 1;
+  const where = b === "work" ? `${floor}F` : b === "life" ? `${floor}番` : `#${floor}`;
 
   function go(next: Step) {
     stop();
@@ -28,22 +33,23 @@ export default function ScenarioView({ scenario, step }: { scenario: Scenario; s
 
   return (
     <main>
-      <Link href="/scenes" className="muted">← 场景</Link>
+      <Link href={`/b/${b}`} className="back">← {BUILDINGS[b].name}</Link>
       <header className="scene-head">
         <div className="scene-icon">{scenario.icon}</div>
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="scene-where">
+            {BUILDINGS[b].icon} {BUILDINGS[b].name} {where} · {npc(scenario).name} <span className="y">{starText(stars(p, scenario))}</span>
+          </div>
           <h1>{scenario.titleZh}</h1>
           <div className="scene-ja">{scenario.title}</div>
         </div>
       </header>
       <div className="tabs steps">
-        {TABS.map((t, i) => (
+        {TABS.map((t) => (
           <button key={t.key} className={`${tab === t.key ? "on" : ""} ${done[t.key] ? "did" : ""}`} onClick={() => go(t.key)}>
-            <span className="step-k">{t.kanji}</span>
-            <span className="step-l">
-              {i + 1} · {t.label}
-              {done[t.key] && <span className="check"> ✓</span>}
-            </span>
+            <b>{t.icon}</b>
+            {t.label}
+            {done[t.key] && " ✓"}
           </button>
         ))}
       </div>
@@ -64,7 +70,7 @@ export function CustomScenarioView({ id, step }: { id: string; step?: Step }) {
   if (scenario) return <ScenarioView scenario={scenario} step={step} />;
   return (
     <main>
-      <Link href="/scenes" className="muted">← 场景</Link>
+      <Link href="/" className="back">← 小镇</Link>
       <p className="muted">{hydrated ? "找不到这个场景，可能已经删除了。" : "加载中…"}</p>
     </main>
   );

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { dayKey, onXp, useProgress, type XpEvent } from "@/lib/client/progress";
 import { formatDuration, totals } from "@/lib/client/metrics";
 import { chime, confetti } from "@/lib/client/fx";
+import { STATION_LEVEL, jobTitle } from "@/lib/client/game";
 
 type Celebration = { kind: "goal" | "level" | "quests" | "freeze"; event: XpEvent };
 
@@ -36,6 +37,7 @@ export default function Rewards() {
   );
 
   const current = queue[0];
+  const lvUp = current?.event.levelUp ?? 1;
   const close = () => setQueue((q) => q.slice(1));
   const today = dayKey();
   const t = totals(p, today, today);
@@ -48,7 +50,7 @@ export default function Rewards() {
         ))}
       </div>
       {current && (
-        <div className="overlay" onClick={close}>
+        <div className={`overlay ${current.kind === "level" ? "levelup" : ""}`} onClick={close}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             {current.kind === "goal" && (
               <>
@@ -83,8 +85,28 @@ export default function Rewards() {
             )}
             {current.kind === "level" && (
               <>
-                <div style={{ fontSize: 56 }}>⭐</div>
-                <h2>升到 Lv {current.event.levelUp}！</h2>
+                <div className="big">LEVEL UP!</div>
+                <div className="portrait">🧑‍💼</div>
+                <div className="rank">
+                  Lv.{lvUp - 1} {jobTitle(lvUp - 1)} → <span className="y">Lv.{lvUp} {jobTitle(lvUp)}</span>
+                </div>
+                <div className="loot win">
+                  <div className="y">▼ 获得奖励</div>
+                  <div>
+                    <span>🎖️ 新职位</span>
+                    <span>{jobTitle(lvUp)}</span>
+                  </div>
+                  {lvUp === STATION_LEVEL && (
+                    <div>
+                      <span>🚉 新地点解锁</span>
+                      <span>駅（问路·坐车）</span>
+                    </div>
+                  )}
+                  <div>
+                    <span>📈 今天开口</span>
+                    <span>{formatDuration(t.speakSec)} · {t.said} 句</span>
+                  </div>
+                </div>
                 <p className="muted">每一级都是实实在在开口练出来的。</p>
               </>
             )}
@@ -96,7 +118,7 @@ export default function Rewards() {
               </>
             )}
             <button className="primary" onClick={close}>
-              好的
+              ▶ 继续冒险
             </button>
           </div>
         </div>

@@ -26,7 +26,7 @@ export function chime(big = false) {
   } catch {}
 }
 
-const COLORS = ["#c7372f", "#e0a84a", "#284b73", "#1d1b18", "#e8b4a8"];
+const COLORS = ["#ff5a4f", "#ffd94a", "#7ce0ff", "#5ad35a", "#ffffff"];
 
 export function confetti(count = 60) {
   if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;

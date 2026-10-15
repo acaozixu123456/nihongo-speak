@@ -6,8 +6,8 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "日语练习",
     start_url: "/",
     display: "standalone",
-    background_color: "#f6f1e7",
-    theme_color: "#f6f1e7",
+    background_color: "#1b1340",
+    theme_color: "#1b1340",
     icons: [
       { src: "/icon", sizes: "512x512", type: "image/png" },
       { src: "/apple-icon", sizes: "180x180", type: "image/png" },

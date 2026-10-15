@@ -15,8 +15,7 @@ import { allTime, diaryMetrics, formatDuration, lastDays, weeks } from "@/lib/cl
 import { Bars, Line } from "./Charts";
 import Nav from "./Nav";
 import Reminders from "./Reminders";
-
-const TITLES = ["入门", "起步", "能听懂一点", "敢开口", "能应付日常", "职场能用", "说得自然", "流利", "达人"];
+import { jobTitle } from "@/lib/client/game";
 
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`;
 
@@ -44,18 +43,26 @@ export default function Stats() {
 
   return (
     <main>
-      <section className="lv lv-poster">
-        <h1>成長</h1>
-        <div className="lv-num">
-          <span>Lv</span>
-          <strong>{lv.n}</strong>
+      <header className="page-mast">
+        <span className="icon" aria-hidden>🏆</span>
+        <div>
+          <h1>成長</h1>
+          <p className="muted">ステータス · 你的冒险记录</p>
         </div>
-        <div className="lv-side">
-          <div className="hero-title">{TITLES[Math.min(lv.n - 1, TITLES.length - 1)]}</div>
-          <div className="small-text">累计 {xp} XP · 离 Lv {lv.n + 1} 还差 {lv.to - xp} XP</div>
+      </header>
+      <section className="win status">
+        <div className="avatar">🧑‍💼</div>
+        <div className="lvl">
+          Lv.{lv.n} {jobTitle(lv.n)}
         </div>
-        <div className="brush">
-          <div style={{ width: `${((xp - lv.from) / (lv.to - lv.from)) * 100}%` }} />
+        <div className="row" style={{ flexWrap: "nowrap" }}>
+          <span>EXP</span>
+          <div className="bar" style={{ flex: 1 }}>
+            <i style={{ width: `${((xp - lv.from) / (lv.to - lv.from)) * 100}%` }} />
+          </div>
+        </div>
+        <div className="small-text">
+          累计 {xp} EXP · 再 {lv.to - xp} EXP 升为「{jobTitle(lv.n + 1)}」
         </div>
       </section>
 

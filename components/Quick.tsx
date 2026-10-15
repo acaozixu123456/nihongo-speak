@@ -265,11 +265,14 @@ export default function Quick({ drill }: { drill?: string }) {
     return (
       <main>
         <div className="row spread">
-          <Link href="/weak" className="muted">← 薄弱点</Link>
+          <Link href="/weak" className="back">← 弱点の書</Link>
         </div>
         <header className="page-mast">
-          <h1>強化</h1>
-          <p className="muted">针对一个薄弱点的瞬间说</p>
+          <span className="icon" aria-hidden>📕</span>
+          <div>
+            <h1>強化</h1>
+            <p className="muted">针对一个薄弱点的瞬间说</p>
+          </div>
         </header>
         {!weakPoint ? (
           <div className="card">
@@ -310,7 +313,7 @@ export default function Quick({ drill }: { drill?: string }) {
             )}
           </div>
         )}
-        <Nav on="review" />
+        <Nav on="town" />
       </main>
     );
   }
@@ -323,8 +326,11 @@ export default function Quick({ drill }: { drill?: string }) {
     return (
       <main>
         <header className="page-mast">
-          <h1>瞬間</h1>
-          <p className="muted">瞬间说 · 看中文，3 秒内开口</p>
+          <span className="icon" aria-hidden>🥋</span>
+          <div>
+            <h1>道場</h1>
+            <p className="muted">瞬间说 · 看中文，3 秒内开口</p>
+          </div>
         </header>
         <div className="card">
           <p style={{ marginTop: 0 }}>
@@ -353,7 +359,7 @@ export default function Quick({ drill }: { drill?: string }) {
           <button className="primary next-cta" onClick={() => begin()}>开始</button>
         </div>
         <WeakTeaser />
-        <Nav on="review" />
+        <Nav on="town" />
       </main>
     );
   }
@@ -372,8 +378,11 @@ export default function Quick({ drill }: { drill?: string }) {
     return (
       <main>
         <header className="page-mast">
-          <h1>瞬間</h1>
-          <p className="muted">这一轮的结果</p>
+          <span className="icon" aria-hidden>🥋</span>
+          <div>
+            <h1>道場</h1>
+            <p className="muted">这一轮的结果</p>
+          </div>
         </header>
         <div className="card">
           <div className="kpis">
@@ -437,9 +446,9 @@ export default function Quick({ drill }: { drill?: string }) {
           </>
         )}
         <p style={{ textAlign: "center" }}>
-          <Link href="/" className="muted">回到今天</Link>
+          <Link href="/" className="muted">回到小镇</Link>
         </p>
-        <Nav on="review" />
+        <Nav on="town" />
       </main>
     );
   }

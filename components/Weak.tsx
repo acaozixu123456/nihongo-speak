@@ -12,8 +12,11 @@ export default function Weak() {
   return (
     <main>
       <header className="page-mast">
-        <h1>弱点</h1>
-        <p className="muted">薄弱点 · AI 从你每次开口里找出来的</p>
+        <span className="icon" aria-hidden>📕</span>
+        <div>
+          <h1>弱点の書</h1>
+          <p className="muted">薄弱点 · AI 从你每次开口里找出来的</p>
+        </div>
       </header>
       {list.length === 0 ? (
         <div className="card">
@@ -48,7 +51,7 @@ export default function Weak() {
         </div>
       )}
       {fixed > 0 && <p className="muted" style={{ textAlign: "center" }}>已经练好 {fixed} 个曾经的薄弱点。</p>}
-      <Nav on="review" />
+      <Nav on="bag" />
     </main>
   );
 }
