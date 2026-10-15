@@ -11,9 +11,17 @@ function escapeXml(s: string) {
   return s.replace(/[<>&'"]/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
-export async function synthesize(text: string, voice: string) {
+// A voice id is an Azure voice name, optionally followed by "@style".
+function ssml(text: string, voiceId: string) {
+  const [name, style] = voiceId.split("@");
+  const body = style
+    ? `<mstts:express-as style="${escapeXml(style)}">${escapeXml(text)}</mstts:express-as>`
+    : escapeXml(text);
+  return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="ja-JP"><voice name="${escapeXml(name)}">${body}</voice></speak>`;
+}
+
+export async function synthesize(text: string, voiceId: string) {
   const { key, region } = config();
-  const ssml = `<speak version="1.0" xml:lang="ja-JP"><voice name="${escapeXml(voice)}">${escapeXml(text)}</voice></speak>`;
   const res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
     method: "POST",
     headers: {
@@ -22,9 +30,9 @@ export async function synthesize(text: string, voice: string) {
       "X-Microsoft-OutputFormat": "audio-24khz-48kbitrate-mono-mp3",
       "User-Agent": "nihongo-speak",
     },
-    body: ssml,
+    body: ssml(text, voiceId),
   });
-  if (!res.ok) throw new Error(`Azure TTS ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(`Azure TTS ${res.status} for ${voiceId}: ${await res.text()}`);
   return res.arrayBuffer();
 }
 

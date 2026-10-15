@@ -24,10 +24,13 @@ export type Scenario = {
   };
 };
 
-const KACHO = "ja-JP-KeitaNeural";
-const SATO = "ja-JP-NanamiNeural";
+// Azure voice ids, optionally with "@style". Only Nanami has speaking styles in
+// Japanese, so she plays the AI's conversation partners in her casual "chat" and
+// polite "customerservice" styles. All of these are in the free F0 tier.
+const KACHO = "ja-JP-NanamiNeural@chat";
+const SATO = "ja-JP-MayuNeural";
 const SUZUKI = "ja-JP-DaichiNeural";
-const KANRI = "ja-JP-AoiNeural";
+const KANRI = "ja-JP-NanamiNeural@customerservice";
 
 export const scenarios: Scenario[] = [
   {
