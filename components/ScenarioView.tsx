@@ -11,9 +11,9 @@ import Shadow from "./Shadow";
 import Talk from "./Talk";
 
 const TABS = [
-  { key: "listen", label: "① 精听" },
-  { key: "shadow", label: "② 跟读" },
-  { key: "talk", label: "③ 对话" },
+  { key: "listen", kanji: "聴", label: "精听" },
+  { key: "shadow", kanji: "読", label: "跟读" },
+  { key: "talk", kanji: "話", label: "对话" },
 ] as const;
 
 export default function ScenarioView({ scenario, step }: { scenario: Scenario; step?: Step }) {
@@ -29,14 +29,21 @@ export default function ScenarioView({ scenario, step }: { scenario: Scenario; s
   return (
     <main>
       <Link href="/scenes" className="muted">← 场景</Link>
-      <h1>
-        {scenario.icon} {scenario.titleZh}
-      </h1>
-      <div className="muted">{scenario.title}</div>
-      <div className="tabs">
-        {TABS.map((t) => (
-          <button key={t.key} className={tab === t.key ? "on" : ""} onClick={() => go(t.key)}>
-            {t.label} {done[t.key] && <span className="check">✓</span>}
+      <header className="scene-head">
+        <div className="scene-icon">{scenario.icon}</div>
+        <div>
+          <h1>{scenario.titleZh}</h1>
+          <div className="scene-ja">{scenario.title}</div>
+        </div>
+      </header>
+      <div className="tabs steps">
+        {TABS.map((t, i) => (
+          <button key={t.key} className={`${tab === t.key ? "on" : ""} ${done[t.key] ? "did" : ""}`} onClick={() => go(t.key)}>
+            <span className="step-k">{t.kanji}</span>
+            <span className="step-l">
+              {i + 1} · {t.label}
+              {done[t.key] && <span className="check"> ✓</span>}
+            </span>
           </button>
         ))}
       </div>

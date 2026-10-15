@@ -76,7 +76,10 @@ export default function Review() {
   if (p.cards.length === 0) {
     return (
       <main>
-        <h1>复习</h1>
+        <header className="page-mast">
+          <h1>復習</h1>
+          <p className="muted">复习 · 按 1、3、7、14 天的间隔再说一遍</p>
+        </header>
         <div className="card">
           <p style={{ marginTop: 0 }}>还没有收藏的句子。</p>
           <p className="muted">
@@ -92,7 +95,10 @@ export default function Review() {
   if (!queue) {
     return (
       <main>
-        <h1>复习</h1>
+        <header className="page-mast">
+          <h1>復習</h1>
+          <p className="muted">复习 · 按 1、3、7、14 天的间隔再说一遍</p>
+        </header>
         <div className="card flash">
           {due.length > 0 ? (
             <>
@@ -118,7 +124,10 @@ export default function Review() {
   if (!card) {
     return (
       <main>
-        <h1>复习</h1>
+        <header className="page-mast">
+          <h1>復習</h1>
+          <p className="muted">复习 · 按 1、3、7、14 天的间隔再说一遍</p>
+        </header>
         <div className="card flash">
           <div style={{ fontSize: 48 }}>🎉</div>
           <p>今天的复习做完了</p>

@@ -44,50 +44,48 @@ export default function Stats() {
 
   return (
     <main>
-      <h1>成长</h1>
+      <header className="page-mast">
+        <h1>成長</h1>
+        <p className="muted">成长 · 每一级都是开口练出来的</p>
+      </header>
 
-      <div className="card">
-        <div className="row spread">
-          <div>
-            <div className="small-text">等级</div>
-            <div style={{ fontSize: 22, fontWeight: 800 }}>
-              Lv {lv.n} · {TITLES[Math.min(lv.n - 1, TITLES.length - 1)]}
-            </div>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div className="small-text">累计</div>
-            <div style={{ fontWeight: 700 }}>{xp} XP</div>
-          </div>
+      <section className="lv">
+        <div className="lv-num">
+          <span>Lv</span>
+          <strong>{lv.n}</strong>
         </div>
-        <div className="levelbar">
+        <div className="lv-side">
+          <div className="hero-title">{TITLES[Math.min(lv.n - 1, TITLES.length - 1)]}</div>
+          <div className="small-text">累计 {xp} XP · 离 Lv {lv.n + 1} 还差 {lv.to - xp} XP</div>
+        </div>
+        <div className="brush">
           <div style={{ width: `${((xp - lv.from) / (lv.to - lv.from)) * 100}%` }} />
         </div>
-        <div className="small-text">离 Lv {lv.n + 1} 还差 {lv.to - xp} XP</div>
-      </div>
+      </section>
 
       <h2>一共练了多少</h2>
-      <div className="grid2">
-        <div className="card kpi" style={{ margin: 0 }}>
+      <div className="grid2 ledger2">
+        <div className="kpi">
           <b>{formatDuration(all.speakSec)}</b>
           <span>开口说日语</span>
         </div>
-        <div className="card kpi" style={{ margin: 0 }}>
+        <div className="kpi">
           <b>{all.said} 句</b>
           <span>说过的句子</span>
         </div>
-        <div className="card kpi" style={{ margin: 0 }}>
+        <div className="kpi">
           <b>{all.listenLines} 句</b>
           <span>整段听过的句子</span>
         </div>
-        <div className="card kpi" style={{ margin: 0 }}>
+        <div className="kpi">
           <b>{mastered(p)} / {p.cards.length}</b>
           <span>掌握的表达 / 收藏</span>
         </div>
-        <div className="card kpi" style={{ margin: 0 }}>
+        <div className="kpi">
           <b>{finished}</b>
           <span>三步全部完成的场景</span>
         </div>
-        <div className="card kpi" style={{ margin: 0 }}>
+        <div className="kpi">
           <b>{p.diary.length} 篇</b>
           <span>口语日记</span>
         </div>
