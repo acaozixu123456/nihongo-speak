@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { Scenario } from "@/content/scenarios";
 import { play, setRate, ttsUrl, unlock } from "@/lib/client/player";
 import { transcribe, type SttResult } from "@/lib/client/recorder";
-import { hasCard, recordShadow, shadowTarget, toggleCard, useProgress } from "@/lib/client/progress";
+import { hasCard, recordShadow, recordSpeech, shadowTarget, toggleCard, useProgress, wavSeconds } from "@/lib/client/progress";
 import { confetti } from "@/lib/client/fx";
 import HoldButton from "./HoldButton";
 import { RatePicker } from "./Listen";
@@ -62,6 +62,7 @@ export default function Shadow({ scenario, active, onNext }: Props) {
         if (pron >= 80 && (best[index] ?? 0) < 80) confetti(40);
         recordShadow(scenario.id, index, pron);
       }
+      recordSpeech(wavSeconds(wav), result.scores?.pron);
     } catch (e) {
       setError(e instanceof Error ? e.message : "评分失败");
     } finally {

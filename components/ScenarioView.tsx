@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import type { Scenario } from "@/content/scenarios";
 import { stop } from "@/lib/client/player";
-import { stepsDone, useProgress, type Step } from "@/lib/client/progress";
+import { findScenario, stepsDone, useProgress, type Step } from "@/lib/client/progress";
+import { useHydrated } from "@/lib/client/hydrated";
 import Listen from "./Listen";
 import Shadow from "./Shadow";
 import Talk from "./Talk";
@@ -27,7 +28,7 @@ export default function ScenarioView({ scenario, step }: { scenario: Scenario; s
 
   return (
     <main>
-      <Link href="/" className="muted">← 今天</Link>
+      <Link href="/scenes" className="muted">← 场景</Link>
       <h1>
         {scenario.icon} {scenario.titleZh}
       </h1>
@@ -45,6 +46,19 @@ export default function ScenarioView({ scenario, step }: { scenario: Scenario; s
         <Shadow scenario={scenario} active={tab === "shadow"} onNext={() => go("talk")} />
       </div>
       <div hidden={tab !== "talk"}><Talk scenario={scenario} active={tab === "talk"} /></div>
+    </main>
+  );
+}
+
+export function CustomScenarioView({ id, step }: { id: string; step?: Step }) {
+  const p = useProgress();
+  const hydrated = useHydrated();
+  const scenario = findScenario(p, id);
+  if (scenario) return <ScenarioView scenario={scenario} step={step} />;
+  return (
+    <main>
+      <Link href="/scenes" className="muted">← 场景</Link>
+      <p className="muted">{hydrated ? "找不到这个场景，可能已经删除了。" : "加载中…"}</p>
     </main>
   );
 }

@@ -6,7 +6,16 @@ import type { Feedback, Hint, Turn } from "@/lib/claude";
 import { play, ttsUrl, unlock } from "@/lib/client/player";
 import { transcribe } from "@/lib/client/recorder";
 import Link from "next/link";
-import { hasCard, recordFeedback, recordTalkTurn, toggleCard, useProgress, type Progress } from "@/lib/client/progress";
+import {
+  hasCard,
+  recordFeedback,
+  recordSpeech,
+  recordTalkTurn,
+  toggleCard,
+  useProgress,
+  wavSeconds,
+  type Progress,
+} from "@/lib/client/progress";
 import HoldButton from "./HoldButton";
 
 type Message = Turn & { zh?: string };
@@ -79,6 +88,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
     try {
       const reply = await post<{ ja: string; zh: string; finished: boolean }>("/api/chat", {
         scenarioId: scenario.id,
+        talk,
         history: history(next),
       });
       setMessages([...next, { role: "assistant", text: reply.ja, zh: reply.zh }]);
@@ -102,6 +112,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
         setError("没听清，再说一次试试");
         return;
       }
+      recordSpeech(wavSeconds(wav));
       await send(text);
     } catch (e) {
       setBusy("");
@@ -116,6 +127,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
       setHint(
         await post<Hint>("/api/chat", {
           scenarioId: scenario.id,
+          talk,
           history: history(messages),
           mode: "hint",
           wantZh: wantZh.trim() || undefined,
@@ -132,7 +144,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
     setError("");
     setBusy("feedback");
     try {
-      setFeedback(await post<Feedback>("/api/feedback", { scenarioId: scenario.id, history: history(messages) }));
+      setFeedback(await post<Feedback>("/api/feedback", { scenarioId: scenario.id, talk, history: history(messages) }));
       recordFeedback(scenario.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "点评失败");

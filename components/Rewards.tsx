@@ -1,24 +1,33 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { onXp, type XpEvent } from "@/lib/client/progress";
+import { dayKey, onXp, useProgress, type XpEvent } from "@/lib/client/progress";
+import { formatDuration, totals } from "@/lib/client/metrics";
 import { chime, confetti } from "@/lib/client/fx";
 
-// Floating "+N XP" pills, and a celebration the first time today's goal is met.
+type Celebration = { kind: "goal" | "level" | "quests" | "freeze"; event: XpEvent };
+
+// Floating "+N XP" pills, and a celebration for goals, level-ups and full quest days.
 export default function Rewards() {
   const [pops, setPops] = useState<{ id: number; amount: number }[]>([]);
-  const [goal, setGoal] = useState<XpEvent | null>(null);
+  const [queue, setQueue] = useState<Celebration[]>([]);
+  const p = useProgress();
 
   useEffect(
     () =>
       onXp((e) => {
         const id = Date.now() + Math.random();
-        setPops((p) => [...p, { id, amount: e.amount }]);
-        setTimeout(() => setPops((p) => p.filter((x) => x.id !== id)), 1400);
-        if (e.goalReached) {
+        setPops((x) => [...x, { id, amount: e.amount }]);
+        setTimeout(() => setPops((x) => x.filter((y) => y.id !== id)), 1400);
+        const found: Celebration[] = [];
+        if (e.goalReached) found.push({ kind: "goal", event: e });
+        if (e.questsDone) found.push({ kind: "quests", event: e });
+        if (e.levelUp) found.push({ kind: "level", event: e });
+        if (e.freezeEarned) found.push({ kind: "freeze", event: e });
+        if (found.length) {
           chime(true);
           confetti(90);
-          setGoal(e);
+          setQueue((q) => [...q, ...found]);
         } else {
           chime();
         }
@@ -26,21 +35,69 @@ export default function Rewards() {
     [],
   );
 
+  const current = queue[0];
+  const close = () => setQueue((q) => q.slice(1));
+  const today = dayKey();
+  const t = totals(p, today, today);
+
   return (
     <>
       <div className="pops" aria-live="polite">
-        {pops.map((p) => (
-          <div key={p.id} className="pop">+{p.amount} XP</div>
+        {pops.map((x) => (
+          <div key={x.id} className="pop">+{x.amount} XP</div>
         ))}
       </div>
-      {goal && (
-        <div className="overlay" onClick={() => setGoal(null)}>
-          <div className="modal">
-            <div style={{ fontSize: 56 }}>🔥</div>
-            <h2>今天的目标完成了！</h2>
-            <p>已经连续练习 <strong>{goal.streak}</strong> 天</p>
-            <p className="muted">明天也来保持连续记录吧。想多练也可以继续。</p>
-            <button className="primary" onClick={() => setGoal(null)}>好的</button>
+      {current && (
+        <div className="overlay" onClick={close}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            {current.kind === "goal" && (
+              <>
+                <div style={{ fontSize: 56 }}>🔥</div>
+                <h2>今天的目标完成了！</h2>
+                <p style={{ margin: 0 }}>
+                  已经连续练习 <strong>{current.event.streak}</strong> 天
+                </p>
+                <div className="kpis">
+                  <div className="kpi">
+                    <b style={{ fontSize: 18 }}>{formatDuration(t.speakSec)}</b>
+                    <span>开口</span>
+                  </div>
+                  <div className="kpi">
+                    <b style={{ fontSize: 18 }}>{t.said}</b>
+                    <span>句</span>
+                  </div>
+                  <div className="kpi">
+                    <b style={{ fontSize: 18 }}>{t.pron ?? "–"}</b>
+                    <span>发音均分</span>
+                  </div>
+                </div>
+                <p className="muted">明天也来保持连续记录吧。想多练也可以继续。</p>
+              </>
+            )}
+            {current.kind === "quests" && (
+              <>
+                <div style={{ fontSize: 56 }}>🎁</div>
+                <h2>今日任务全部完成</h2>
+                <p className="muted">场景、日记、复习都做了，额外奖励 +10 XP。</p>
+              </>
+            )}
+            {current.kind === "level" && (
+              <>
+                <div style={{ fontSize: 56 }}>⭐</div>
+                <h2>升到 Lv {current.event.levelUp}！</h2>
+                <p className="muted">每一级都是实实在在开口练出来的。</p>
+              </>
+            )}
+            {current.kind === "freeze" && (
+              <>
+                <div style={{ fontSize: 56 }}>🛡️</div>
+                <h2>获得一张保护卡</h2>
+                <p className="muted">连续 7 天的奖励。哪天实在没空练，它会自动帮你保住连续记录（最多存 2 张）。</p>
+              </>
+            )}
+            <button className="primary" onClick={close}>
+              好的
+            </button>
           </div>
         </div>
       )}

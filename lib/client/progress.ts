@@ -2,36 +2,35 @@
 
 import { useSyncExternalStore } from "react";
 import { scenarios, type Scenario } from "@/content/scenarios";
+import {
+  EMPTY,
+  active,
+  addDays,
+  dayKey,
+  level,
+  merge,
+  normalize,
+  streak,
+  totalXp,
+  type Card,
+  type CustomScenario,
+  type DayStats,
+  type DiaryEntry,
+  type Progress,
+  type ScenarioProgress,
+  type XpKind,
+} from "@/lib/progress-model";
 
-// Everything is kept in this phone's localStorage: the app has one user.
+export { dayKey, level, streak, totalXp };
+export type { Card, CustomScenario, DiaryEntry, Progress };
 
-export type Card = {
-  id: string;
-  ja: string;
-  reading?: string;
-  zh: string;
-  voice: string;
-  scenarioId: string;
-  due: string; // YYYY-MM-DD
-  step: number; // index into INTERVALS
-};
-
-type ScenarioProgress = {
-  listened?: boolean;
-  shadow?: Record<number, number>; // line index -> best score
-  talked?: number; // conversations finished with feedback
-};
-
-export type Progress = {
-  goal: number;
-  days: Record<string, number>; // YYYY-MM-DD -> xp
-  scenarios: Record<string, ScenarioProgress>;
-  cards: Card[];
-};
+// The phone's localStorage is the working copy; it is synced to the server
+// (when storage is set up) so nothing is lost if Safari data is cleared.
 
 const KEY = "nihongo-speak:progress:v1";
 const INTERVALS = [1, 3, 7, 14, 30, 60];
 export const GOALS = [30, 50, 80];
+export const MAX_FREEZES = 2;
 
 export const XP = {
   listen: 10,
@@ -40,9 +39,9 @@ export const XP = {
   talkTurn: 3,
   feedback: 10,
   review: 2,
+  diary: 15,
+  quests: 10,
 };
-
-const EMPTY: Progress = { goal: 50, days: {}, scenarios: {}, cards: [] };
 
 let state: Progress | null = null;
 const listeners = new Set<() => void>();
@@ -51,19 +50,24 @@ function read(): Progress {
   if (state) return state;
   try {
     const raw = localStorage.getItem(KEY);
-    state = raw ? { ...EMPTY, ...JSON.parse(raw) } : EMPTY;
+    state = normalize(raw ? JSON.parse(raw) : null);
   } catch {
     state = EMPTY;
   }
   return state!;
 }
 
-function write(next: Progress) {
+function save(next: Progress, sync = true) {
   state = next;
   try {
     localStorage.setItem(KEY, JSON.stringify(next));
   } catch {}
   listeners.forEach((l) => l());
+  if (sync) scheduleSync();
+}
+
+function write(next: Progress) {
+  save({ ...next, updatedAt: Date.now() });
 }
 
 export function useProgress(): Progress {
@@ -77,33 +81,98 @@ export function useProgress(): Progress {
   );
 }
 
-export function dayKey(d = new Date()) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+// ---- Server sync ----
+
+export type SyncState = "off" | "syncing" | "ok" | "error";
+let syncState: SyncState = "off";
+const syncListeners = new Set<() => void>();
+let timer: ReturnType<typeof setTimeout> | null = null;
+
+function setSyncState(s: SyncState) {
+  syncState = s;
+  syncListeners.forEach((l) => l());
 }
 
-function addDays(key: string, n: number) {
-  const [y, m, d] = key.split("-").map(Number);
-  return dayKey(new Date(y, m - 1, d + n));
+export function useSyncState() {
+  return useSyncExternalStore(
+    (l) => {
+      syncListeners.add(l);
+      return () => syncListeners.delete(l);
+    },
+    () => syncState,
+    () => "off" as SyncState,
+  );
 }
 
-export function streak(p: Progress) {
+async function exchange(method: "GET" | "PUT") {
+  const res = await fetch("/api/sync", {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: method === "PUT" ? JSON.stringify(read()) : undefined,
+  });
+  if (res.status === 503) return "off" as const;
+  if (!res.ok) throw new Error(String(res.status));
+  const server = normalize((await res.json()).progress);
+  save(merge(read(), server), false);
+  return "ok" as const;
+}
+
+function scheduleSync() {
+  if (!booted || syncState === "off") return;
+  if (timer) clearTimeout(timer);
+  timer = setTimeout(() => {
+    setSyncState("syncing");
+    exchange("PUT").then(setSyncState, () => setSyncState("error"));
+  }, 2500);
+}
+
+let booted = false;
+
+// Called once when the app opens: pull the server copy, then fix up the streak.
+export function boot() {
+  if (booted) return;
+  booted = true;
+  applyFreezes();
+  setSyncState("syncing");
+  exchange("PUT").then(
+    (s) => {
+      setSyncState(s);
+      applyFreezes();
+    },
+    () => setSyncState("error"),
+  );
+}
+
+// ---- Streak protection ----
+
+// Missed days are covered by protectors, if there are enough to bridge the gap.
+function applyFreezes() {
+  const p = read();
+  if (!p.freezes) return;
   const today = dayKey();
-  let day = p.days[today] ? today : addDays(today, -1);
-  let n = 0;
-  while (p.days[day]) {
-    n++;
+  const gap: string[] = [];
+  let day = addDays(today, -1);
+  while (!active(p, day) && gap.length <= p.freezes) {
+    gap.push(day);
     day = addDays(day, -1);
+    if (gap.length > 30) return;
   }
-  return n;
+  if (gap.length === 0 || gap.length > p.freezes || !active(p, day)) return;
+  write({ ...p, freezes: p.freezes - gap.length, frozen: [...p.frozen, ...gap] });
 }
 
-export const todayXp = (p: Progress) => p.days[dayKey()] ?? 0;
+// ---- XP ----
 
-// XP events drive the floating "+N" and the goal celebration.
-export type XpEvent = { amount: number; total: number; goal: number; goalReached: boolean; streak: number };
+export type XpEvent = {
+  amount: number;
+  total: number;
+  goal: number;
+  goalReached: boolean;
+  streak: number;
+  levelUp?: number;
+  freezeEarned?: boolean;
+  questsDone?: boolean;
+};
 const xpListeners = new Set<(e: XpEvent) => void>();
 
 export function onXp(cb: (e: XpEvent) => void) {
@@ -113,20 +182,56 @@ export function onXp(cb: (e: XpEvent) => void) {
   };
 }
 
-function gainXp(p: Progress, amount: number): Progress {
+function bumpStats(p: Progress, fn: (s: DayStats) => DayStats): Progress {
+  const today = dayKey();
+  return { ...p, stats: { ...p.stats, [today]: fn(p.stats[today] ?? {}) } };
+}
+
+function gainXp(p: Progress, amount: number, kind: XpKind): Progress {
   const today = dayKey();
   const before = p.days[today] ?? 0;
-  const next = { ...p, days: { ...p.days, [today]: before + amount } };
+  const levelBefore = level(totalXp(p)).n;
+  let next = bumpStats({ ...p, days: { ...p.days, [today]: before + amount } }, (s) => ({
+    ...s,
+    xp: { ...s.xp, [kind]: (s.xp?.[kind] ?? 0) + amount },
+  }));
+
+  // Every 7 days in a row earns a streak protector.
+  const days = streak(next);
+  let freezeEarned = false;
+  if (days > 0 && days % 7 === 0 && next.freezeAwardDay !== today && next.freezes < MAX_FREEZES) {
+    next = { ...next, freezes: next.freezes + 1, freezeAwardDay: today };
+    freezeEarned = true;
+  }
+
+  let questsDone = false;
+  let total = before + amount;
+  if (kind !== "bonus" && !next.bonusDays.includes(today) && quests(next).every((q) => q.done)) {
+    questsDone = true;
+    total += XP.quests;
+    next = bumpStats(
+      { ...next, days: { ...next.days, [today]: total }, bonusDays: [...next.bonusDays, today] },
+      (s) => ({ ...s, xp: { ...s.xp, bonus: (s.xp?.bonus ?? 0) + XP.quests } }),
+    );
+  }
+
+  const levelAfter = level(totalXp(next)).n;
   const event: XpEvent = {
-    amount,
-    total: before + amount,
+    amount: total - before,
+    total,
     goal: p.goal,
-    goalReached: before < p.goal && before + amount >= p.goal,
-    streak: streak(next),
+    goalReached: before < p.goal && total >= p.goal,
+    streak: days,
+    levelUp: levelAfter > levelBefore ? levelAfter : undefined,
+    freezeEarned,
+    questsDone,
   };
   queueMicrotask(() => xpListeners.forEach((l) => l(event)));
   return next;
 }
+
+export const todayXp = (p: Progress) => p.days[dayKey()] ?? 0;
+export const todayStats = (p: Progress): DayStats => p.stats[dayKey()] ?? {};
 
 function updateScenario(p: Progress, id: string, fn: (s: ScenarioProgress) => ScenarioProgress): Progress {
   return { ...p, scenarios: { ...p.scenarios, [id]: fn(p.scenarios[id] ?? {}) } };
@@ -136,8 +241,25 @@ export function setGoal(goal: number) {
   write({ ...read(), goal });
 }
 
-export function markListened(id: string) {
-  write(gainXp(updateScenario(read(), id, (s) => ({ ...s, listened: true })), XP.listen));
+// Seconds of 16kHz 16-bit mono WAV.
+export const wavSeconds = (wav: Blob) => Math.max(0, (wav.size - 44) / 32000);
+
+// Every time the learner speaks: how long, and the pronunciation score if there was one.
+export function recordSpeech(sec: number, pron?: number) {
+  write(
+    bumpStats(read(), (s) => ({
+      ...s,
+      speakSec: (s.speakSec ?? 0) + sec,
+      said: (s.said ?? 0) + 1,
+      pronSum: (s.pronSum ?? 0) + (pron ?? 0),
+      pronN: (s.pronN ?? 0) + (pron === undefined ? 0 : 1),
+    })),
+  );
+}
+
+export function markListened(s: Scenario) {
+  const p = bumpStats(read(), (st) => ({ ...st, listenLines: (st.listenLines ?? 0) + s.lines.length }));
+  write(gainXp(updateScenario(p, s.id, (sp) => ({ ...sp, listened: true })), XP.listen, "scene"));
 }
 
 export function recordShadow(id: string, line: number, score: number) {
@@ -148,17 +270,20 @@ export function recordShadow(id: string, line: number, score: number) {
     gainXp(
       updateScenario(p, id, (s) => ({ ...s, shadow: { ...s.shadow, [line]: Math.max(prevBest, score) } })),
       amount,
+      "scene",
     ),
   );
 }
 
 export function recordTalkTurn() {
-  write(gainXp(read(), XP.talkTurn));
+  write(gainXp(read(), XP.talkTurn, "scene"));
 }
 
 export function recordFeedback(id: string) {
-  write(gainXp(updateScenario(read(), id, (s) => ({ ...s, talked: (s.talked ?? 0) + 1 })), XP.feedback));
+  write(gainXp(updateScenario(read(), id, (s) => ({ ...s, talked: (s.talked ?? 0) + 1 })), XP.feedback, "scene"));
 }
+
+// ---- Saved expressions ----
 
 const cardId = (ja: string) => ja.replace(/\s/g, "");
 
@@ -170,10 +295,14 @@ export function toggleCard(card: Omit<Card, "id" | "due" | "step">) {
   const p = read();
   const id = cardId(card.ja);
   if (p.cards.some((c) => c.id === id)) {
-    write({ ...p, cards: p.cards.filter((c) => c.id !== id) });
+    write({ ...p, cards: p.cards.filter((c) => c.id !== id), removedCards: [...p.removedCards, id] });
   } else {
     // New cards are due right away so they show up in today's review.
-    write({ ...p, cards: [...p.cards, { ...card, id, due: dayKey(), step: 0 }] });
+    write({
+      ...p,
+      cards: [...p.cards, { ...card, id, due: dayKey(), step: 0 }],
+      removedCards: p.removedCards.filter((r) => r !== id),
+    });
   }
 }
 
@@ -182,6 +311,9 @@ export function dueCards(p: Progress) {
   return p.cards.filter((c) => c.due <= today);
 }
 
+// A card that survived the 7-day interval counts as mastered.
+export const mastered = (p: Progress) => p.cards.filter((c) => c.step >= 3).length;
+
 export function reviewCard(id: string, remembered: boolean) {
   const p = read();
   const cards = p.cards.map((c) => {
@@ -189,10 +321,36 @@ export function reviewCard(id: string, remembered: boolean) {
     const step = remembered ? Math.min(c.step + 1, INTERVALS.length - 1) : 0;
     return { ...c, step, due: addDays(dayKey(), remembered ? INTERVALS[c.step] : 1) };
   });
-  write(gainXp({ ...p, cards }, XP.review));
+  write(gainXp({ ...p, cards }, XP.review, "review"));
 }
 
-// Steps of a scenario: listen once, shadow at least 5 lines, finish one conversation.
+// ---- Diary ----
+
+export function addDiary(entry: DiaryEntry) {
+  write(gainXp({ ...read(), diary: [entry, ...read().diary] }, XP.diary, "diary"));
+}
+
+export const diaryToday = (p: Progress) => p.diary.some((d) => d.date === dayKey());
+
+// ---- Custom scenarios ----
+
+export function addCustom(s: CustomScenario) {
+  write({ ...read(), custom: [s, ...read().custom] });
+}
+
+export function removeCustom(id: string) {
+  const p = read();
+  write({ ...p, custom: p.custom.filter((s) => s.id !== id) });
+}
+
+export const allScenarios = (p: Progress): Scenario[] => [...p.custom, ...scenarios];
+
+export function findScenario(p: Progress, id: string) {
+  return allScenarios(p).find((s) => s.id === id);
+}
+
+// ---- Scenario steps ----
+
 export type Step = "listen" | "shadow" | "talk";
 
 export function shadowTarget(s: Scenario) {
@@ -209,10 +367,39 @@ export function stepsDone(p: Progress, s: Scenario): Record<Step, boolean> {
 }
 
 export function nextStep(p: Progress): { scenario: Scenario; step: Step } | null {
-  for (const s of scenarios) {
+  for (const s of allScenarios(p)) {
     const done = stepsDone(p, s);
     const step = (["listen", "shadow", "talk"] as Step[]).find((k) => !done[k]);
     if (step) return { scenario: s, step };
   }
   return null;
+}
+
+// ---- Today's three quests ----
+
+export const SCENE_QUEST_XP = 15;
+
+export type Quest = { key: "scene" | "diary" | "review"; done: boolean; label: string; detail: string };
+
+export function quests(p: Progress): Quest[] {
+  const s = todayStats(p);
+  const sceneXp = s.xp?.scene ?? 0;
+  const reviewed = (s.xp?.review ?? 0) > 0;
+  const due = dueCards(p).length;
+  return [
+    {
+      key: "scene",
+      done: sceneXp >= SCENE_QUEST_XP,
+      label: "场景练习",
+      detail: sceneXp >= SCENE_QUEST_XP ? "完成" : `${sceneXp} / ${SCENE_QUEST_XP} XP`,
+    },
+    { key: "diary", done: diaryToday(p), label: "一分钟口语日记", detail: diaryToday(p) ? "完成" : "说说今天" },
+    {
+      key: "review",
+      // With nothing due, there is nothing to review and the quest is free.
+      done: due === 0,
+      label: "复习收藏",
+      detail: due > 0 ? `${due} 句待复习` : reviewed ? "完成" : "今天没有到期的",
+    },
+  ];
 }

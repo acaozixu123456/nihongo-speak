@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import Boot from "@/components/Boot";
 import Rewards from "@/components/Rewards";
 
 export const metadata: Metadata = {
@@ -13,8 +14,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f7f6f3" },
-    { media: "(prefers-color-scheme: dark)", color: "#141414" },
+    { media: "(prefers-color-scheme: light)", color: "#f5f2ec" },
+    { media: "(prefers-color-scheme: dark)", color: "#121110" },
   ],
 };
 
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         {children}
         <Rewards />
+        <Boot />
       </body>
     </html>
   );

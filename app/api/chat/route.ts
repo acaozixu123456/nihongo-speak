@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
-import { getScenario } from "@/content/scenarios";
+import type { Scenario } from "@/content/scenarios";
+import { resolveTalk } from "@/lib/talk";
 import { hint, roleplayReply, type Turn } from "@/lib/claude";
 
-type Body = { scenarioId: string; history: Turn[]; mode?: "reply" | "hint"; wantZh?: string };
+type Body = { scenarioId: string; talk?: Scenario["talk"]; history: Turn[]; mode?: "reply" | "hint"; wantZh?: string };
 
 export async function POST(request: Request) {
   const body = (await request.json()) as Body;
-  const scenario = getScenario(body.scenarioId);
+  const scenario = resolveTalk(body);
   if (!scenario) return NextResponse.json({ error: "unknown scenario" }, { status: 404 });
   try {
     const result =

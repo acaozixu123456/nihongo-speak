@@ -58,7 +58,7 @@ export default function Listen({ scenario, onNext }: { scenario: Scenario; onNex
       }
       // A full run from the first line counts as having listened to the scenario.
       if (!single && start === 0 && i === scenario.lines.length && runId.current === id) {
-        markListened(scenario.id);
+        markListened(scenario);
         setFinished(true);
       }
     } catch {

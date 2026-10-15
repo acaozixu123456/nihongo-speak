@@ -2,10 +2,9 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { getScenario } from "@/content/scenarios";
 import { play, ttsUrl, unlock } from "@/lib/client/player";
 import { transcribe } from "@/lib/client/recorder";
-import { dueCards, reviewCard, useProgress, type Card } from "@/lib/client/progress";
+import { dueCards, findScenario, recordSpeech, reviewCard, useProgress, wavSeconds, type Card } from "@/lib/client/progress";
 import HoldButton from "./HoldButton";
 import Nav from "./Nav";
 
@@ -49,6 +48,7 @@ export default function Review() {
         setError("没听清，再说一次试试");
         return;
       }
+      recordSpeech(wavSeconds(wav), r.scores?.pron);
       setHeard({ text: r.text, score: r.scores?.pron });
       setRevealed(true);
       listen(card);
@@ -132,7 +132,7 @@ export default function Review() {
     );
   }
 
-  const scenario = getScenario(card.scenarioId);
+  const scenario = findScenario(p, card.scenarioId);
 
   return (
     <main>
