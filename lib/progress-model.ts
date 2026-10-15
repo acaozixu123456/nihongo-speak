@@ -20,7 +20,7 @@ export type ScenarioProgress = {
   talked?: number; // conversations finished with feedback
 };
 
-export type XpKind = "scene" | "diary" | "review" | "bonus";
+export type XpKind = "scene" | "diary" | "review" | "quick" | "bonus";
 
 // What happened on one day, for the 成长 page.
 export type DayStats = {
@@ -29,6 +29,12 @@ export type DayStats = {
   pronSum?: number; // sum of pronunciation scores, with pronN scored utterances
   pronN?: number;
   listenLines?: number; // dialogue lines played back in full-scenario listening
+  // Quick-response drill: prompts shown, how many the learner answered, total ms
+  // from prompt to starting to speak, and how many answers started within 3s.
+  quickN?: number;
+  quickSpoke?: number;
+  quickMsSum?: number;
+  quickFast?: number;
   xp?: Partial<Record<XpKind, number>>;
 };
 
@@ -45,6 +51,28 @@ export type DiaryEntry = {
 
 export type CustomScenario = Scenario & { createdAt: number };
 
+// The latest quick-response attempt at one sentence, keyed by the sentence text.
+export type QuickStat = {
+  day: string; // YYYY-MM-DD of the last attempt
+  ms: number | null; // reaction time, or null if the learner couldn't say it (or needed a hint)
+  fast: number; // answers in a row that started within 3s
+};
+
+// A grammar point or expression the AI coach has been tracking across answers.
+export type DrillItem = { ja: string; reading?: string; zh: string; where: string };
+export type WeakPoint = {
+  tag: string; // e.g. 「〜てもらえますか」（依頼）
+  zh: string; // what the point is, in Chinese
+  hit: number; // answers that used it correctly
+  miss: number; // answers that got it wrong
+  last: string; // YYYY-MM-DD
+  lastMiss?: string;
+  examples: { said: string; better: string }[]; // latest mistakes, newest first
+  pattern?: string; // the form in one line, e.g. 「Vて ＋ もらえますか」
+  explain?: string; // AI explanation for the targeted drill
+  drill?: DrillItem[];
+};
+
 export type Progress = {
   goal: number;
   days: Record<string, number>; // YYYY-MM-DD -> xp
@@ -54,6 +82,8 @@ export type Progress = {
   removedCards: string[];
   custom: CustomScenario[];
   diary: DiaryEntry[];
+  quick: Record<string, QuickStat>;
+  weak: Record<string, WeakPoint>;
   freezes: number; // streak protectors in hand
   frozen: string[]; // days covered by a protector
   freezeAwardDay?: string;
@@ -70,6 +100,8 @@ export const EMPTY: Progress = {
   removedCards: [],
   custom: [],
   diary: [],
+  quick: {},
+  weak: {},
   freezes: 0,
   frozen: [],
   bonusDays: [],
@@ -147,6 +179,17 @@ export function merge(a: Progress, b: Progress): Progress {
   // A card saved again after being removed lives in the newer copy's list.
   const live = [...cards.values()].filter((c) => !removedCards.includes(c.id) || newer.cards.some((n) => n.id === c.id));
 
+  const quick: Record<string, QuickStat> = { ...a.quick };
+  for (const [k, v] of Object.entries(b.quick ?? {})) if (!quick[k] || v.day > quick[k].day) quick[k] = v;
+
+  const weak: Record<string, WeakPoint> = { ...a.weak };
+  for (const [k, v] of Object.entries(b.weak ?? {})) {
+    const o = weak[k];
+    if (!o || v.hit + v.miss > o.hit + o.miss || (v.hit + v.miss === o.hit + o.miss && v.last > o.last)) {
+      weak[k] = { ...v, pattern: v.pattern ?? o?.pattern, explain: v.explain ?? o?.explain, drill: v.drill ?? o?.drill };
+    }
+  }
+
   const byId = <T extends { id: string }>(x: T[], y: T[]) => [...new Map([...x, ...y].map((i) => [i.id, i])).values()];
 
   return {
@@ -158,6 +201,8 @@ export function merge(a: Progress, b: Progress): Progress {
     removedCards: removedCards.filter((id) => !live.some((c) => c.id === id)),
     custom: byId(a.custom, b.custom).sort((x, y) => y.createdAt - x.createdAt),
     diary: byId(a.diary, b.diary).sort((x, y) => (x.id < y.id ? 1 : -1)),
+    quick,
+    weak,
     freezes: newer.freezes,
     frozen: [...new Set([...a.frozen, ...b.frozen])],
     freezeAwardDay: newer.freezeAwardDay,

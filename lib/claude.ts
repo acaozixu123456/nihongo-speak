@@ -209,3 +209,105 @@ export async function diaryFeedback(prompt: string, text: string) {
   if (!res.parsed_output) throw new Error("AI 返回格式不对，请重试");
   return res.parsed_output;
 }
+
+// ---- Judging one spoken answer (瞬间说 / 复习) ----
+
+// Fast and cheap: this runs after every single answer.
+const JUDGE_MODEL = "claude-haiku-5-5";
+
+const JudgeSchema = z.object({
+  verdict: z
+    .enum(["good", "ok", "off"])
+    .describe("good: その場面でそのまま通じる自然な言い方。ok: 意味は通じるが直したい所がある。off: 意味が違う・通じない・ほとんど言えていない"),
+  summary_zh: z.string().describe("一言の講評（中国語、1文）。まず言えた点を認める"),
+  right_zh: z.string().describe("良かった点（中国語、短く）。なければ空文字"),
+  fixes: z
+    .array(z.object({ you_said: z.string(), better: z.string(), why_zh: z.string() }))
+    .describe("直すべき箇所だけ（最大3個）。音声認識の誤りらしきものは含めない。good なら空配列"),
+  others: z
+    .array(z.object({ ja: z.string(), zh: z.string().describe("どんな時に使うか（中国語、短く）") }))
+    .describe("同じ意味の別の言い方を2個。丁寧さやくだけ具合が違うもの、より短いものなど"),
+  points: z
+    .array(
+      z.object({
+        tag: z.string().describe("文法・表現の名前（日本語、短く）。例：「〜てもらえますか（依頼）」「謙譲語：承知しました」「助詞：に／で」"),
+        zh: z.string().describe("その文法・表現が何か（中国語、1文）"),
+        ok: z.boolean().describe("学習者がこの点を正しく使えたら true。言えなかった・間違えた・避けたら false"),
+      }),
+    )
+    .describe("模範解答の中心となる文法・表現を1〜3個。学習者の発言でそれぞれ使えたかどうか。語彙だけの違いや認識ミスは含めない"),
+});
+
+export type Judge = z.infer<typeof JudgeSchema>;
+
+export async function judgeAnswer(a: { zh: string; ja: string; where?: string; said: string; known?: string[] }) {
+  const res = await client.messages.parse({
+    model: JUDGE_MODEL,
+    max_tokens: 1500,
+    system: `あなたは日本在住の社会人向けの日本語コーチです。学習者は中国人、レベルはN4〜N3。
+学習者は中国語を見て、すぐに日本語で言う練習をしています。模範解答と一字一句同じである必要はありません。
+その場面で意味が通じて自然なら good にしてください。言い方の違いだけで減点しない。
+学習者の発言は音声認識の結果です。同音の漢字違い、句読点、小さな認識ミスは学習者の誤りとして扱わない。
+説明は中国語で、短く具体的に。
+points は学習者の弱点を記録するために使います。同じ文法・表現には毎回同じ tag を使ってください。${
+      a.known?.length ? `\n既に使った tag：${a.known.join("、")}\n当てはまるものがあれば、この表記をそのまま使う。` : ""
+    }`,
+    messages: [
+      {
+        role: "user",
+        content: `場面：${a.where || "（なし）"}
+言いたいこと（中国語）：${a.zh}
+模範解答：${a.ja}
+学習者が言ったこと：${a.said}`,
+      },
+    ],
+    output_config: { format: zodOutputFormat(JudgeSchema) },
+  });
+  checkStop(res.stop_reason);
+  if (!res.parsed_output) throw new Error("AI 返回格式不对，请重试");
+  return res.parsed_output;
+}
+
+// ---- Targeted drill for one weak point ----
+
+const DrillSchema = z.object({
+  explain_zh: z
+    .string()
+    .describe("この文法・表現の使い方の説明（中国語、3〜5文）。学習者の間違いがなぜ間違いかに触れ、言うときのコツを入れる"),
+  pattern: z.string().describe("形の要約。例：「Vて ＋ もらえますか」"),
+  items: z
+    .array(
+      z.object({
+        zh: z.string().describe("学習者に見せる中国語（言いたいこと）"),
+        ja: z.string().describe("その文法・表現を使った自然な日本語。25字以内"),
+        reading: z.string().describe("ja の全文をひらがなで"),
+        where: z.string().describe("場面（中国語、10字以内）。例：「对课长」「便利店」"),
+      }),
+    )
+    .describe("瞬間的に言う練習用の文を6個。易しいものから。仕事と生活の場面を混ぜる"),
+});
+
+export type Drill = z.infer<typeof DrillSchema>;
+
+export async function makeDrill(w: { tag: string; zh: string; examples: { said: string; better: string }[] }) {
+  const res = await client.messages.parse({
+    model: MODEL,
+    max_tokens: 4000,
+    system: `あなたは日本在住の社会人向けの日本語コーチです。学習者は中国人、レベルはN4〜N3。日本で働き、生活しています。
+学習者が話すときに何度も間違えた文法・表現について、短い説明と、中国語を見て瞬間的に日本語で言う練習問題を作ってください。
+- 練習文はその文法・表現を必ず使い、実際の職場や生活でそのまま使える自然な言い方にする。
+- 語彙は N3 程度。1文で短く。`,
+    messages: [
+      {
+        role: "user",
+        content: `文法・表現：${w.tag}（${w.zh}）
+学習者の最近の間違い：
+${w.examples.map((e) => `- 言った：${e.said} → 正しくは：${e.better}`).join("\n") || "（記録なし）"}`,
+      },
+    ],
+    output_config: { effort: "low", format: zodOutputFormat(DrillSchema) },
+  });
+  checkStop(res.stop_reason);
+  if (!res.parsed_output) throw new Error("AI 返回格式不对，请重试");
+  return res.parsed_output;
+}

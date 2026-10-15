@@ -16,13 +16,15 @@ import {
   type CustomScenario,
   type DayStats,
   type DiaryEntry,
+  type DrillItem,
   type Progress,
   type ScenarioProgress,
+  type WeakPoint,
   type XpKind,
 } from "@/lib/progress-model";
 
 export { dayKey, level, streak, totalXp };
-export type { Card, CustomScenario, DiaryEntry, Progress };
+export type { Card, CustomScenario, DiaryEntry, DrillItem, Progress, WeakPoint };
 
 // The phone's localStorage is the working copy; it is synced to the server
 // (when storage is set up) so nothing is lost if Safari data is cleared.
@@ -40,6 +42,7 @@ export const XP = {
   feedback: 10,
   review: 2,
   diary: 15,
+  quick: 2,
   quests: 10,
 };
 
@@ -256,6 +259,199 @@ export function recordSpeech(sec: number, pron?: number) {
     })),
   );
 }
+
+// ---- Quick-response drill ----
+
+export const QUICK_LIMIT_MS = 3000;
+
+export type QuickItem = {
+  key: string;
+  ja: string;
+  reading?: string;
+  zh: string;
+  voice: string;
+  scenarioId: string;
+  where: string; // the situation the line comes from, e.g. "☀️ 早会汇报进度 · 佐藤"
+};
+
+// Short lines only: the drill is about getting a sentence out in a few seconds.
+const QUICK_MAX_CHARS = 32;
+
+// Saved cards first, then lines from scenarios the learner has worked on, then the rest.
+export function quickPool(p: Progress): QuickItem[] {
+  const all = allScenarios(p);
+  const byId = new Map(all.map((s) => [s.id, s]));
+  const fromCards: QuickItem[] = p.cards.map((c) => {
+    const s = byId.get(c.scenarioId);
+    return { key: c.id, ja: c.ja, reading: c.reading, zh: c.zh, voice: c.voice, scenarioId: c.scenarioId, where: s ? `${s.icon} ${s.titleZh} · 收藏` : "收藏" };
+  });
+  const touched = (s: Scenario) => {
+    const sp = p.scenarios[s.id];
+    return !!sp && (sp.listened || Object.keys(sp.shadow ?? {}).length > 0 || (sp.talked ?? 0) > 0);
+  };
+  const fromLines = (list: Scenario[]): QuickItem[] =>
+    list.flatMap((s) =>
+      s.lines
+        .filter((l) => l.ja.length <= QUICK_MAX_CHARS)
+        .map((l) => ({
+          key: `${s.id}:${l.ja}`,
+          ja: l.ja,
+          reading: l.kana,
+          zh: l.zh,
+          voice: l.voice,
+          scenarioId: s.id,
+          where: `${s.icon} ${s.titleZh} · 你是${l.speaker}`,
+        })),
+    );
+  const seen = new Set<string>();
+  return [...fromCards, ...fromLines(all.filter(touched)), ...fromLines(all.filter((s) => !touched(s)))].filter((i) => {
+    if (seen.has(i.ja)) return false;
+    seen.add(i.ja);
+    return true;
+  });
+}
+
+const shuffle = <T,>(x: T[]) => x.map((v) => [Math.random(), v] as const).sort((a, b) => a[0] - b[0]).map(([, v]) => v);
+
+// Pick n prompts. Sentences the learner missed or answered slowly come back first,
+// then ones never tried, then fast ones not seen for a while; mastered ones
+// (three fast answers in a row) only fill any space left.
+export function quickRound(p: Progress, n = 10): QuickItem[] {
+  const today = dayKey();
+  const pool = quickPool(p);
+  const stat = (i: QuickItem) => p.quick[i.ja];
+  const weak = pool.filter((i) => {
+    const s = stat(i);
+    return s && s.fast === 0 && s.day < today;
+  });
+  const fresh = pool.filter((i) => !stat(i));
+  const stale = pool
+    .filter((i) => {
+      const s = stat(i);
+      return s && s.fast > 0 && s.fast < 3 && s.day <= addDays(today, -2);
+    })
+    .sort((x, y) => (stat(x)!.day < stat(y)!.day ? -1 : 1));
+  const rest = pool.filter((i) => !weak.includes(i) && !fresh.includes(i) && !stale.includes(i));
+  const picked = [
+    ...shuffle(weak).slice(0, Math.ceil(n * 0.4)),
+    ...fresh.slice(0, Math.max(n * 2, 20)),
+    ...stale,
+    ...shuffle(rest),
+  ];
+  // Keep the priority order when choosing, then mix so weak ones aren't all at the start.
+  const chosen = [...new Map(picked.map((i) => [i.ja, i])).values()].slice(0, n);
+  return shuffle(chosen);
+}
+
+// One prompt answered: reaction time in ms, or null if the learner couldn't say it.
+// A hinted answer counts as spoken (for speaking time and XP) but not as recalled.
+export function recordQuick(item: QuickItem, ms: number | null, hinted = false) {
+  const spoke = ms !== null;
+  const fast = spoke && !hinted && ms <= QUICK_LIMIT_MS;
+  const p = read();
+  const prev = p.quick[item.ja];
+  let next = bumpStats(
+    {
+      ...p,
+      quick: { ...p.quick, [item.ja]: { day: dayKey(), ms: spoke && !hinted ? ms : null, fast: fast ? (prev?.fast ?? 0) + 1 : 0 } },
+    },
+    (s) => ({
+      ...s,
+      quickN: (s.quickN ?? 0) + 1,
+      quickSpoke: (s.quickSpoke ?? 0) + (spoke && !hinted ? 1 : 0),
+      quickMsSum: (s.quickMsSum ?? 0) + (spoke && !hinted ? ms : 0),
+      quickFast: (s.quickFast ?? 0) + (fast ? 1 : 0),
+    }),
+  );
+  if (spoke) next = gainXp(next, XP.quick, "quick");
+  write(next);
+}
+
+// The AI judged today's answer as wrong in meaning: it was quick, but it doesn't count as recalled.
+export function markQuickOff(ja: string) {
+  const p = read();
+  const prev = p.quick[ja];
+  if (!prev || prev.day !== dayKey()) return;
+  const wasFast = prev.fast > 0;
+  write(
+    bumpStats({ ...p, quick: { ...p.quick, [ja]: { ...prev, fast: 0 } } }, (s) => ({
+      ...s,
+      quickFast: Math.max(0, (s.quickFast ?? 0) - (wasFast ? 1 : 0)),
+    })),
+  );
+}
+
+// ---- Weak points the AI coach found ----
+
+export type JudgedPoint = { tag: string; zh: string; ok: boolean };
+
+// One judged answer: count each grammar point it tested as right or wrong.
+export function recordPoints(points: JudgedPoint[], fixes: { you_said: string; better: string }[]) {
+  if (!points.length) return;
+  const p = read();
+  const today = dayKey();
+  const weak = { ...p.weak };
+  for (const pt of points) {
+    const o = weak[pt.tag] ?? { tag: pt.tag, zh: pt.zh, hit: 0, miss: 0, last: today, examples: [] };
+    const ex = pt.ok ? o.examples : [...fixes.slice(0, 1).map((f) => ({ said: f.you_said, better: f.better })), ...o.examples]
+          .filter((e, i, all) => all.findIndex((x) => x.said === e.said) === i)
+          .slice(0, 4);
+    weak[pt.tag] = {
+      ...o,
+      zh: o.zh || pt.zh,
+      hit: o.hit + (pt.ok ? 1 : 0),
+      miss: o.miss + (pt.ok ? 0 : 1),
+      last: today,
+      lastMiss: pt.ok ? o.lastMiss : today,
+      examples: ex,
+    };
+  }
+  write({ ...p, weak });
+}
+
+// How shaky a point still is: each correct use earns back half a mistake.
+export const weakness = (w: WeakPoint) => w.miss - w.hit * 0.5;
+
+// Points still worth drilling, shakiest first.
+export function weakList(p: Progress) {
+  return Object.values(p.weak)
+    .filter((w) => w.miss > 0 && weakness(w) > 0)
+    .sort((x, y) => weakness(y) - weakness(x) || (x.last < y.last ? 1 : -1));
+}
+
+// Tags the coach has used before, so it names the same point the same way next time.
+export const knownTags = (p: Progress) =>
+  Object.values(p.weak)
+    .sort((x, y) => (x.last < y.last ? 1 : -1))
+    .slice(0, 40)
+    .map((w) => w.tag);
+
+export function saveDrill(tag: string, d: { pattern: string; explain: string; drill: DrillItem[] }) {
+  const p = read();
+  const o = p.weak[tag];
+  if (!o) return;
+  write({ ...p, weak: { ...p.weak, [tag]: { ...o, ...d } } });
+}
+
+// A targeted drill as quick-response prompts.
+export function drillRound(w: WeakPoint): QuickItem[] {
+  return shuffle(
+    (w.drill ?? []).map((d) => ({
+      key: `drill:${w.tag}:${d.ja}`,
+      ja: d.ja,
+      reading: d.reading,
+      zh: d.zh,
+      voice: DRILL_VOICE,
+      scenarioId: "",
+      where: `${d.where} · 强化 ${w.tag}`,
+    })),
+  );
+}
+
+const DRILL_VOICE = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-MayuNeural";
+
+// How many sentences have been answered fast three times in a row.
+export const quickMastered = (p: Progress) => Object.values(p.quick).filter((s) => s.fast >= 3).length;
 
 export function markListened(s: Scenario) {
   const p = bumpStats(read(), (st) => ({ ...st, listenLines: (st.listenLines ?? 0) + s.lines.length }));

@@ -44,50 +44,44 @@ export default function Stats() {
 
   return (
     <main>
-      <h1>成长</h1>
-
-      <div className="card">
-        <div className="row spread">
-          <div>
-            <div className="small-text">等级</div>
-            <div style={{ fontSize: 22, fontWeight: 800 }}>
-              Lv {lv.n} · {TITLES[Math.min(lv.n - 1, TITLES.length - 1)]}
-            </div>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div className="small-text">累计</div>
-            <div style={{ fontWeight: 700 }}>{xp} XP</div>
-          </div>
+      <section className="lv lv-poster">
+        <h1>成長</h1>
+        <div className="lv-num">
+          <span>Lv</span>
+          <strong>{lv.n}</strong>
         </div>
-        <div className="levelbar">
+        <div className="lv-side">
+          <div className="hero-title">{TITLES[Math.min(lv.n - 1, TITLES.length - 1)]}</div>
+          <div className="small-text">累计 {xp} XP · 离 Lv {lv.n + 1} 还差 {lv.to - xp} XP</div>
+        </div>
+        <div className="brush">
           <div style={{ width: `${((xp - lv.from) / (lv.to - lv.from)) * 100}%` }} />
         </div>
-        <div className="small-text">离 Lv {lv.n + 1} 还差 {lv.to - xp} XP</div>
-      </div>
+      </section>
 
       <h2>一共练了多少</h2>
-      <div className="grid2">
-        <div className="card kpi" style={{ margin: 0 }}>
+      <div className="grid2 ledger2">
+        <div className="kpi">
           <b>{formatDuration(all.speakSec)}</b>
           <span>开口说日语</span>
         </div>
-        <div className="card kpi" style={{ margin: 0 }}>
+        <div className="kpi">
           <b>{all.said} 句</b>
           <span>说过的句子</span>
         </div>
-        <div className="card kpi" style={{ margin: 0 }}>
+        <div className="kpi">
           <b>{all.listenLines} 句</b>
           <span>整段听过的句子</span>
         </div>
-        <div className="card kpi" style={{ margin: 0 }}>
+        <div className="kpi">
           <b>{mastered(p)} / {p.cards.length}</b>
           <span>掌握的表达 / 收藏</span>
         </div>
-        <div className="card kpi" style={{ margin: 0 }}>
+        <div className="kpi">
           <b>{finished}</b>
           <span>三步全部完成的场景</span>
         </div>
-        <div className="card kpi" style={{ margin: 0 }}>
+        <div className="kpi">
           <b>{p.diary.length} 篇</b>
           <span>口语日记</span>
         </div>
@@ -129,6 +123,19 @@ export default function Stats() {
           data={ws.map((w, i) => ({ label: `${md(w.from)}–${md(w.to)}`, tick: i % 2 === 1 ? md(w.to) : undefined, value: w.pron }))}
         />
         <div className="small-text">跟读和复习时 Azure 给的发音分。往上走说明发音在进步。</div>
+      </div>
+
+      <h2>瞬间说：平均几秒开口（每周）</h2>
+      <div className="card">
+        <Line
+          unit="秒"
+          data={ws.map((w, i) => ({
+            label: `${md(w.from)}–${md(w.to)}`,
+            tick: i % 2 === 1 ? md(w.to) : undefined,
+            value: w.quickMs === null ? null : Math.round(w.quickMs / 100) / 10,
+          }))}
+        />
+        <div className="small-text">看到中文到开始说日语用了几秒。往下走，说明开口越来越快了。</div>
       </div>
 
       <h2>开口时长（每周分钟）</h2>
