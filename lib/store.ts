@@ -4,7 +4,8 @@ import { merge, normalize, type Progress } from "@/lib/progress-model";
 import type { PushSubscription } from "web-push";
 
 // One private JSON file in Vercel Blob holds everything the server keeps.
-// Without BLOB_READ_WRITE_TOKEN the app still works, just without sync or reminders.
+// Connected stores authenticate with Vercel OIDC + BLOB_STORE_ID (or an older read-write token).
+// Without either the app still works, just without sync or reminders.
 
 export type Slot = "noon" | "evening";
 
@@ -15,7 +16,7 @@ export type State = {
 
 const PATH = "state.json";
 
-export const storageReady = () => !!process.env.BLOB_READ_WRITE_TOKEN;
+export const storageReady = () => !!(process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN);
 
 export async function readState(): Promise<State> {
   const res = await get(PATH, { access: "private", useCache: false }).catch(() => null);
