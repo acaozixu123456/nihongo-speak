@@ -1,5 +1,5 @@
 import "server-only";
-import { get, put } from "@vercel/blob";
+import { BlobNotFoundError, get, put } from "@vercel/blob";
 import { merge, normalize, type Progress } from "@/lib/progress-model";
 import type { PushSubscription } from "web-push";
 
@@ -19,7 +19,12 @@ const PATH = "state.json";
 export const storageReady = () => !!(process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN);
 
 export async function readState(): Promise<State> {
-  const res = await get(PATH, { access: "private", useCache: false }).catch(() => null);
+  // Only "no file yet" counts as empty; any other failure must not be mistaken for it,
+  // or the next write would wipe the saved state.
+  const res = await get(PATH, { access: "private", useCache: false }).catch((e: unknown) => {
+    if (e instanceof BlobNotFoundError) return null;
+    throw e;
+  });
   if (!res || res.statusCode !== 200) return { progress: normalize(null) };
   const data = (await new Response(res.stream).json()) as State;
   return { ...data, progress: normalize(data.progress) };
