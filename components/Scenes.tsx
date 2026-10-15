@@ -50,19 +50,24 @@ export default function Scenes() {
   ] as const;
   return (
     <main>
-      <header className="page-mast">
+      <header className="ink-mast">
         <h1>場面</h1>
-        <p className="muted">场景 · 每个场景三步：聴 精听 → 読 跟读 → 話 和 AI 对话</p>
+        <p>
+          场景
+          <br />
+          三步练一个
+          <br />
+          聴 → 読 → 話
+        </p>
+        <Link href="/new" className="fab-new">
+          <b>新</b>
+          <span>AI 生成</span>
+        </Link>
       </header>
-      <Link href="/new" className="go solid big">
-        <span className="go-kanji" aria-hidden>新</span>
-        <div className="title">生成新场景</div>
-        <div className="cta">说说你最近遇到的情况，AI 帮你写成练习 →</div>
-      </Link>
       {p.custom.length > 0 && (
         <section>
           <h2>自作 <span>我的场景</span></h2>
-          <div className="tiles">
+          <div className="tiles rail">
             {p.custom.map((s, i) => (
               <ScenarioCard key={s.id} p={p} s={s} n={i + 1} custom />
             ))}
@@ -72,7 +77,7 @@ export default function Scenes() {
       {groups.map((g) => (
         <section key={g.key}>
           <h2>{g.ja} <span>{g.label}</span></h2>
-          <div className="tiles">
+          <div className="tiles rail">
             {scenarios
               .filter((s) => s.category === g.key)
               .map((s, i) => (

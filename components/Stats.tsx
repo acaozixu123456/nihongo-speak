@@ -44,12 +44,8 @@ export default function Stats() {
 
   return (
     <main>
-      <header className="page-mast">
+      <section className="lv lv-poster">
         <h1>成長</h1>
-        <p className="muted">成长 · 每一级都是开口练出来的</p>
-      </header>
-
-      <section className="lv">
         <div className="lv-num">
           <span>Lv</span>
           <strong>{lv.n}</strong>

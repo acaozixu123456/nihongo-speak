@@ -84,58 +84,51 @@ export default function Today() {
     diary: "/diary",
     review: "/review",
   };
+  const questIcon = { scene: next?.scenario.icon ?? "🎬", diary: "🎙️", review: "🃏" };
   const questDetail = (k: "scene" | "diary" | "review", detail: string) =>
     k === "scene" && next ? `${next.scenario.titleZh} · ${STEP_LABEL[next.step]} · ${detail}` : detail;
 
   return (
     <main className="today">
-      <header className="mast">
-        <div className="mast-date">
-          {kanjiNum(now.getMonth() + 1)}月{kanjiNum(now.getDate())}日
-          <span>{WEEKDAY_JA[now.getDay()]}曜日</span>
-        </div>
-        <div className="mast-title">
-          <h1>今日</h1>
-          <div className="small-text">
-            今天 · 星期{WEEKDAY[now.getDay()]}
-            {p.freezes > 0 && ` · 保护卡 ${p.freezes}`}
+      <section className="poster">
+        <div className="poster-top">
+          <div className="poster-date">
+            {kanjiNum(now.getMonth() + 1)}月{kanjiNum(now.getDate())}日 · {WEEKDAY_JA[now.getDay()]}曜日
+            <Link href="/stats">
+              Lv {lv.n}
+              {p.freezes > 0 && ` · 保护卡 ${p.freezes}`}
+            </Link>
           </div>
+          <Link href="/stats" className={`seal ${xp > 0 ? "" : "cold"}`} aria-label={`连续 ${days} 天`}>
+            <b>{days}</b>
+            <span>日連続</span>
+          </Link>
         </div>
-        <Link href="/stats" className={`seal ${xp > 0 ? "" : "cold"}`} aria-label={`连续 ${days} 天，等级 ${lv.n}`}>
-          <b>{days}</b>
-          <span>日連続</span>
-        </Link>
-      </header>
-
-      <section className="goal">
-        <div className="goal-num">
+        <h1 className="poster-kanji">今日</h1>
+        <div className="poster-xp">
           <strong>{xp}</strong>
           <span>/ {p.goal} XP</span>
         </div>
-        <div className="goal-side">
-          <div className="hero-title">{headline(xp, p.goal, days)}</div>
-          <div className="small-text">
-            Lv {lv.n} · {days > 0 ? `已连续 ${days} 天` : "开始新的连续记录"}
-            {p.freezes === 0 && " · 连续 7 天送保护卡"}
-          </div>
-        </div>
+        <div className="poster-head">{headline(xp, p.goal, days)}</div>
         <div className="brush">
           <div style={{ width: `${ratio * 100}%` }} />
         </div>
         <Week p={p} />
       </section>
 
-      <h2>今日の課題 <span>今日任务</span></h2>
-      <ol className="quests">
+      <h2 className="big-h">
+        課題<span>今日任务 · 向左滑</span>
+      </h2>
+      <ol className="deck">
         {qs.map((q, i) => (
           <li key={q.key}>
-            <Link href={questLink[q.key]} className={`quest ${q.done ? "done" : ""}`}>
-              <span className="qnum">{KANJI_NUM[i + 1]}</span>
-              <div className="qbody">
-                <div className="qtitle">{q.label}</div>
-                <div className="small-text ellipsis">{questDetail(q.key, q.detail)}</div>
-              </div>
-              {q.done ? <i className="stamp">済</i> : <span className="qgo">→</span>}
+            <Link href={questLink[q.key]} className={`qcard q-${q.key} ${q.done ? "done" : ""}`}>
+              <span className="qcard-num" aria-hidden>{KANJI_NUM[i + 1]}</span>
+              <span className="qcard-icon">{questIcon[q.key]}</span>
+              <div className="qcard-title">{q.label}</div>
+              <div className="qcard-detail">{questDetail(q.key, q.detail)}</div>
+              <div className="qcard-go">{q.done ? "再练一次" : "开始"} →</div>
+              {q.done && <i className="stamp big">済</i>}
             </Link>
           </li>
         ))}
@@ -145,40 +138,43 @@ export default function Today() {
         {XP.quests} XP
       </div>
 
-      <h2>今日の成果 <span>今天的成果</span></h2>
-      {t.said === 0 && t.listenLines === 0 ? (
-        <p className="muted">还没开始。今天开口说的时长、句数和发音分数都会记在这里。</p>
-      ) : (
-        <div className="kpis ledger">
-          <div className="kpi">
-            <span>开口时长</span>
-            <b>{formatDuration(t.speakSec)}</b>
+      <section className="band">
+        <h2 className="big-h">
+          成果<span>今天的成果</span>
+        </h2>
+        {t.said === 0 && t.listenLines === 0 ? (
+          <p className="band-empty">还没开始。今天开口说的时长、句数和发音分数都会记在这里。</p>
+        ) : (
+          <div className="band-nums">
+            <div>
+              <b>{formatDuration(t.speakSec)}</b>
+              <span>开口时长</span>
+            </div>
+            <div>
+              <b>{t.said}</b>
+              <span>说了几句</span>
+            </div>
+            <div>
+              <b>{t.pron ?? "–"}</b>
+              <span>
+                发音均分
+                {t.pron !== null && week.pron !== null && t.pron !== week.pron && (
+                  <span className={`delta ${t.pron > week.pron ? "up" : "down"}`}>
+                    {" "}
+                    {t.pron > week.pron ? "↑" : "↓"}
+                    {Math.abs(t.pron - week.pron)}
+                  </span>
+                )}
+              </span>
+            </div>
           </div>
-          <div className="kpi">
-            <span>说了几句</span>
-            <b>{t.said}</b>
-          </div>
-          <div className="kpi">
-            <span>
-              发音均分
-              {t.pron !== null && week.pron !== null && t.pron !== week.pron && (
-                <span className={`delta ${t.pron > week.pron ? "up" : "down"}`}>
-                  {" "}
-                  {t.pron > week.pron ? "↑" : "↓"}
-                  {Math.abs(t.pron - week.pron)}
-                </span>
-              )}
-            </span>
-            <b>{t.pron ?? "–"}</b>
-          </div>
-        </div>
-      )}
+        )}
+      </section>
 
-      <Link href="/new" className="go solid big">
-        <span className="go-kanji" aria-hidden>新</span>
-        <div className="label">想练别的？</div>
-        <div className="title">让 AI 写一个新场景</div>
-        <div className="cta">输入一句话就能生成 →</div>
+      <Link href="/new" className="newbig">
+        <span className="newbig-k" aria-hidden>新</span>
+        <span className="newbig-l">想练别的？</span>
+        <span className="newbig-t">让 AI 写一个新场景 →</span>
       </Link>
       <Nav on="today" />
     </main>
