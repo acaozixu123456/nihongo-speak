@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import type { Scenario } from "@/content/scenarios";
 import { stop } from "@/lib/client/player";
+import { stepsDone, useProgress, type Step } from "@/lib/client/progress";
 import Listen from "./Listen";
 import Shadow from "./Shadow";
 import Talk from "./Talk";
@@ -14,32 +15,35 @@ const TABS = [
   { key: "talk", label: "③ 对话" },
 ] as const;
 
-type Tab = (typeof TABS)[number]["key"];
+export default function ScenarioView({ scenario, step }: { scenario: Scenario; step?: Step }) {
+  const [tab, setTab] = useState<Step>(step ?? "listen");
+  const done = stepsDone(useProgress(), scenario);
 
-export default function ScenarioView({ scenario }: { scenario: Scenario }) {
-  const [tab, setTab] = useState<Tab>("listen");
+  function go(next: Step) {
+    stop();
+    setTab(next);
+    window.scrollTo({ top: 0 });
+  }
+
   return (
     <main>
-      <Link href="/" className="muted">← 场景列表</Link>
-      <h1>{scenario.title}</h1>
-      <div className="muted">{scenario.titleZh}</div>
+      <Link href="/" className="muted">← 今天</Link>
+      <h1>
+        {scenario.icon} {scenario.titleZh}
+      </h1>
+      <div className="muted">{scenario.title}</div>
       <div className="tabs">
         {TABS.map((t) => (
-          <button
-            key={t.key}
-            className={tab === t.key ? "on" : ""}
-            onClick={() => {
-              stop();
-              setTab(t.key);
-            }}
-          >
-            {t.label}
+          <button key={t.key} className={tab === t.key ? "on" : ""} onClick={() => go(t.key)}>
+            {t.label} {done[t.key] && <span className="check">✓</span>}
           </button>
         ))}
       </div>
       {/* Keep every tab mounted so switching back doesn't lose progress. */}
-      <div hidden={tab !== "listen"}><Listen scenario={scenario} /></div>
-      <div hidden={tab !== "shadow"}><Shadow scenario={scenario} active={tab === "shadow"} /></div>
+      <div hidden={tab !== "listen"}><Listen scenario={scenario} onNext={() => go("shadow")} /></div>
+      <div hidden={tab !== "shadow"}>
+        <Shadow scenario={scenario} active={tab === "shadow"} onNext={() => go("talk")} />
+      </div>
       <div hidden={tab !== "talk"}><Talk scenario={scenario} active={tab === "talk"} /></div>
     </main>
   );

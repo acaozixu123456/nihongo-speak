@@ -4,6 +4,8 @@ import { useState } from "react";
 import type { Scenario } from "@/content/scenarios";
 import { play, setRate, ttsUrl, unlock } from "@/lib/client/player";
 import { transcribe, type SttResult } from "@/lib/client/recorder";
+import { hasCard, recordShadow, shadowTarget, toggleCard, useProgress } from "@/lib/client/progress";
+import { confetti } from "@/lib/client/fx";
 import HoldButton from "./HoldButton";
 import { RatePicker } from "./Listen";
 
@@ -13,12 +15,16 @@ function tone(score: number) {
   return score >= 80 ? "good" : score >= 60 ? "warn" : "bad";
 }
 
-export default function Shadow({ scenario, active }: { scenario: Scenario; active: boolean }) {
+type Props = { scenario: Scenario; active: boolean; onNext: () => void };
+
+export default function Shadow({ scenario, active, onNext }: Props) {
   const [index, setIndex] = useState(0);
   const [rate, setRateState] = useState(1);
   const [showZh, setShowZh] = useState(false);
   const [attempts, setAttempts] = useState<Record<number, Attempt>>({});
-  const [best, setBest] = useState<Record<number, number>>({});
+  const [passed, setPassed] = useState(false);
+  const progress = useProgress();
+  const best = progress.scenarios[scenario.id]?.shadow ?? {};
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -27,6 +33,8 @@ export default function Shadow({ scenario, active }: { scenario: Scenario; activ
   const scores = attempt?.result.scores;
   const scored = Object.values(best);
   const average = scored.length ? Math.round(scored.reduce((a, b) => a + b, 0) / scored.length) : null;
+  const target = shadowTarget(scenario);
+  const saved = hasCard(progress, line.ja);
 
   function listen() {
     unlock();
@@ -50,7 +58,9 @@ export default function Shadow({ scenario, active }: { scenario: Scenario; activ
       });
       if (result.scores) {
         const pron = result.scores.pron;
-        setBest((prev) => ({ ...prev, [index]: Math.max(prev[index] ?? 0, pron) }));
+        setPassed(pron >= 80);
+        if (pron >= 80 && (best[index] ?? 0) < 80) confetti(40);
+        recordShadow(scenario.id, index, pron);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "评分失败");
@@ -61,6 +71,7 @@ export default function Shadow({ scenario, active }: { scenario: Scenario; activ
 
   function go(delta: number) {
     setError("");
+    setPassed(false);
     setIndex((i) => Math.min(scenario.lines.length - 1, Math.max(0, i + delta)));
   }
 
@@ -82,6 +93,9 @@ export default function Shadow({ scenario, active }: { scenario: Scenario; activ
             已练 {scored.length}/{scenario.lines.length} 句，最高分平均 {average}
           </p>
         )}
+        {scored.length >= target && (
+          <button className="primary next-cta" onClick={onNext}>跟读完成，去和 AI 对话 →</button>
+        )}
       </div>
 
       <div className="card">
@@ -89,7 +103,18 @@ export default function Shadow({ scenario, active }: { scenario: Scenario; activ
           <span className="speaker">
             {index + 1} / {scenario.lines.length} · {line.speaker}
           </span>
-          {best[index] !== undefined && <span className={`muted ${tone(best[index])}`}>最高 {best[index]}</span>}
+          <div className="row">
+            {best[index] !== undefined && <span className={`muted ${tone(best[index])}`}>最高 {best[index]}</span>}
+            <button
+              className={`star ${saved ? "on" : ""}`}
+              aria-label={saved ? "取消收藏" : "收藏到复习"}
+              onClick={() =>
+                toggleCard({ ja: line.ja, reading: line.kana, zh: line.zh, voice: line.voice, scenarioId: scenario.id })
+              }
+            >
+              {saved ? "★" : "☆"}
+            </button>
+          </div>
         </div>
         <div className="ja">
           {scores && scores.words.length > 0
@@ -126,14 +151,21 @@ export default function Shadow({ scenario, active }: { scenario: Scenario; activ
           {scores ? (
             <>
               <div className="row" style={{ gap: 16 }}>
-                <div className={`score-big ${tone(scores.pron)}`}>{scores.pron}</div>
+                <div key={scores.pron + attempt.wavUrl} className={`score-big ${tone(scores.pron)} ${passed ? "pass" : ""}`}>
+                  {scores.pron}
+                </div>
                 <div className="muted">
                   准确度 {scores.accuracy} · 流利度 {scores.fluency} · 完整度 {scores.completeness}
                 </div>
               </div>
               <p className="muted" style={{ marginBottom: 0 }}>
-                上面句子里标红的词发音偏差较大，标黄的可以再练练。
+                {passed
+                  ? "过关！可以去下一句了。"
+                  : "上面句子里标红的词发音偏差较大，标黄的可以再练练。先听原声再试一次。"}
               </p>
+              {passed && index < scenario.lines.length - 1 && (
+                <button className="primary next-cta" onClick={() => go(1)}>下一句 →</button>
+              )}
             </>
           ) : null}
           <p className="muted" style={{ marginBottom: 0 }}>识别结果：{attempt.result.text}</p>

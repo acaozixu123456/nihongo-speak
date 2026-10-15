@@ -5,9 +5,24 @@ import type { Scenario } from "@/content/scenarios";
 import type { Feedback, Hint, Turn } from "@/lib/claude";
 import { play, ttsUrl, unlock } from "@/lib/client/player";
 import { transcribe } from "@/lib/client/recorder";
+import Link from "next/link";
+import { hasCard, recordFeedback, recordTalkTurn, toggleCard, useProgress, type Progress } from "@/lib/client/progress";
 import HoldButton from "./HoldButton";
 
 type Message = Turn & { zh?: string };
+
+function Star({ p, ja, zh, reading, voice, scenarioId }: { p: Progress; ja: string; zh: string; reading?: string; voice: string; scenarioId: string }) {
+  const saved = hasCard(p, ja);
+  return (
+    <button
+      className={`small star ${saved ? "on" : ""}`}
+      aria-label={saved ? "取消收藏" : "收藏到复习"}
+      onClick={() => toggleCard({ ja, zh, reading, voice, scenarioId })}
+    >
+      {saved ? "★ 已收藏" : "☆ 收藏"}
+    </button>
+  );
+}
 
 async function post<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
@@ -34,6 +49,8 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [error, setError] = useState("");
   const bottom = useRef<HTMLDivElement>(null);
+  const progress = useProgress();
+  const card = { p: progress, voice: talk.aiVoice, scenarioId: scenario.id };
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth" });
@@ -66,6 +83,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
       });
       setMessages([...next, { role: "assistant", text: reply.ja, zh: reply.zh }]);
       setFinished(reply.finished);
+      recordTalkTurn();
       say(reply.ja);
     } catch (e) {
       setError(e instanceof Error ? e.message : "AI 出错了");
@@ -115,6 +133,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
     setBusy("feedback");
     try {
       setFeedback(await post<Feedback>("/api/feedback", { scenarioId: scenario.id, history: history(messages) }));
+      recordFeedback(scenario.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "点评失败");
     } finally {
@@ -157,6 +176,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
             <div className="row" style={{ marginTop: 6 }}>
               <button className="small" onClick={() => { unlock(); say(m.text); }}>▶ 再听</button>
               <button className="small" onClick={() => toggleZh(i)}>{shownZh.has(i) ? "隐藏中文" : "中文"}</button>
+              {m.zh && <Star {...card} ja={m.text} zh={m.zh} />}
             </div>
           </div>
         ) : (
@@ -204,7 +224,10 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
               <div className="muted">你说：{c.you_said}</div>
               <div className="ja">→ {c.better}</div>
               <div className="zh">{c.why_zh}</div>
-              <button className="small" onClick={() => { unlock(); say(c.better); }}>▶ 听一下</button>
+              <div className="row">
+                <button className="small" onClick={() => { unlock(); say(c.better); }}>▶ 听一下</button>
+                <Star {...card} ja={c.better} zh={`换个更自然的说法：${c.you_said}`} />
+              </div>
             </div>
           ))}
           <h2>值得记住的表达</h2>
@@ -213,9 +236,19 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
               <div className="ja">{p.ja}</div>
               <div className="kana">{p.reading}</div>
               <div className="zh">{p.zh}</div>
-              <button className="small" onClick={() => { unlock(); say(p.ja); }}>▶ 听一下</button>
+              <div className="row">
+                <button className="small" onClick={() => { unlock(); say(p.ja); }}>▶ 听一下</button>
+                <Star {...card} ja={p.ja} zh={p.zh} reading={p.reading} />
+              </div>
             </div>
           ))}
+          <p className="muted">收藏的句子会出现在「复习」里，隔几天提醒你说一遍。</p>
+          <div className="row">
+            <Link href="/" className="go" style={{ flex: 1, margin: 0, textAlign: "center" }}>
+              <div className="cta" style={{ marginTop: 0 }}>回到今天 →</div>
+            </Link>
+            <button onClick={start}>再来一次</button>
+          </div>
         </div>
       )}
 

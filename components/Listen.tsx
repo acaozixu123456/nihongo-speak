@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import type { Scenario } from "@/content/scenarios";
 import { play, setRate, stop, ttsUrl, unlock } from "@/lib/client/player";
+import { markListened } from "@/lib/client/progress";
 
 export const RATES = [0.6, 0.8, 1, 1.2];
 
@@ -19,7 +20,7 @@ export function RatePicker({ rate, onChange }: { rate: number; onChange: (r: num
   );
 }
 
-export default function Listen({ scenario }: { scenario: Scenario }) {
+export default function Listen({ scenario, onNext }: { scenario: Scenario; onNext: () => void }) {
   const [rate, setRateState] = useState(1);
   const [showJa, setShowJa] = useState(false);
   const [showKana, setShowKana] = useState(false);
@@ -28,6 +29,7 @@ export default function Listen({ scenario }: { scenario: Scenario }) {
   const [current, setCurrent] = useState<number | null>(null);
   const [loop, setLoop] = useState(false);
   const [error, setError] = useState("");
+  const [finished, setFinished] = useState(false);
   const runId = useRef(0);
 
   function changeRate(r: number) {
@@ -53,6 +55,11 @@ export default function Listen({ scenario }: { scenario: Scenario }) {
         }
         await new Promise((r) => setTimeout(r, 400));
         i++;
+      }
+      // A full run from the first line counts as having listened to the scenario.
+      if (!single && start === 0 && i === scenario.lines.length && runId.current === id) {
+        markListened(scenario.id);
+        setFinished(true);
       }
     } catch {
       if (runId.current === id) setError("音频播放失败，请检查网络后再试");
@@ -98,6 +105,16 @@ export default function Listen({ scenario }: { scenario: Scenario }) {
         </div>
         {error && <p className="error">{error}</p>}
       </div>
+
+      {finished && (
+        <div className="card">
+          <strong>整段听完了 👏</strong>
+          <p className="muted" style={{ margin: "4px 0 0" }}>
+            听不出的句子点开再听几遍。觉得差不多了，就开口跟着说。
+          </p>
+          <button className="primary next-cta" onClick={onNext}>去跟读 →</button>
+        </div>
+      )}
 
       {scenario.lines.map((line, i) => {
         const visible = showJa || revealed.has(i);
