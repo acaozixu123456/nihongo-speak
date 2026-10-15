@@ -768,3 +768,32 @@ h2 span { font-family: -apple-system, "PingFang SC", sans-serif; font-size: 12px
 .qrow:last-child { border-bottom: none; }
 .qrow > span { flex: none; width: 44px; font-weight: 700; }
 .qhint { margin-top: 10px; font-family: var(--serif-ja); font-size: 18px; color: var(--accent); }
+
+/* AI judge after each spoken answer */
+.judge { margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: color-mix(in srgb, var(--ink) 5%, transparent); text-align: left; border-left: 3px solid var(--line, currentColor); }
+.judge-good { border-left-color: var(--good, #2f7d4f); }
+.judge-warn { border-left-color: var(--warn, #b7791f); }
+.judge-bad { border-left-color: var(--accent); }
+.judge-head { display: flex; flex-direction: column; gap: 4px; }
+.judge-right { margin: 8px 0 0; font-size: 14px; }
+.judge-fix { margin-top: 8px; font-size: 15px; }
+.judge-fix s { opacity: .6; }
+.judge-fix .small { margin-left: 6px; padding: 2px 8px; }
+.judge-others { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.judge-alt { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; width: 100%; font-family: var(--serif-ja); }
+.judge-wait { animation: judgepulse 1.2s ease-in-out infinite; }
+@keyframes judgepulse { 50% { opacity: .4; } }
+.judge-points { margin-top: 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.judge-points .chip { font-size: 13px; padding: 2px 8px; border-radius: 999px; font-family: var(--serif-ja); }
+.chip-ok { background: var(--good-soft); color: var(--good); }
+.chip-miss { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+
+/* Weak points */
+.weak-row { display: block; padding: 12px 0; border-bottom: 1px solid var(--line); color: inherit; text-decoration: none; }
+.weak-row:last-child { border-bottom: 0; }
+.weak-tag { font-family: var(--serif-ja); font-size: 18px; }
+.weak-bar { height: 6px; border-radius: 3px; background: var(--good-soft); overflow: hidden; margin: 6px 0 4px; }
+.weak-bar > div { height: 100%; background: var(--accent); }
+.weak-ex { font-size: 14px; margin: 4px 0; }
+.weak-ex s { opacity: .6; }
+.pattern { font-family: var(--serif-ja); font-size: 20px; text-align: center; margin: 8px 0; }

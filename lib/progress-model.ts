@@ -58,6 +58,21 @@ export type QuickStat = {
   fast: number; // answers in a row that started within 3s
 };
 
+// A grammar point or expression the AI coach has been tracking across answers.
+export type DrillItem = { ja: string; reading?: string; zh: string; where: string };
+export type WeakPoint = {
+  tag: string; // e.g. 「〜てもらえますか」（依頼）
+  zh: string; // what the point is, in Chinese
+  hit: number; // answers that used it correctly
+  miss: number; // answers that got it wrong
+  last: string; // YYYY-MM-DD
+  lastMiss?: string;
+  examples: { said: string; better: string }[]; // latest mistakes, newest first
+  pattern?: string; // the form in one line, e.g. 「Vて ＋ もらえますか」
+  explain?: string; // AI explanation for the targeted drill
+  drill?: DrillItem[];
+};
+
 export type Progress = {
   goal: number;
   days: Record<string, number>; // YYYY-MM-DD -> xp
@@ -68,6 +83,7 @@ export type Progress = {
   custom: CustomScenario[];
   diary: DiaryEntry[];
   quick: Record<string, QuickStat>;
+  weak: Record<string, WeakPoint>;
   freezes: number; // streak protectors in hand
   frozen: string[]; // days covered by a protector
   freezeAwardDay?: string;
@@ -85,6 +101,7 @@ export const EMPTY: Progress = {
   custom: [],
   diary: [],
   quick: {},
+  weak: {},
   freezes: 0,
   frozen: [],
   bonusDays: [],
@@ -165,6 +182,14 @@ export function merge(a: Progress, b: Progress): Progress {
   const quick: Record<string, QuickStat> = { ...a.quick };
   for (const [k, v] of Object.entries(b.quick ?? {})) if (!quick[k] || v.day > quick[k].day) quick[k] = v;
 
+  const weak: Record<string, WeakPoint> = { ...a.weak };
+  for (const [k, v] of Object.entries(b.weak ?? {})) {
+    const o = weak[k];
+    if (!o || v.hit + v.miss > o.hit + o.miss || (v.hit + v.miss === o.hit + o.miss && v.last > o.last)) {
+      weak[k] = { ...v, pattern: v.pattern ?? o?.pattern, explain: v.explain ?? o?.explain, drill: v.drill ?? o?.drill };
+    }
+  }
+
   const byId = <T extends { id: string }>(x: T[], y: T[]) => [...new Map([...x, ...y].map((i) => [i.id, i])).values()];
 
   return {
@@ -177,6 +202,7 @@ export function merge(a: Progress, b: Progress): Progress {
     custom: byId(a.custom, b.custom).sort((x, y) => y.createdAt - x.createdAt),
     diary: byId(a.diary, b.diary).sort((x, y) => (x.id < y.id ? 1 : -1)),
     quick,
+    weak,
     freezes: newer.freezes,
     frozen: [...new Set([...a.frozen, ...b.frozen])],
     freezeAwardDay: newer.freezeAwardDay,

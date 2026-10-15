@@ -16,13 +16,15 @@ import {
   type CustomScenario,
   type DayStats,
   type DiaryEntry,
+  type DrillItem,
   type Progress,
   type ScenarioProgress,
+  type WeakPoint,
   type XpKind,
 } from "@/lib/progress-model";
 
 export { dayKey, level, streak, totalXp };
-export type { Card, CustomScenario, DiaryEntry, Progress };
+export type { Card, CustomScenario, DiaryEntry, DrillItem, Progress, WeakPoint };
 
 // The phone's localStorage is the working copy; it is synced to the server
 // (when storage is set up) so nothing is lost if Safari data is cleared.
@@ -364,6 +366,89 @@ export function recordQuick(item: QuickItem, ms: number | null, hinted = false) 
   if (spoke) next = gainXp(next, XP.quick, "quick");
   write(next);
 }
+
+// The AI judged today's answer as wrong in meaning: it was quick, but it doesn't count as recalled.
+export function markQuickOff(ja: string) {
+  const p = read();
+  const prev = p.quick[ja];
+  if (!prev || prev.day !== dayKey()) return;
+  const wasFast = prev.fast > 0;
+  write(
+    bumpStats({ ...p, quick: { ...p.quick, [ja]: { ...prev, fast: 0 } } }, (s) => ({
+      ...s,
+      quickFast: Math.max(0, (s.quickFast ?? 0) - (wasFast ? 1 : 0)),
+    })),
+  );
+}
+
+// ---- Weak points the AI coach found ----
+
+export type JudgedPoint = { tag: string; zh: string; ok: boolean };
+
+// One judged answer: count each grammar point it tested as right or wrong.
+export function recordPoints(points: JudgedPoint[], fixes: { you_said: string; better: string }[]) {
+  if (!points.length) return;
+  const p = read();
+  const today = dayKey();
+  const weak = { ...p.weak };
+  for (const pt of points) {
+    const o = weak[pt.tag] ?? { tag: pt.tag, zh: pt.zh, hit: 0, miss: 0, last: today, examples: [] };
+    const ex = pt.ok ? o.examples : [...fixes.slice(0, 1).map((f) => ({ said: f.you_said, better: f.better })), ...o.examples]
+          .filter((e, i, all) => all.findIndex((x) => x.said === e.said) === i)
+          .slice(0, 4);
+    weak[pt.tag] = {
+      ...o,
+      zh: o.zh || pt.zh,
+      hit: o.hit + (pt.ok ? 1 : 0),
+      miss: o.miss + (pt.ok ? 0 : 1),
+      last: today,
+      lastMiss: pt.ok ? o.lastMiss : today,
+      examples: ex,
+    };
+  }
+  write({ ...p, weak });
+}
+
+// How shaky a point still is: each correct use earns back half a mistake.
+export const weakness = (w: WeakPoint) => w.miss - w.hit * 0.5;
+
+// Points still worth drilling, shakiest first.
+export function weakList(p: Progress) {
+  return Object.values(p.weak)
+    .filter((w) => w.miss > 0 && weakness(w) > 0)
+    .sort((x, y) => weakness(y) - weakness(x) || (x.last < y.last ? 1 : -1));
+}
+
+// Tags the coach has used before, so it names the same point the same way next time.
+export const knownTags = (p: Progress) =>
+  Object.values(p.weak)
+    .sort((x, y) => (x.last < y.last ? 1 : -1))
+    .slice(0, 40)
+    .map((w) => w.tag);
+
+export function saveDrill(tag: string, d: { pattern: string; explain: string; drill: DrillItem[] }) {
+  const p = read();
+  const o = p.weak[tag];
+  if (!o) return;
+  write({ ...p, weak: { ...p.weak, [tag]: { ...o, ...d } } });
+}
+
+// A targeted drill as quick-response prompts.
+export function drillRound(w: WeakPoint): QuickItem[] {
+  return shuffle(
+    (w.drill ?? []).map((d) => ({
+      key: `drill:${w.tag}:${d.ja}`,
+      ja: d.ja,
+      reading: d.reading,
+      zh: d.zh,
+      voice: DRILL_VOICE,
+      scenarioId: "",
+      where: `${d.where} · 强化 ${w.tag}`,
+    })),
+  );
+}
+
+const DRILL_VOICE = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-MayuNeural";
 
 // How many sentences have been answered fast three times in a row.
 export const quickMastered = (p: Progress) => Object.values(p.quick).filter((s) => s.fast >= 3).length;

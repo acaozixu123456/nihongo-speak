@@ -7,18 +7,23 @@ import { transcribe } from "@/lib/client/recorder";
 import {
   QUICK_LIMIT_MS,
   dayKey,
+  drillRound,
   hasCard,
+  markQuickOff,
   quickMastered,
   quickRound,
   recordQuick,
   recordSpeech,
+  saveDrill,
   toggleCard,
   useProgress,
   wavSeconds,
+  weakList,
   type QuickItem,
 } from "@/lib/client/progress";
 import { totals } from "@/lib/client/metrics";
 import { addDays } from "@/lib/progress-model";
+import AiJudge, { type Verdict } from "./AiJudge";
 import HoldButton from "./HoldButton";
 import Nav from "./Nav";
 
@@ -81,11 +86,16 @@ function Timer({ start, frozen, onOver }: { start: number; frozen: number | null
   );
 }
 
-export default function Quick() {
+export default function Quick({ drill }: { drill?: string }) {
   const p = useProgress();
+  const weakPoint = drill ? p.weak[drill] : undefined;
+  const [making, setMaking] = useState(false);
   const [size, setSize] = useState(10);
   const [round, setRound] = useState<QuickItem[] | null>(null);
   const [retried, setRetried] = useState<Set<string>>(new Set());
+  // First-attempt answers the AI judged as wrong in meaning.
+  const [off, setOff] = useState<Set<string>>(new Set());
+  const judged = useRef<Set<string>>(new Set());
   const [index, setIndex] = useState(0);
   const [shownAt, setShownAt] = useState(0);
   const [spokeAt, setSpokeAt] = useState<number | null>(null);
@@ -94,7 +104,7 @@ export default function Quick() {
   const [result, setResult] = useState<Result | null>(null);
   const [results, setResults] = useState<Result[]>([]);
   // After the answer is shown: cover it and say it again from memory.
-  const [again, setAgain] = useState<"off" | "covered" | { heard: string; score?: number }>("off");
+  const [again, setAgain] = useState<"off" | "covered" | { heard: string; score?: number; ok?: boolean }>("off");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const spokeRef = useRef<number | null>(null);
@@ -115,10 +125,39 @@ export default function Quick() {
     setError("");
   }
 
+  async function makeDrill() {
+    if (!weakPoint) return;
+    setMaking(true);
+    setError("");
+    try {
+      const res = await fetch("/api/drill", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tag: weakPoint.tag, zh: weakPoint.zh, examples: weakPoint.examples }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error);
+      saveDrill(weakPoint.tag, { pattern: d.pattern, explain: d.explain_zh, drill: d.items });
+    } catch (e) {
+      setError(e instanceof Error && e.message ? e.message : "生成练习失败，再试一次");
+    } finally {
+      setMaking(false);
+    }
+  }
+
+  // A weak point without practice sentences yet gets them on arrival.
+  const needDrill = !!weakPoint && !weakPoint.drill?.length;
+  useEffect(() => {
+    if (needDrill) makeDrill();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needDrill]);
+
   function begin(n = size) {
     unlock();
-    setRound(quickRound(p, n));
+    setRound(weakPoint?.drill?.length ? drillRound(weakPoint) : quickRound(p, n));
     setRetried(new Set());
+    setOff(new Set());
+    judged.current = new Set();
     setResults([]);
     show(0);
   }
@@ -147,6 +186,21 @@ export default function Quick() {
     if (weak && !retry && round) {
       setRetried((s) => new Set(s).add(r.item.ja));
       setRound([...round, r.item]);
+    }
+  }
+
+  function onVerdict(r: Result, v: Verdict) {
+    // Only the first attempt's verdict changes the record, and only once.
+    if (judged.current.has(r.item.ja)) return;
+    judged.current.add(r.item.ja);
+    if (v !== "off") return;
+    setOff((s) => new Set(s).add(r.item.ja));
+    markQuickOff(r.item.ja);
+    // A quick but wrong answer still needs another go at the end of the round.
+    const weak = r.ms === null || r.hinted || r.ms > QUICK_LIMIT_MS;
+    if (!weak) {
+      setRetried((s) => new Set(s).add(r.item.ja));
+      setRound((rd) => (rd ? [...rd, r.item] : rd));
     }
   }
 
@@ -187,7 +241,7 @@ export default function Quick() {
     try {
       const r = await transcribe(wav, item.ja);
       recordSpeech(wavSeconds(wav), r.scores?.pron);
-      setAgain({ heard: r.text || "（没听清）", score: r.scores?.pron });
+      setAgain({ heard: r.text || "（没听清）", score: r.scores?.pron, ok: !!r.text });
     } catch {
       recordSpeech(wavSeconds(wav));
       setAgain({ heard: "（识别失败，自己对照一下）" });
@@ -204,6 +258,61 @@ export default function Quick() {
   function next() {
     stop();
     show(index + 1);
+  }
+
+  // ---- Intro for a targeted drill ----
+  if (!round && drill) {
+    return (
+      <main>
+        <div className="row spread">
+          <Link href="/weak" className="muted">← 薄弱点</Link>
+        </div>
+        <header className="page-mast">
+          <h1>強化</h1>
+          <p className="muted">针对一个薄弱点的瞬间说</p>
+        </header>
+        {!weakPoint ? (
+          <div className="card">
+            <p style={{ marginTop: 0 }}>找不到这个薄弱点了。</p>
+            <Link href="/weak">回薄弱点 →</Link>
+          </div>
+        ) : (
+          <div className="card">
+            <div className="weak-tag">{weakPoint.tag}</div>
+            <p className="muted" style={{ marginTop: 4 }}>
+              {weakPoint.zh} · 错 {weakPoint.miss} 次 · 对 {weakPoint.hit} 次
+            </p>
+            {weakPoint.examples.slice(0, 2).map((e, i) => (
+              <div key={i} className="weak-ex">
+                <s>{e.said}</s> → {e.better}
+              </div>
+            ))}
+            {weakPoint.drill?.length ? (
+              <>
+                {weakPoint.pattern && <div className="pattern">{weakPoint.pattern}</div>}
+                {weakPoint.explain && <p>{weakPoint.explain}</p>}
+                <button className="primary next-cta" onClick={() => begin()}>
+                  开始练 {weakPoint.drill.length} 句
+                </button>
+                <p style={{ textAlign: "center" }}>
+                  <button className="small" onClick={makeDrill} disabled={making}>
+                    {making ? "AI 出题中…" : "换一批句子"}
+                  </button>
+                </p>
+              </>
+            ) : (
+              <p className="muted judge-wait">{making ? "AI 正在讲解并出题…" : ""}</p>
+            )}
+            {error && (
+              <p className="error">
+                {error} <button className="small" onClick={makeDrill}>重试</button>
+              </p>
+            )}
+          </div>
+        )}
+        <Nav on="review" />
+      </main>
+    );
   }
 
   // ---- Intro ----
@@ -243,6 +352,7 @@ export default function Quick() {
           </div>
           <button className="primary next-cta" onClick={() => begin()}>开始</button>
         </div>
+        <WeakTeaser />
         <Nav on="review" />
       </main>
     );
@@ -252,8 +362,10 @@ export default function Quick() {
   if (!item) {
     // A sentence retried at the end counts once, by its first attempt.
     const firsts = results.filter((r, i) => results.findIndex((x) => x.item.ja === r.item.ja) === i);
-    const recalled = firsts.filter((r) => r.ms !== null && !r.hinted);
-    const avg = recalled.length ? recalled.reduce((a, r) => a + r.ms!, 0) / recalled.length : null;
+    const spoken = firsts.filter((r) => r.ms !== null && !r.hinted);
+    const recalled = spoken.filter((r) => !off.has(r.item.ja));
+    // Reaction time counts every answer that was spoken unaided, right or wrong.
+    const avg = spoken.length ? spoken.reduce((a, r) => a + r.ms!, 0) / spoken.length : null;
     const fast = recalled.filter((r) => r.ms! <= QUICK_LIMIT_MS).length;
     const today = dayKey();
     const before = totals(p, addDays(today, -7), addDays(today, -1));
@@ -277,7 +389,7 @@ export default function Quick() {
             </div>
             <div className="kpi">
               <b>{firsts.length - recalled.length}</b>
-              <span>没说出 / 靠提示</span>
+              <span>没说出·说错</span>
             </div>
           </div>
           {avg !== null && before.quickMs !== null && (
@@ -292,9 +404,15 @@ export default function Quick() {
         <div className="card">
           {results.map((r, i) => (
             <div key={i} className="qrow">
-              <span className={r.ms === null ? "bad" : r.hinted ? "warn" : r.ms <= QUICK_LIMIT_MS ? "good" : "warn"}>
-                {r.ms === null ? "✗" : r.hinted ? "提示" : `${secs(r.ms)}s`}
-              </span>
+              {(() => {
+                const first = results.findIndex((x) => x.item.ja === r.item.ja) === i;
+                const wrong = first && off.has(r.item.ja);
+                return (
+                  <span className={r.ms === null || wrong ? "bad" : r.hinted ? "warn" : r.ms <= QUICK_LIMIT_MS ? "good" : "warn"}>
+                    {r.ms === null ? "✗" : r.hinted ? "提示" : wrong ? "说错" : `${secs(r.ms)}s`}
+                  </span>
+                );
+              })()}
               <div>
                 <div>{r.item.ja}</div>
                 <div className="small-text">
@@ -305,7 +423,19 @@ export default function Quick() {
             </div>
           ))}
         </div>
-        <button className="primary next-cta" onClick={() => begin()}>再来一轮</button>
+        {drill ? (
+          <>
+            <button className="primary next-cta" onClick={() => begin()}>这个点再练一轮</button>
+            <p style={{ textAlign: "center" }}>
+              <Link href="/weak">回薄弱点 →</Link>
+            </p>
+          </>
+        ) : (
+          <>
+            <WeakTeaser />
+            <button className="primary next-cta" onClick={() => begin()}>再来一轮</button>
+          </>
+        )}
         <p style={{ textAlign: "center" }}>
           <Link href="/" className="muted">回到今天</Link>
         </p>
@@ -321,7 +451,9 @@ export default function Quick() {
   return (
     <main>
       <div className="row spread">
-        <Link href="/quick" className="muted" onClick={() => setRound(null)}>← 退出</Link>
+        <Link href={drill ? `/quick?drill=${encodeURIComponent(drill)}` : "/quick"} className="muted" onClick={() => setRound(null)}>
+          ← 退出
+        </Link>
         <span className="muted">
           {index + 1} / {round.length}
         </span>
@@ -377,6 +509,16 @@ export default function Quick() {
                 )}
               </p>
             )}
+            {result.heard && again === "off" && (
+              <AiJudge
+                zh={item.zh}
+                ja={item.ja}
+                where={item.where}
+                said={result.heard}
+                voice={item.voice}
+                onVerdict={results.filter((x) => x.item.ja === item.ja).length === 1 ? (v) => onVerdict(result, v) : undefined}
+              />
+            )}
             {result.sttFailed && again === "off" && <p className="muted">这次没连上识别服务，计时照样记下了。自己对照一下答案。</p>}
             {typeof again === "object" && (
               <p className="muted">
@@ -387,6 +529,9 @@ export default function Quick() {
                   </>
                 )}
               </p>
+            )}
+            {typeof again === "object" && again.ok && (
+              <AiJudge zh={item.zh} ja={item.ja} where={item.where} said={again.heard} voice={item.voice} />
             )}
             {comingBack && <p className="small-text">这句本轮最后会再出现一次。</p>}
             <div className="row" style={{ justifyContent: "center" }}>
@@ -442,5 +587,31 @@ export default function Quick() {
         </div>
       </div>
     </main>
+  );
+}
+
+// The shakiest grammar points so far, with a way into their drills.
+function WeakTeaser() {
+  const p = useProgress();
+  const list = weakList(p).slice(0, 3);
+  if (!list.length) return null;
+  return (
+    <div className="card">
+      <div className="row spread">
+        <strong>AI 发现的薄弱点</strong>
+        <Link href="/weak" className="small-text">全部 →</Link>
+      </div>
+      {list.map((w) => (
+        <Link key={w.tag} href={`/quick?drill=${encodeURIComponent(w.tag)}`} className="weak-row">
+          <div className="row spread">
+            <span className="weak-tag">{w.tag}</span>
+            <span className="small-text" style={{ color: "var(--accent)" }}>强化 →</span>
+          </div>
+          <div className="small-text">
+            {w.zh} · 错 {w.miss} 次
+          </div>
+        </Link>
+      ))}
+    </div>
   );
 }

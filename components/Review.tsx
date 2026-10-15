@@ -5,6 +5,7 @@ import { useState } from "react";
 import { play, ttsUrl, unlock } from "@/lib/client/player";
 import { transcribe } from "@/lib/client/recorder";
 import { dueCards, findScenario, recordSpeech, reviewCard, useProgress, wavSeconds, type Card } from "@/lib/client/progress";
+import AiJudge, { type Verdict } from "./AiJudge";
 import HoldButton from "./HoldButton";
 import Nav from "./Nav";
 
@@ -22,6 +23,7 @@ export default function Review() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [again, setAgain] = useState(0);
+  const [verdict, setVerdict] = useState<Verdict | null>(null);
 
   const due = dueCards(p);
   const list = queue ?? due;
@@ -70,6 +72,7 @@ export default function Review() {
     setIndex((i) => i + 1);
     setRevealed(false);
     setHeard(null);
+    setVerdict(null);
     setError("");
   }
 
@@ -132,6 +135,11 @@ export default function Review() {
           <div style={{ fontSize: 48 }}>🎉</div>
           <p>今天的复习做完了</p>
           {again > 0 && <p className="muted">有 {again} 次「再练」，明天还会再见到它们。</p>}
+          {Object.keys(p.weak).length > 0 && (
+            <p>
+              <Link href="/weak">看 AI 找出的薄弱点 →</Link>
+            </p>
+          )}
           <Link href="/" className="go">
             <div className="cta" style={{ marginTop: 0 }}>回到今天 →</div>
           </Link>
@@ -172,7 +180,17 @@ export default function Review() {
                 )}
               </p>
             )}
-            <button onClick={() => listen(card)}>▶ 听原声</button>
+            {heard && (
+              <AiJudge
+                zh={card.zh}
+                ja={card.ja}
+                where={scenario ? `${scenario.icon} ${scenario.titleZh}` : undefined}
+                said={heard.text}
+                voice={card.voice}
+                onVerdict={setVerdict}
+              />
+            )}
+            <button style={{ marginTop: 12 }} onClick={() => listen(card)}>▶ 听原声</button>
           </>
         ) : (
           <p className="muted">用日语怎么说？按住下面的按钮说出来。</p>
@@ -184,8 +202,10 @@ export default function Review() {
         <div className="dock-inner">
           {revealed ? (
             <div className="row" style={{ flexWrap: "nowrap" }}>
-              <button style={{ flex: 1, padding: 14 }} onClick={() => answer(false)}>再练</button>
-              <button className="primary" style={{ flex: 1, padding: 14 }} onClick={() => answer(true)}>
+              <button className={verdict === "off" ? "primary" : ""} style={{ flex: 1, padding: 14 }} onClick={() => answer(false)}>
+                再练
+              </button>
+              <button className={verdict === "off" ? "" : "primary"} style={{ flex: 1, padding: 14 }} onClick={() => answer(true)}>
                 记住了
               </button>
             </div>
