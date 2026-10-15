@@ -24,13 +24,12 @@ export type Scenario = {
   };
 };
 
-// Azure voice ids, optionally with "@style". Only Nanami has speaking styles in
-// Japanese, so she plays the AI's conversation partners in her casual "chat" and
-// polite "customerservice" styles. All of these are in the free F0 tier.
-const KACHO = "ja-JP-NanamiNeural@chat";
-const SATO = "ja-JP-MayuNeural";
+// Azure voices, tried in order (see lib/azure.ts). The HD voices sound the most
+// like real conversation; the standard voices after "|" are the free fallback.
+const KACHO = "ja-JP-Masaru:DragonHDLatestNeural|ja-JP-NanamiNeural@chat";
+const SATO = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-MayuNeural";
 const SUZUKI = "ja-JP-DaichiNeural";
-const KANRI = "ja-JP-NanamiNeural@customerservice";
+const KANRI = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-NanamiNeural@customerservice";
 
 export const scenarios: Scenario[] = [
   {

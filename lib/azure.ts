@@ -11,17 +11,26 @@ function escapeXml(s: string) {
   return s.replace(/[<>&'"]/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
-// A voice id is an Azure voice name, optionally followed by "@style".
-function ssml(text: string, voiceId: string) {
-  const [name, style] = voiceId.split("@");
+// HD voices aren't offered in Japan East, so they go through an optional second
+// Speech resource (AZURE_TTS_KEY / AZURE_TTS_REGION, e.g. southeastasia, tier S0).
+function hdConfig() {
+  const key = process.env.AZURE_TTS_KEY;
+  const region = process.env.AZURE_TTS_REGION;
+  return key && region ? { key, region } : null;
+}
+
+const isHd = (name: string) => name.includes(":DragonHD");
+
+// A voice is an Azure voice name, optionally followed by "@style".
+function ssml(text: string, voice: string) {
+  const [name, style] = voice.split("@");
   const body = style
     ? `<mstts:express-as style="${escapeXml(style)}">${escapeXml(text)}</mstts:express-as>`
     : escapeXml(text);
   return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="ja-JP"><voice name="${escapeXml(name)}">${body}</voice></speak>`;
 }
 
-export async function synthesize(text: string, voiceId: string) {
-  const { key, region } = config();
+async function synthesizeWith(text: string, voice: string, { key, region }: { key: string; region: string }) {
   const res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
     method: "POST",
     headers: {
@@ -30,10 +39,28 @@ export async function synthesize(text: string, voiceId: string) {
       "X-Microsoft-OutputFormat": "audio-24khz-48kbitrate-mono-mp3",
       "User-Agent": "nihongo-speak",
     },
-    body: ssml(text, voiceId),
+    body: ssml(text, voice),
   });
-  if (!res.ok) throw new Error(`Azure TTS ${res.status} for ${voiceId}: ${await res.text()}`);
+  if (!res.ok) throw new Error(`Azure TTS ${res.status} for ${voice}: ${await res.text()}`);
   return res.arrayBuffer();
+}
+
+// voiceId lists voices to try in order, separated by "|". An HD voice is skipped
+// when the HD resource isn't configured or fails (for example after the Azure
+// trial credit runs out), so playback falls back to the free standard voice.
+export async function synthesize(text: string, voiceId: string) {
+  const voices = voiceId.split("|");
+  const hd = hdConfig();
+  for (const voice of voices.slice(0, -1)) {
+    if (isHd(voice) && !hd) continue;
+    try {
+      return await synthesizeWith(text, voice, isHd(voice) ? hd! : config());
+    } catch (e) {
+      console.warn(e);
+    }
+  }
+  const last = voices[voices.length - 1];
+  return synthesizeWith(text, last, isHd(last) && hd ? hd : config());
 }
 
 export type WordScore = { word: string; accuracy: number; errorType: string };

@@ -4,7 +4,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const text = url.searchParams.get("text") ?? "";
   const voice = url.searchParams.get("voice") ?? "ja-JP-NanamiNeural";
-  if (!text || text.length > 400 || !/^ja-JP-\w+Neural(@\w+)?$/.test(voice)) {
+  if (!text || text.length > 400 || !/^ja-JP-[\w:]+Neural(@\w+)?(\|ja-JP-[\w:]+Neural(@\w+)?)*$/.test(voice)) {
     return new Response("bad request", { status: 400 });
   }
   try {
@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     return new Response(audio, {
       headers: {
         "Content-Type": "audio/mpeg",
-        // Same text + voice always gives the same audio, so let the phone keep it.
+        // Same text + voice gives the same audio, so let the phone keep it.
         "Cache-Control": "private, max-age=31536000, immutable",
       },
     });
