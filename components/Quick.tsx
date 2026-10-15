@@ -8,6 +8,7 @@ import {
   QUICK_LIMIT_MS,
   dayKey,
   hasCard,
+  quickMastered,
   quickRound,
   recordQuick,
   recordSpeech,
@@ -21,7 +22,18 @@ import { addDays } from "@/lib/progress-model";
 import HoldButton from "./HoldButton";
 import Nav from "./Nav";
 
-type Result = { item: QuickItem; ms: number | null; heard?: string; score?: number };
+type Result = {
+  item: QuickItem;
+  ms: number | null;
+  hinted: boolean;
+  heard?: string;
+  score?: number;
+  sttFailed?: boolean;
+};
+
+const SIZES = [5, 10, 20];
+const SIZE_KEY = "nihongo-speak:quick-size";
+const HINT_CHARS = 3;
 
 const secs = (ms: number) => (ms / 1000).toFixed(1);
 
@@ -29,14 +41,33 @@ function tone(score: number) {
   return score >= 80 ? "good" : score >= 60 ? "warn" : "bad";
 }
 
+function loadSize() {
+  try {
+    const n = Number(localStorage.getItem(SIZE_KEY));
+    return SIZES.includes(n) ? n : 10;
+  } catch {
+    return 10;
+  }
+}
+
 // Counts down from 3s, then keeps counting how far over the learner went.
-function Timer({ start, frozen }: { start: number; frozen: number | null }) {
+function Timer({ start, frozen, onOver }: { start: number; frozen: number | null; onOver: () => void }) {
   const [now, setNow] = useState(start);
+  const over = useRef(false);
+  const cb = useRef(onOver);
+  cb.current = onOver;
   useEffect(() => {
     if (frozen !== null) return;
-    const t = setInterval(() => setNow(Date.now()), 100);
+    const t = setInterval(() => {
+      const n = Date.now();
+      setNow(n);
+      if (!over.current && n - start > QUICK_LIMIT_MS) {
+        over.current = true;
+        cb.current();
+      }
+    }, 100);
     return () => clearInterval(t);
-  }, [frozen]);
+  }, [frozen, start]);
   const elapsed = (frozen ?? now) - start;
   const left = QUICK_LIMIT_MS - elapsed;
   const ratio = Math.max(0, left / QUICK_LIMIT_MS);
@@ -52,15 +83,23 @@ function Timer({ start, frozen }: { start: number; frozen: number | null }) {
 
 export default function Quick() {
   const p = useProgress();
+  const [size, setSize] = useState(10);
   const [round, setRound] = useState<QuickItem[] | null>(null);
+  const [retried, setRetried] = useState<Set<string>>(new Set());
   const [index, setIndex] = useState(0);
   const [shownAt, setShownAt] = useState(0);
   const [spokeAt, setSpokeAt] = useState<number | null>(null);
+  const [overtime, setOvertime] = useState(false);
+  const [hinted, setHinted] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [results, setResults] = useState<Result[]>([]);
+  // After the answer is shown: cover it and say it again from memory.
+  const [again, setAgain] = useState<"off" | "covered" | { heard: string; score?: number }>("off");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const spokeRef = useRef<number | null>(null);
+
+  useEffect(() => setSize(loadSize()), []);
 
   const item = round?.[index];
 
@@ -69,27 +108,46 @@ export default function Quick() {
     setShownAt(Date.now());
     setSpokeAt(null);
     spokeRef.current = null;
+    setOvertime(false);
+    setHinted(false);
     setResult(null);
+    setAgain("off");
     setError("");
   }
 
-  function begin() {
+  function begin(n = size) {
     unlock();
-    setRound(quickRound(p));
+    setRound(quickRound(p, n));
+    setRetried(new Set());
     setResults([]);
     show(0);
   }
 
+  function pickSize(n: number) {
+    setSize(n);
+    try {
+      localStorage.setItem(SIZE_KEY, String(n));
+    } catch {}
+  }
+
   function hear(i: QuickItem) {
     unlock();
-    play(ttsUrl(i.ja, i.voice), 1).catch(() => setError("音频播放失败"));
+    play(ttsUrl(i.ja, i.voice), 1).catch(() => setError("原声播放失败，可以再点一次「听原声」"));
   }
 
   function finish(r: Result) {
-    recordQuick(r.ms);
+    // Only the first attempt in a round counts toward the sentence's record;
+    // the retry at the end comes right after seeing the answer.
+    const retry = retried.has(r.item.ja);
+    if (!retry) recordQuick(r.item, r.ms, r.hinted);
     setResult(r);
     setResults((rs) => [...rs, r]);
     hear(r.item);
+    const weak = r.ms === null || r.hinted || r.ms > QUICK_LIMIT_MS;
+    if (weak && !retry && round) {
+      setRetried((s) => new Set(s).add(r.item.ja));
+      setRound([...round, r.item]);
+    }
   }
 
   function onStart() {
@@ -102,6 +160,7 @@ export default function Quick() {
 
   async function onRecorded(wav: Blob) {
     if (!item) return;
+    const ms = (spokeRef.current ?? Date.now()) - shownAt;
     setBusy(true);
     setError("");
     try {
@@ -111,9 +170,27 @@ export default function Quick() {
         return;
       }
       recordSpeech(wavSeconds(wav), r.scores?.pron);
-      finish({ item, ms: (spokeRef.current ?? Date.now()) - shownAt, heard: r.text, score: r.scores?.pron });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "识别失败");
+      finish({ item, ms, hinted, heard: r.text, score: r.scores?.pron });
+    } catch {
+      // The reaction time is what this drill measures, so a failed upload shouldn't cost the answer.
+      recordSpeech(wavSeconds(wav));
+      finish({ item, ms, hinted, sttFailed: true });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onAgain(wav: Blob) {
+    if (!item) return;
+    setBusy(true);
+    setError("");
+    try {
+      const r = await transcribe(wav, item.ja);
+      recordSpeech(wavSeconds(wav), r.scores?.pron);
+      setAgain({ heard: r.text || "（没听清）", score: r.scores?.pron });
+    } catch {
+      recordSpeech(wavSeconds(wav));
+      setAgain({ heard: "（识别失败，自己对照一下）" });
     } finally {
       setBusy(false);
     }
@@ -121,7 +198,7 @@ export default function Quick() {
 
   function giveUp() {
     if (!item) return;
-    finish({ item, ms: null });
+    finish({ item, ms: null, hinted });
   }
 
   function next() {
@@ -133,6 +210,7 @@ export default function Quick() {
   if (!round) {
     const today = dayKey();
     const t = totals(p, today, today);
+    const mastered = quickMastered(p);
     return (
       <main>
         <header className="page-mast">
@@ -141,18 +219,29 @@ export default function Quick() {
         </header>
         <div className="card">
           <p style={{ marginTop: 0 }}>
-            真实对话里只有一两秒反应时间。这里每题给你一句中文和它出现的场合，<strong>3 秒内按住按钮开口</strong>
+            真实对话里只有一两秒反应时间。每题给你一句中文和它出现的场合，<strong>3 秒内按住按钮开口</strong>
             ，说完对照标准说法。
           </p>
           <p className="muted">
-            一轮 10 题。不用说得和答案一模一样，意思对、先说出来最重要。App 会记下你从看到题目到开口用了几秒，看它一周周变短。
+            不用和答案一模一样，意思对、先说出来最重要。说不出来的句子，这一轮最后会再出现一次，之后几天也会优先出现，直到能连续三次 3 秒内说出来。
           </p>
-          {t.quickMs !== null && (
+          {(t.quickMs !== null || mastered > 0) && (
             <p className="muted">
-              今天已经答了 {t.quickSpoke} 题，平均 {secs(t.quickMs)} 秒开口。
+              {t.quickMs !== null && `今天已经答了 ${t.quickSpoke} 题，平均 ${secs(t.quickMs)} 秒开口。`}
+              {mastered > 0 && `已经练熟 ${mastered} 句。`}
             </p>
           )}
-          <button className="primary next-cta" onClick={begin}>开始一轮</button>
+          <div className="row" style={{ marginTop: 12 }}>
+            <span className="muted">每轮</span>
+            <div className="seg" style={{ flex: 1 }}>
+              {SIZES.map((n) => (
+                <button key={n} className={size === n ? "on" : ""} onClick={() => pickSize(n)}>
+                  {n} 题
+                </button>
+              ))}
+            </div>
+          </div>
+          <button className="primary next-cta" onClick={() => begin()}>开始</button>
         </div>
         <Nav on="review" />
       </main>
@@ -161,9 +250,11 @@ export default function Quick() {
 
   // ---- Summary ----
   if (!item) {
-    const spoke = results.filter((r) => r.ms !== null);
-    const avg = spoke.length ? spoke.reduce((a, r) => a + r.ms!, 0) / spoke.length : null;
-    const fast = spoke.filter((r) => r.ms! <= QUICK_LIMIT_MS).length;
+    // A sentence retried at the end counts once, by its first attempt.
+    const firsts = results.filter((r, i) => results.findIndex((x) => x.item.ja === r.item.ja) === i);
+    const recalled = firsts.filter((r) => r.ms !== null && !r.hinted);
+    const avg = recalled.length ? recalled.reduce((a, r) => a + r.ms!, 0) / recalled.length : null;
+    const fast = recalled.filter((r) => r.ms! <= QUICK_LIMIT_MS).length;
     const today = dayKey();
     const before = totals(p, addDays(today, -7), addDays(today, -1));
     return (
@@ -180,13 +271,13 @@ export default function Quick() {
             </div>
             <div className="kpi">
               <b>
-                {fast} / {results.length}
+                {fast} / {firsts.length}
               </b>
               <span>3 秒内</span>
             </div>
             <div className="kpi">
-              <b>{results.length - spoke.length}</b>
-              <span>没说出来</span>
+              <b>{firsts.length - recalled.length}</b>
+              <span>没说出 / 靠提示</span>
             </div>
           </div>
           {avg !== null && before.quickMs !== null && (
@@ -201,17 +292,20 @@ export default function Quick() {
         <div className="card">
           {results.map((r, i) => (
             <div key={i} className="qrow">
-              <span className={r.ms === null ? "bad" : r.ms <= QUICK_LIMIT_MS ? "good" : "warn"}>
-                {r.ms === null ? "✗" : `${secs(r.ms)}s`}
+              <span className={r.ms === null ? "bad" : r.hinted ? "warn" : r.ms <= QUICK_LIMIT_MS ? "good" : "warn"}>
+                {r.ms === null ? "✗" : r.hinted ? "提示" : `${secs(r.ms)}s`}
               </span>
               <div>
                 <div>{r.item.ja}</div>
-                <div className="small-text">{r.item.zh}</div>
+                <div className="small-text">
+                  {r.item.zh}
+                  {results.findIndex((x) => x.item.ja === r.item.ja) !== i && " · 再来一次"}
+                </div>
               </div>
             </div>
           ))}
         </div>
-        <button className="primary next-cta" onClick={begin}>再来一轮</button>
+        <button className="primary next-cta" onClick={() => begin()}>再来一轮</button>
         <p style={{ textAlign: "center" }}>
           <Link href="/" className="muted">回到今天</Link>
         </p>
@@ -222,6 +316,8 @@ export default function Quick() {
 
   // ---- One prompt ----
   const saved = hasCard(p, item.ja);
+  const comingBack = result && round.slice(index + 1).some((i) => i.ja === item.ja);
+  const hint = (item.reading ?? item.ja).slice(0, HINT_CHARS);
   return (
     <main>
       <div className="row spread">
@@ -237,19 +333,41 @@ export default function Quick() {
       <div className="card flash">
         <div className="muted">{item.where}</div>
         <div className="prompt">{item.zh}</div>
-        {!result && <Timer key={shownAt} start={shownAt} frozen={spokeAt} />}
+        {!result && (
+          <>
+            <Timer key={shownAt} start={shownAt} frozen={spokeAt} onOver={() => setOvertime(true)} />
+            {hinted ? (
+              <div className="qhint">开头：{hint}…</div>
+            ) : (
+              overtime &&
+              spokeAt === null && (
+                <button className="small" style={{ marginTop: 10 }} onClick={() => setHinted(true)}>
+                  💡 给个开头
+                </button>
+              )
+            )}
+          </>
+        )}
         {result && (
           <>
             <div className="qtime">
               {result.ms === null ? (
                 <span className="bad">这次没说出来，没关系</span>
+              ) : result.hinted ? (
+                <span className="warn">看了提示后 {secs(result.ms)} 秒开口</span>
               ) : (
                 <span className={result.ms <= QUICK_LIMIT_MS ? "good" : "warn"}>{secs(result.ms)} 秒开口</span>
               )}
             </div>
-            <div className="answer">{item.ja}</div>
-            {item.reading && <div className="kana">{item.reading}</div>}
-            {result.heard && (
+            {again === "covered" ? (
+              <p className="muted">答案盖住了。不看原文，按住再说一遍。</p>
+            ) : (
+              <>
+                <div className="answer">{item.ja}</div>
+                {item.reading && <div className="kana">{item.reading}</div>}
+              </>
+            )}
+            {result.heard && again === "off" && (
               <p className="muted">
                 你说：{result.heard}
                 {result.score !== undefined && (
@@ -259,6 +377,18 @@ export default function Quick() {
                 )}
               </p>
             )}
+            {result.sttFailed && again === "off" && <p className="muted">这次没连上识别服务，计时照样记下了。自己对照一下答案。</p>}
+            {typeof again === "object" && (
+              <p className="muted">
+                再说一遍：{again.heard}
+                {again.score !== undefined && (
+                  <>
+                    {" "}· <strong className={tone(again.score)}>发音 {again.score}</strong>
+                  </>
+                )}
+              </p>
+            )}
+            {comingBack && <p className="small-text">这句本轮最后会再出现一次。</p>}
             <div className="row" style={{ justifyContent: "center" }}>
               <button onClick={() => hear(item)}>▶ 听原声</button>
               <button
@@ -277,11 +407,7 @@ export default function Quick() {
 
       <div className="dock" style={{ bottom: 0, zIndex: 20 }}>
         <div className="dock-inner">
-          {result ? (
-            <button className="primary" style={{ width: "100%", padding: 14 }} onClick={next}>
-              {index + 1 < round.length ? "下一题 →" : "看结果"}
-            </button>
-          ) : (
+          {!result ? (
             <div className="row" style={{ flexWrap: "nowrap" }}>
               <button onClick={giveUp} disabled={busy}>说不出来</button>
               <div style={{ flex: 1 }}>
@@ -293,6 +419,24 @@ export default function Quick() {
                   onError={setError}
                 />
               </div>
+            </div>
+          ) : again === "covered" ? (
+            <div className="row" style={{ flexWrap: "nowrap" }}>
+              <button onClick={() => setAgain("off")} disabled={busy}>算了</button>
+              <div style={{ flex: 1 }}>
+                <HoldButton label={busy ? "识别中…" : "按住再说一遍"} disabled={busy} onRecorded={onAgain} onError={setError} />
+              </div>
+            </div>
+          ) : (
+            <div className="row" style={{ flexWrap: "nowrap" }}>
+              {again === "off" && (
+                <button style={{ flex: 1, padding: 14 }} onClick={() => { stop(); setAgain("covered"); }}>
+                  🙈 盖住再说
+                </button>
+              )}
+              <button className="primary" style={{ flex: 1, padding: 14 }} onClick={next}>
+                {index + 1 < round.length ? "下一题 →" : "看结果"}
+              </button>
             </div>
           )}
         </div>

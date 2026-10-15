@@ -767,3 +767,4 @@ h2 span { font-family: -apple-system, "PingFang SC", sans-serif; font-size: 12px
 .qrow { display: flex; gap: 12px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .qrow:last-child { border-bottom: none; }
 .qrow > span { flex: none; width: 44px; font-weight: 700; }
+.qhint { margin-top: 10px; font-family: var(--serif-ja); font-size: 18px; color: var(--accent); }

@@ -298,7 +298,7 @@ export function quickPool(p: Progress): QuickItem[] {
           zh: l.zh,
           voice: l.voice,
           scenarioId: s.id,
-          where: `${s.icon} ${s.titleZh} · ${l.speaker}`,
+          where: `${s.icon} ${s.titleZh} · 你是${l.speaker}`,
         })),
     );
   const seen = new Set<string>();
@@ -309,27 +309,64 @@ export function quickPool(p: Progress): QuickItem[] {
   });
 }
 
-// Pick n prompts, mostly from the front of the pool (cards and practised scenarios).
+const shuffle = <T,>(x: T[]) => x.map((v) => [Math.random(), v] as const).sort((a, b) => a[0] - b[0]).map(([, v]) => v);
+
+// Pick n prompts. Sentences the learner missed or answered slowly come back first,
+// then ones never tried, then fast ones not seen for a while; mastered ones
+// (three fast answers in a row) only fill any space left.
 export function quickRound(p: Progress, n = 10): QuickItem[] {
+  const today = dayKey();
   const pool = quickPool(p);
-  const front = pool.slice(0, Math.max(n * 2, 20));
-  const shuffle = <T,>(x: T[]) => x.map((v) => [Math.random(), v] as const).sort((a, b) => a[0] - b[0]).map(([, v]) => v);
-  return shuffle(front).slice(0, n);
+  const stat = (i: QuickItem) => p.quick[i.ja];
+  const weak = pool.filter((i) => {
+    const s = stat(i);
+    return s && s.fast === 0 && s.day < today;
+  });
+  const fresh = pool.filter((i) => !stat(i));
+  const stale = pool
+    .filter((i) => {
+      const s = stat(i);
+      return s && s.fast > 0 && s.fast < 3 && s.day <= addDays(today, -2);
+    })
+    .sort((x, y) => (stat(x)!.day < stat(y)!.day ? -1 : 1));
+  const rest = pool.filter((i) => !weak.includes(i) && !fresh.includes(i) && !stale.includes(i));
+  const picked = [
+    ...shuffle(weak).slice(0, Math.ceil(n * 0.4)),
+    ...fresh.slice(0, Math.max(n * 2, 20)),
+    ...stale,
+    ...shuffle(rest),
+  ];
+  // Keep the priority order when choosing, then mix so weak ones aren't all at the start.
+  const chosen = [...new Map(picked.map((i) => [i.ja, i])).values()].slice(0, n);
+  return shuffle(chosen);
 }
 
-// One prompt answered (or skipped): reaction time in ms, or null if the learner didn't speak.
-export function recordQuick(ms: number | null) {
+// One prompt answered: reaction time in ms, or null if the learner couldn't say it.
+// A hinted answer counts as spoken (for speaking time and XP) but not as recalled.
+export function recordQuick(item: QuickItem, ms: number | null, hinted = false) {
   const spoke = ms !== null;
-  let next = bumpStats(read(), (s) => ({
-    ...s,
-    quickN: (s.quickN ?? 0) + 1,
-    quickSpoke: (s.quickSpoke ?? 0) + (spoke ? 1 : 0),
-    quickMsSum: (s.quickMsSum ?? 0) + (ms ?? 0),
-    quickFast: (s.quickFast ?? 0) + (spoke && ms <= QUICK_LIMIT_MS ? 1 : 0),
-  }));
+  const fast = spoke && !hinted && ms <= QUICK_LIMIT_MS;
+  const p = read();
+  const prev = p.quick[item.ja];
+  let next = bumpStats(
+    {
+      ...p,
+      quick: { ...p.quick, [item.ja]: { day: dayKey(), ms: spoke && !hinted ? ms : null, fast: fast ? (prev?.fast ?? 0) + 1 : 0 } },
+    },
+    (s) => ({
+      ...s,
+      quickN: (s.quickN ?? 0) + 1,
+      quickSpoke: (s.quickSpoke ?? 0) + (spoke && !hinted ? 1 : 0),
+      quickMsSum: (s.quickMsSum ?? 0) + (spoke && !hinted ? ms : 0),
+      quickFast: (s.quickFast ?? 0) + (fast ? 1 : 0),
+    }),
+  );
   if (spoke) next = gainXp(next, XP.quick, "quick");
   write(next);
 }
+
+// How many sentences have been answered fast three times in a row.
+export const quickMastered = (p: Progress) => Object.values(p.quick).filter((s) => s.fast >= 3).length;
 
 export function markListened(s: Scenario) {
   const p = bumpStats(read(), (st) => ({ ...st, listenLines: (st.listenLines ?? 0) + s.lines.length }));

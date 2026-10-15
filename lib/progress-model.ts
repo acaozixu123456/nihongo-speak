@@ -51,6 +51,13 @@ export type DiaryEntry = {
 
 export type CustomScenario = Scenario & { createdAt: number };
 
+// The latest quick-response attempt at one sentence, keyed by the sentence text.
+export type QuickStat = {
+  day: string; // YYYY-MM-DD of the last attempt
+  ms: number | null; // reaction time, or null if the learner couldn't say it (or needed a hint)
+  fast: number; // answers in a row that started within 3s
+};
+
 export type Progress = {
   goal: number;
   days: Record<string, number>; // YYYY-MM-DD -> xp
@@ -60,6 +67,7 @@ export type Progress = {
   removedCards: string[];
   custom: CustomScenario[];
   diary: DiaryEntry[];
+  quick: Record<string, QuickStat>;
   freezes: number; // streak protectors in hand
   frozen: string[]; // days covered by a protector
   freezeAwardDay?: string;
@@ -76,6 +84,7 @@ export const EMPTY: Progress = {
   removedCards: [],
   custom: [],
   diary: [],
+  quick: {},
   freezes: 0,
   frozen: [],
   bonusDays: [],
@@ -153,6 +162,9 @@ export function merge(a: Progress, b: Progress): Progress {
   // A card saved again after being removed lives in the newer copy's list.
   const live = [...cards.values()].filter((c) => !removedCards.includes(c.id) || newer.cards.some((n) => n.id === c.id));
 
+  const quick: Record<string, QuickStat> = { ...a.quick };
+  for (const [k, v] of Object.entries(b.quick ?? {})) if (!quick[k] || v.day > quick[k].day) quick[k] = v;
+
   const byId = <T extends { id: string }>(x: T[], y: T[]) => [...new Map([...x, ...y].map((i) => [i.id, i])).values()];
 
   return {
@@ -164,6 +176,7 @@ export function merge(a: Progress, b: Progress): Progress {
     removedCards: removedCards.filter((id) => !live.some((c) => c.id === id)),
     custom: byId(a.custom, b.custom).sort((x, y) => y.createdAt - x.createdAt),
     diary: byId(a.diary, b.diary).sort((x, y) => (x.id < y.id ? 1 : -1)),
+    quick,
     freezes: newer.freezes,
     frozen: [...new Set([...a.frozen, ...b.frozen])],
     freezeAwardDay: newer.freezeAwardDay,
