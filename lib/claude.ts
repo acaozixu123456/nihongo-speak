@@ -13,6 +13,14 @@ const MODEL = "claude-haiku-5-5";
 const workspace = process.env.ANTHROPIC_WORKSPACE_ID;
 const client = new Anthropic(workspace ? { defaultHeaders: { "anthropic-workspace-id": workspace } } : {});
 
+// Haiku drifts into Japanese when the instructions are in Japanese, so every call ends with this.
+const ZH_RULE = `
+
+【出力の言語】中国語の項目（名前が zh・_zh・Zh で終わるもの：講評、説明、理由、訳）は、必ず簡体字の中国語で書く。日本語で書いてはいけない。
+日本語の項目（ja、better、reading、kana、例文、言い換え）は日本語のまま。`;
+const parse: typeof client.messages.parse = ((params, options) =>
+  client.messages.parse({ ...params, system: `${params.system ?? ""}${ZH_RULE}` }, options)) as typeof client.messages.parse;
+
 export type Turn = { role: "user" | "assistant"; text: string };
 
 function roleplaySystem(s: Talk) {
@@ -50,7 +58,7 @@ const ReplySchema = z.object({
 });
 
 export async function roleplayReply(s: Talk, history: Turn[]) {
-  const res = await client.messages.parse({
+  const res = await parse({
     model: MODEL,
     max_tokens: 2000,
     system: roleplaySystem(s),
@@ -72,7 +80,7 @@ export async function hint(s: Talk, history: Turn[], wantZh?: string) {
   const ask = wantZh
     ? `学習者は次にこう言いたい（中国語）：「${wantZh}」。この場面で自然な日本語の言い方を提案してください。`
     : "学習者が次に何と言えばいいか詰まっています。この場面で自然な返答を提案してください。";
-  const res = await client.messages.parse({
+  const res = await parse({
     model: MODEL,
     max_tokens: 2000,
     system: `${roleplaySystem(s)}
@@ -109,7 +117,7 @@ export async function feedback(s: Talk, history: Turn[]) {
   const transcript = history
     .map((t) => `${t.role === "user" ? "学習者" : "相手"}：${t.text}`)
     .join("\n");
-  const res = await client.messages.parse({
+  const res = await parse({
     model: MODEL,
     max_tokens: 8000,
     system: `あなたは日本在住の社会人向けの日本語コーチです。学習者は中国人、レベルはN4〜N3。
@@ -169,7 +177,7 @@ export type Photo = { mediaType: "image/jpeg" | "image/png" | "image/webp"; data
 // `topic` is either a situation to practise or what happened when the learner couldn't get the words out;
 // `photo` is a picture from their day (a sign, a menu, an email) to build the scene around.
 export async function generateScenario(topic: string, category: "work" | "life", photo?: Photo) {
-  const res = await client.messages.parse({
+  const res = await parse({
     model: MODEL,
     max_tokens: 16000,
     system: `あなたは日本語教材の作者です。学習者は日本に住んで${category === "work" ? "IT企業で働いている" : "生活している"}中国人で、日本語レベルはJLPT N4〜N3です。
@@ -211,7 +219,7 @@ const DiarySchema = z.object({
 export type DiaryFeedback = z.infer<typeof DiarySchema>;
 
 export async function diaryFeedback(prompt: string, text: string) {
-  const res = await client.messages.parse({
+  const res = await parse({
     model: MODEL,
     max_tokens: 8000,
     system: `あなたは日本在住の社会人向けの日本語コーチです。学習者は中国人、レベルはN4〜N3。
@@ -265,7 +273,7 @@ export async function judgeAnswer(a: { zh: string; ja: string; where?: string; s
 }
 
 async function judgeOnce(a: { zh: string; ja: string; where?: string; said: string; known?: string[] }) {
-  const res = await client.messages.parse({
+  const res = await parse({
     model: MODEL,
     max_tokens: 4000,
     system: `あなたは日本在住の社会人向けの日本語コーチです。学習者は中国人、レベルはN4〜N3。
@@ -315,7 +323,7 @@ const DrillSchema = z.object({
 export type Drill = z.infer<typeof DrillSchema>;
 
 export async function makeDrill(w: { tag: string; zh: string; examples: { said: string; better: string }[] }) {
-  const res = await client.messages.parse({
+  const res = await parse({
     model: MODEL,
     max_tokens: 4000,
     system: `あなたは日本在住の社会人向けの日本語コーチです。学習者は中国人、レベルはN4〜N3。日本で働き、生活しています。
@@ -361,7 +369,7 @@ function knownLine(known?: string[]) {
 // Short coaching calls; one retry so the learner still gets feedback after a hiccup.
 async function haikuFirst<S extends z.ZodType>(schema: S, system: string, content: string): Promise<z.infer<S>> {
   const run = async () => {
-    const res = await client.messages.parse({
+    const res = await parse({
       model: MODEL,
       max_tokens: 3000,
       system,
