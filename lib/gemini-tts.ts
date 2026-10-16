@@ -55,31 +55,89 @@ async function mp3(samples: Int16Array) {
   return Buffer.concat(parts);
 }
 
-// Only the sentence is sent: a style instruction in front of it gets read out loud.
-export async function synthesizeGemini(text: string, voice: string, timeoutMs = 15000, model = FLASH) {
+const API = "https://generativelanguage.googleapis.com/v1beta";
+
+function apiKey() {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY is not set");
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-    method: "POST",
-    headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text }] }],
-      generationConfig: {
-        responseModalities: ["AUDIO"],
-        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
-      },
-    }),
-    signal: AbortSignal.timeout(timeoutMs),
+  return key;
+}
+
+// Only the sentence is sent: a style instruction in front of it gets read out loud.
+const request = (text: string, voice: string) => ({
+  contents: [{ parts: [{ text }] }],
+  generationConfig: {
+    responseModalities: ["AUDIO"],
+    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
+  },
+});
+
+type Reply = { candidates?: { content?: { parts?: { inlineData?: { data?: string } }[] } }[] };
+
+function audio(reply: Reply, voice: string) {
+  const b64 = reply.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data)?.inlineData?.data;
+  if (!b64) throw new Error(`Gemini TTS returned no audio for ${voice}`);
+  return mp3(pcm(Buffer.from(b64, "base64")));
+}
+
+async function call(path: string, init?: RequestInit) {
+  const res = await fetch(`${API}/${path}`, {
+    ...init,
+    headers: { "x-goog-api-key": apiKey(), "Content-Type": "application/json" },
   });
   if (!res.ok) {
     const body = await res.text();
     const daily = body.includes("per_day") ? " (daily quota)" : "";
-    throw new Error(`Gemini TTS ${res.status}${daily} for ${voice} on ${model}: ${body.slice(0, 200)}`);
+    throw new Error(`Gemini TTS ${res.status}${daily} on ${path}: ${body.slice(0, 200)}`);
   }
-  const data = (await res.json()) as {
-    candidates?: { content?: { parts?: { inlineData?: { data?: string } }[] } }[];
+  return res.json();
+}
+
+export async function synthesizeGemini(text: string, voice: string, timeoutMs = 15000, model = FLASH) {
+  const reply = await call(`models/${model}:generateContent`, {
+    method: "POST",
+    body: JSON.stringify(request(text, voice)),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  return audio(reply, voice);
+}
+
+// The Batch API costs half and doesn't count against the 100-a-day quota, but answers within
+// minutes rather than seconds, so it is for scripts/bake-voices.ts only. Resolves to one MP3 per
+// key; a sentence that failed is missing from the map.
+export async function synthesizeGeminiBatch(items: { key: string; text: string; voice: string }[], model = FLASH) {
+  const created = await call(`models/${model}:batchGenerateContent`, {
+    method: "POST",
+    body: JSON.stringify({
+      batch: {
+        display_name: "nihongo-speak voices",
+        input_config: {
+          requests: { requests: items.map((i) => ({ request: request(i.text, i.voice), metadata: { key: i.key } })) },
+        },
+      },
+    }),
+  });
+  type Batch = {
+    done?: boolean;
+    metadata?: { state?: string };
+    response?: { inlinedResponses?: { inlinedResponses?: { response?: Reply; error?: unknown; metadata?: { key?: string } }[] } };
   };
-  const b64 = data.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data)?.inlineData?.data;
-  if (!b64) throw new Error(`Gemini TTS returned no audio for ${voice}`);
-  return mp3(pcm(Buffer.from(b64, "base64")));
+  let batch: Batch = created;
+  while (!batch.done) {
+    await new Promise((r) => setTimeout(r, 30000));
+    batch = await call(created.name);
+  }
+  if (batch.metadata?.state !== "BATCH_STATE_SUCCEEDED") throw new Error(`Gemini batch ended ${batch.metadata?.state}`);
+  const voices = new Map(items.map((i) => [i.key, i.voice]));
+  const out = new Map<string, Buffer>();
+  for (const r of batch.response?.inlinedResponses?.inlinedResponses ?? []) {
+    const key = r.metadata?.key;
+    if (!key || !r.response) continue;
+    try {
+      out.set(key, await audio(r.response, voices.get(key) ?? ""));
+    } catch (e) {
+      console.error(String(e));
+    }
+  }
+  return out;
 }
