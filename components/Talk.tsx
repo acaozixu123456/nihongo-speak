@@ -7,32 +7,17 @@ import { play, ttsUrl, unlock } from "@/lib/client/player";
 import { transcribe } from "@/lib/client/recorder";
 import Link from "next/link";
 import {
-  hasCard,
   recordFeedback,
   recordSpeech,
   recordTalkTurn,
-  toggleCard,
   useProgress,
   wavSeconds,
-  type Progress,
 } from "@/lib/client/progress";
 import HoldButton from "./HoldButton";
 import TurnNote from "./TurnNote";
+import FeedbackCard, { Star } from "./FeedbackCard";
 
 type Message = Turn & { zh?: string };
-
-function Star({ p, ja, zh, reading, voice, scenarioId }: { p: Progress; ja: string; zh: string; reading?: string; voice: string; scenarioId: string }) {
-  const saved = hasCard(p, ja);
-  return (
-    <button
-      className={`small star ${saved ? "on" : ""}`}
-      aria-label={saved ? "取消收藏" : "收藏到复习"}
-      onClick={() => toggleCard({ ja, zh, reading, voice, scenarioId })}
-    >
-      {saved ? "已收藏" : "收藏"}
-    </button>
-  );
-}
 
 async function post<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
@@ -237,39 +222,10 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
 
       {busy === "feedback" && <p className="muted">正在点评…</p>}
       {feedback && (
-        <div className="card">
-          <h2 style={{ marginTop: 0 }}>点评</h2>
-          <p>{feedback.overall_zh}</p>
-          {feedback.corrections.length > 0 && <h2>可以说得更好</h2>}
-          {feedback.corrections.map((c, i) => (
-            <div key={i} style={{ marginBottom: 12 }}>
-              <div className="muted">你说：{c.you_said}</div>
-              <div className="ja">→ {c.better}</div>
-              <div className="zh">{c.why_zh}</div>
-              <div className="row">
-                <button className="small" onClick={() => { unlock(); say(c.better); }}>听一下</button>
-                <Star {...card} ja={c.better} zh={`换个更自然的说法：${c.you_said}`} />
-              </div>
-            </div>
-          ))}
-          <h2>值得记住的表达</h2>
-          {feedback.phrases.map((p, i) => (
-            <div key={i} style={{ marginBottom: 10 }}>
-              <div className="ja">{p.ja}</div>
-              <div className="kana">{p.reading}</div>
-              <div className="zh">{p.zh}</div>
-              <div className="row">
-                <button className="small" onClick={() => { unlock(); say(p.ja); }}>听一下</button>
-                <Star {...card} ja={p.ja} zh={p.zh} reading={p.reading} />
-              </div>
-            </div>
-          ))}
-          <p className="muted">收藏的句子会进入复习，隔几天提醒你说一遍。</p>
-          <div className="row">
-            <Link href="/scenes" className="btn primary" style={{ flex: 1 }}>回到场景 →</Link>
-            <button onClick={start}>再来一次</button>
-          </div>
-        </div>
+        <FeedbackCard feedback={feedback} voice={talk.aiVoice} scenarioId={scenario.id}>
+          <Link href="/scenes" className="btn primary" style={{ flex: 1 }}>回到场景 →</Link>
+          <button onClick={start}>再来一次</button>
+        </FeedbackCard>
       )}
 
       {error && <p className="error">{error}</p>}

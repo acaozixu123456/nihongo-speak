@@ -141,6 +141,7 @@ function Result({ entry }: { entry: DiaryEntry }) {
         </>
       )}
       <h2>自然的说法，跟读一遍</h2>
+      <p className="small-text" style={{ marginTop: -4 }}>这些句子之后会出现在瞬间说里：看中文，用你自己的话说出来。</p>
       {entry.natural.map((s, i) => (
         <Sentence key={i} s={s} entryId={entry.id} />
       ))}

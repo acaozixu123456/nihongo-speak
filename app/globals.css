@@ -432,3 +432,40 @@ main.home { padding: 0 0 calc(env(safe-area-inset-bottom) + 100px); }
 .podcast-script p { margin: 8px 0; }
 .pod-ja { margin: 12px 0; padding-left: 12px; border-left: 2px solid var(--accent); font-family: var(--ja); }
 .row .seg, .card > .seg:first-child { margin: 0; }
+
+/* ---- Phone call ---- */
+.call-head { text-align: center; margin: 28px 0 22px; }
+.call-avatar {
+  width: 84px;
+  height: 84px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  background: var(--soft);
+  display: grid;
+  place-items: center;
+  font-family: var(--ja);
+  font-weight: 700;
+  font-size: 30px;
+  color: var(--accent);
+}
+.call-who { font-family: var(--ja); font-size: 24px; font-weight: 700; }
+.call-state { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.call-go { display: block; width: 100%; margin-top: 18px; padding: 15px; font-size: 17px; }
+.call-pulse {
+  width: 180px;
+  height: 180px;
+  margin: 10px auto 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 15px;
+  box-shadow: 0 1px 2px rgba(20, 20, 20, 0.05);
+  transition: box-shadow 0.3s, color 0.3s;
+}
+.call-pulse.on { color: var(--accent); animation: rec 1.4s ease-in-out infinite; }
+button.hangup { background: var(--text); border-color: var(--text); color: #fff; padding: 15px 20px; }
+.call-line { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.call-line:last-child { border-bottom: 0; }
+.call-line.me .ja { color: var(--accent-ink); }
