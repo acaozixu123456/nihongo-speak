@@ -164,12 +164,14 @@ const HOST = { A: "ja-JP-AoiNeural", B: "ja-JP-KeitaNeural" } as const;
 // The hook in Chinese, the chat straight through in Japanese (each line its own clip, so "再听"
 // lands on it), then three phrases to keep and a question to think about.
 function radioClips(ep: Radio): Clip[] {
-  const talk: Clip[] = ep.lines.map((l, i) => ({
+  // Stage directions like （笑） would be read out loud.
+  const say = (ja: string) => ja.replace(/[（(][^）)]*[）)]/g, "").replace(/〜/g, "").trim();
+  const talk: Clip[] = ep.lines.filter((l) => say(l.ja)).map((l, i) => ({
     block: "radio",
     show: l.ja,
     sub: `${l.who === "A" ? "ハル" : "ケン"} · ${l.zh}`,
     line: { ja: l.ja, zh: l.zh, voice: HOST[l.who] },
-    parts: [...(i ? [] : [zh(`趣味电台：${ep.title_zh}`, 500), zh(ep.hook_zh, 900)]), { voice: HOST[l.who], text: l.ja, pauseMs: 350 }],
+    parts: [...(i ? [] : [zh(`趣味电台：${ep.title_zh}`, 500), zh(ep.hook_zh, 900)]), { voice: HOST[l.who], text: say(l.ja), pauseMs: 350 }],
   }));
   const keep: Clip[] = ep.phrases.map((ph, i) => ({
     block: "radio",
@@ -178,9 +180,9 @@ function radioClips(ep: Radio): Clip[] {
     line: { ja: ph.ja, zh: ph.zh, voice: HOST.A },
     parts: [
       ...(i ? [] : [zh(NARRATION.radioKeep, 600)]),
-      { voice: HOST.A, text: ph.ja, pauseMs: 700 },
+      { voice: HOST.A, text: say(ph.ja), pauseMs: 700 },
       zh(ph.zh, 700),
-      { voice: HOST.A, text: ph.ja, pauseMs: 1500 },
+      { voice: HOST.A, text: say(ph.ja), pauseMs: 1500 },
     ],
   }));
   const quiz: Clip = { block: "radio", show: ep.title_zh, sub: ep.quiz_zh, parts: [zh(ep.quiz_zh, 2500)] };

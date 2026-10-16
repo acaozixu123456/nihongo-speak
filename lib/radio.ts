@@ -22,7 +22,7 @@ export const RadioSchema = z.object({
     )
     .describe("18〜26行の掛け合い"),
   phrases: z
-    .array(z.object({ ja: z.string().describe("会話に出てきた、そのまま日常や職場で使える表現（日本語、20字以内）"), zh: z.string() }))
+    .array(z.object({ ja: z.string().describe("会話に出てきた、そのまま日常や職場で使える表現（日本語、20字以内、「〜」を使わない完全な文）"), zh: z.string() }))
     .describe("3個"),
   quiz_zh: z.string().describe("最後に中国語のナレーターが出す、今日の話に関する一問（答えは言わない、1文）"),
 });
@@ -58,8 +58,9 @@ const SYSTEM = `あなたは日本語学習者向けポッドキャストの放�
 - 語彙・文法はN3程度。難しい言葉が出たら、会話の中でもう一人が言い換える（「つまり〜ってこと？」）。
 - 1行は短く（40字以内）。話し言葉で自然に。縮約形（〜ちゃう、〜てる）はそのまま使ってよい。
 - 漢字は普通に使う（読み上げ用なので、ふりがなは不要）。
+- 全部そのまま読み上げるので、（笑）のようなト書き・記号・絵文字は書かない。笑いはセリフで表す（「あはは」など）。
 
-phrases には会話に実際に出てきた表現から、職場や日常でそのまま使えるものを選ぶ。`;
+phrases には会話に実際に出てきた表現から、職場や日常でそのまま使えるものを選ぶ。「〜」で省略せず、そのまま言える短い文にする。`;
 
 function prompt(avoid: string[]) {
   const topic = TOPICS[Math.floor(Math.random() * TOPICS.length)];
