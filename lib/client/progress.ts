@@ -19,12 +19,13 @@ import {
   type DrillItem,
   type Progress,
   type ScenarioProgress,
+  type StuckLine,
   type WeakPoint,
   type XpKind,
 } from "@/lib/progress-model";
 
 export { dayKey, level, streak, totalXp };
-export type { Card, CustomScenario, DiaryEntry, DrillItem, Progress, WeakPoint };
+export type { Card, CustomScenario, DiaryEntry, DrillItem, Progress, StuckLine, WeakPoint };
 
 // The phone's localStorage is the working copy; it is synced to the server
 // (when storage is set up) so nothing is lost if Safari data is cleared.
@@ -262,6 +263,21 @@ export function recordSpeech(sec: number, pron?: number) {
       pronSum: (s.pronSum ?? 0) + (pron ?? 0),
       pronN: (s.pronN ?? 0) + (pron === undefined ? 0 : 1),
     })),
+  );
+}
+
+// ---- 摸鱼模式 ----
+
+export function recordMoyu(sec: number) {
+  write(bumpStats(read(), (s) => ({ ...s, moyuSec: (s.moyuSec ?? 0) + sec })));
+}
+
+// A sentence the learner asked to hear again: kept for today, to be said out loud after work.
+export function recordStuck(line: StuckLine) {
+  write(
+    bumpStats(read(), (s) =>
+      s.stuck?.some((x) => x.ja === line.ja) ? s : { ...s, stuck: [...(s.stuck ?? []), line].slice(-30) },
+    ),
   );
 }
 
