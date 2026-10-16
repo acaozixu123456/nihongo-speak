@@ -31,7 +31,10 @@ function pcm(bytes: Buffer) {
   if (bytes.subarray(0, 4).toString("latin1") === "RIFF") {
     const at = bytes.indexOf("data", 12, "latin1");
     if (at < 0) throw new Error("Gemini TTS: WAV without data");
-    body = bytes.subarray(at + 8);
+    // Only the data chunk is sound: Gemini puts another chunk after it, which played as a loud
+    // burst of noise at the end of every sentence.
+    const size = bytes.readUInt32LE(at + 4);
+    body = bytes.subarray(at + 8, Math.min(bytes.length, at + 8 + size));
   }
   const copy = new Uint8Array(body.length - (body.length % 2));
   copy.set(body.subarray(0, copy.length));
@@ -45,7 +48,8 @@ async function mp3(samples: Int16Array) {
   const enc = new Mp3Encoder(1, 24000, 48);
   const parts: Buffer[] = [];
   // lamejs hands back Int8Arrays despite its types.
-  const add = (b: ArrayBufferView) => parts.push(Buffer.from(b.buffer, b.byteOffset, b.byteLength));
+  // Copied, since the encoder may reuse its output buffer between calls.
+  const add = (b: ArrayBufferView) => parts.push(Buffer.from(new Uint8Array(b.buffer, b.byteOffset, b.byteLength)));
   for (let i = 0; i < samples.length; i += 1152 * 10) add(enc.encodeBuffer(samples.subarray(i, i + 1152 * 10)));
   add(enc.flush());
   return Buffer.concat(parts);
