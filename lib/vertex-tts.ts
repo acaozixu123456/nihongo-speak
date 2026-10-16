@@ -2,8 +2,8 @@ import { createSign } from "node:crypto";
 import { FLASH, audio, request, type Reply } from "@/lib/gemini-tts";
 
 // The same Gemini voices through Vertex AI, billed to the Google Cloud account (its $300 trial
-// credit) instead of the Gemini API, with its own quota. /api/tts tries it when both Gemini API
-// models are out of quota. Signs in with VERTEX_SERVICE_ACCOUNT, the service account's JSON key
+// credit) instead of the Gemini API, with its own quota. /api/tts tries it first, before the
+// Gemini API. Signs in with VERTEX_SERVICE_ACCOUNT, the service account's JSON key
 // (as is or base64); Vertex turns plain API keys away.
 const HOST = "https://aiplatform.googleapis.com/v1";
 

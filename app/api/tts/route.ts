@@ -32,12 +32,20 @@ export async function GET(request: Request) {
   }
 }
 
-// Japanese goes to Gemini, which sounds the most natural; Azure stays as the fallback (no key,
-// quota used up everywhere, slow answer) and keeps the Chinese narration.
+// Japanese goes to Gemini, which sounds the most natural. Vertex AI first: same voice, paid from the
+// Google Cloud credit (and once that runs out it fails fast). Then the Gemini API, each model with
+// its own daily quota (100 on the first paid tier). Azure stays as the last fallback (no key, quota
+// used up everywhere, slow answer) and keeps the Chinese narration.
 async function speak(text: string, voice: string): Promise<BodyInit> {
   const gemini = geminiVoice(voice);
+  if (gemini && vertexConfigured()) {
+    try {
+      return new Uint8Array(await synthesizeVertex(text, gemini, 12000));
+    } catch (e) {
+      console.warn(e);
+    }
+  }
   if (gemini && geminiConfigured()) {
-    // Each model has its own daily quota (100 on the first paid tier), so Lite picks up after Flash.
     for (const model of [FLASH, FLASH_LITE]) {
       try {
         return new Uint8Array(await synthesizeGemini(text, gemini, 12000, model));
@@ -45,14 +53,6 @@ async function speak(text: string, voice: string): Promise<BodyInit> {
         console.warn(e);
         if (!String(e).includes("Gemini TTS 429")) break;
       }
-    }
-  }
-  // The same voice again through Vertex AI, paid from the Google Cloud credit, before Azure.
-  if (gemini && vertexConfigured()) {
-    try {
-      return new Uint8Array(await synthesizeVertex(text, gemini, 12000));
-    } catch (e) {
-      console.warn(e);
     }
   }
   return synthesize(text, voice);
