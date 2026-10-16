@@ -13,7 +13,12 @@ export async function GET(request: Request) {
     return new Response("bad request", { status: 400 });
   }
   try {
-    const audio = await speak(text, voice);
+    // ?engine=vertex skips the chain and fails loudly, to check the Vertex AI key on the live site.
+    const gemini = geminiVoice(voice);
+    const audio =
+      url.searchParams.get("engine") === "vertex" && gemini
+        ? new Uint8Array(await synthesizeVertex(text, gemini, 12000))
+        : await speak(text, voice);
     return new Response(audio, {
       headers: {
         "Content-Type": "audio/mpeg",
