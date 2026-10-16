@@ -113,6 +113,9 @@ export async function recognize(wav: ArrayBuffer, referenceText?: string): Promi
       GradingSystem: "HundredMark",
       Granularity: "Word",
       Dimension: "Comprehensive",
+      // Without this Azure force-aligns the audio to the reference and echoes the reference back as
+      // the transcript, so a different answer looked word-perfect and only the score (often near 0) hinted at it.
+      EnableMiscue: true,
     };
     headers["Pronunciation-Assessment"] = Buffer.from(JSON.stringify(params)).toString("base64");
   }
