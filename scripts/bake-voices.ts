@@ -2,14 +2,15 @@
 // and plays fixed content without Azure (for example after the Azure trial ends). Content that is
 // written on the fly (AI replies, feedback, the daily podcast) is still synthesized on demand.
 //
-//   npx tsx scripts/bake-voices.ts [site] [--redo-ja] [--max=80] [--lite]     (default https://nihongo-speak.vercel.app)
+//   npx tsx scripts/bake-voices.ts [site] [--redo-ja] [--max=80] [--lite] [--batch]     (default https://nihongo-speak.vercel.app)
 //
 // Japanese sentences are recorded with Gemini TTS straight from here when GEMINI_API_KEY is set;
 // everything else, and Japanese without the key, goes through the site. --redo-ja re-records the
 // existing Japanese files that scripts/gemini-recorded.txt doesn't list yet. Gemini allows 100
 // requests a day, so --max caps how many this run uses (the app needs some too) and a run stops
 // asking Gemini once the day's quota is gone; run it again the next day to continue, or use --lite
-// (Gemini Flash-Lite TTS, which has a quota of its own).
+// (Gemini Flash-Lite TTS, which has a quota of its own). --batch sends all the Japanese sentences
+// as one Batch API job instead: half the price, no daily quota, done in minutes.
 //
 // The site is asked with only the first voice of a list, so
 // an HD voice that fails is an error here instead of a quiet fallback to the standard voice.
@@ -20,13 +21,14 @@ import { join } from "node:path";
 import { calls } from "../content/calls";
 import { listenIntro, NARRATION, ZH_VOICE } from "../content/narration";
 import { scenarios } from "../content/scenarios";
-import { FLASH, FLASH_LITE, geminiConfigured, geminiVoice, synthesizeGemini } from "../lib/gemini-tts";
+import { FLASH, FLASH_LITE, geminiConfigured, geminiVoice, synthesizeGemini, synthesizeGeminiBatch } from "../lib/gemini-tts";
 import { voiceKey } from "../lib/voice-key";
 
 const args = process.argv.slice(2);
 const site = args.find((a) => !a.startsWith("--")) ?? "https://nihongo-speak.vercel.app";
 const redoJa = args.includes("--redo-ja");
 const model = args.includes("--lite") ? FLASH_LITE : FLASH;
+const batch = args.includes("--batch");
 const maxGemini = Number(args.find((a) => a.startsWith("--max="))?.slice(6) ?? Infinity);
 const dir = join(__dirname, "..", "public", "voice");
 const geminiLog = join(__dirname, "gemini-recorded.txt");
@@ -93,6 +95,26 @@ async function main() {
   console.log(`${items.size} sentences, ${todo.length} to record`);
   let done = 0;
   let failed = 0;
+  if (batch) {
+    const jobs = todo.filter(([, { voice }]) => useGemini(voice)).slice(0, maxGemini);
+    console.log(`sending ${jobs.length} to the Gemini Batch API`);
+    const got = await synthesizeGeminiBatch(
+      jobs.map(([key, { text, voice }]) => ({ key, text, voice: geminiVoice(voice)! })),
+      model,
+    );
+    for (const [key] of jobs) {
+      const mp3 = got.get(key);
+      if (!mp3) {
+        failed++;
+        console.error(`no audio from the batch for ${key}`);
+        continue;
+      }
+      writeFileSync(join(dir, `${key}.mp3`), mp3);
+      appendFileSync(geminiLog, `${key}\n`);
+      done++;
+    }
+    geminiQuotaGone = true; // the rest of the run leaves Japanese alone
+  }
   const worker = async () => {
     for (let next = todo.shift(); next; next = todo.shift()) {
       const [key, { text, voice }] = next;
