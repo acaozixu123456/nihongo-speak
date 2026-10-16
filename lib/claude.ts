@@ -8,7 +8,9 @@ import type { Scenario } from "@/content/scenarios";
 type Talk = Pick<Scenario, "talk">;
 
 const MODEL = "claude-sonnet-5-5";
-const client = new Anthropic();
+// A key created outside any workspace must name one on every request.
+const workspace = process.env.ANTHROPIC_WORKSPACE_ID;
+const client = new Anthropic(workspace ? { defaultHeaders: { "anthropic-workspace-id": workspace } } : {});
 
 export type Turn = { role: "user" | "assistant"; text: string };
 
