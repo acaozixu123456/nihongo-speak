@@ -324,3 +324,132 @@ ${w.examples.map((e) => `- 言った：${e.said} → 正しくは：${e.better}`
   if (!res.parsed_output) throw new Error("AI 返回格式不对，请重试");
   return res.parsed_output;
 }
+
+// ---- Haiku coach: quick feedback on every other kind of speaking ----
+
+const COACH = `あなたは日本在住の社会人向けの日本語コーチです。学習者は中国人、レベルはN4〜N3。日本で働き、生活しています。
+説明は中国語で、短く具体的に。学習者の発言は音声認識の結果なので、同音の漢字違いや句読点は誤りとして扱わない。`;
+
+const PointsSchema = z
+  .array(
+    z.object({
+      tag: z.string().describe("文法・表現の名前（日本語、短く）。例：「〜てもらえますか（依頼）」「助詞：に／で」"),
+      zh: z.string().describe("その文法・表現が何か（中国語、1文）"),
+      ok: z.boolean().describe("学習者が正しく使えたら true、間違えた・避けたら false"),
+    }),
+  )
+  .describe("学習者の発言の中心となる文法・表現を0〜2個。語彙だけの違いや認識ミスは含めない");
+
+function knownLine(known?: string[]) {
+  return known?.length
+    ? `\n学習者の弱点記録で既に使った tag：${known.join("、")}\n同じ文法・表現なら、この表記をそのまま使う。`
+    : "";
+}
+
+// Haiku first; if it fails, the main model answers so the learner still gets feedback.
+async function haikuFirst<S extends z.ZodType>(schema: S, system: string, content: string): Promise<z.infer<S>> {
+  const run = async (model: string) => {
+    const res = await client.messages.parse({
+      model,
+      max_tokens: 3000,
+      system,
+      messages: [{ role: "user", content }],
+      output_config: model === MODEL ? { effort: "low", format: zodOutputFormat(schema) } : { format: zodOutputFormat(schema) },
+    });
+    checkStop(res.stop_reason);
+    if (!res.parsed_output) throw new Error(`AI 返回格式不对（${res.stop_reason}），请重试`);
+    return res.parsed_output as z.infer<S>;
+  };
+  try {
+    return await run(JUDGE_MODEL);
+  } catch (e) {
+    console.error(`${JUDGE_MODEL} failed, falling back to ${MODEL}:`, e);
+    return run(MODEL);
+  }
+}
+
+// 模仿说話: turn Azure's word scores into one thing to fix.
+const ShadowCoachSchema = z.object({
+  tip_zh: z.string().describe("次の1回で直すべき一番大事な点（中国語、1〜2文）。どの語のどの音か、どう言えばいいかを具体的に"),
+  words: z
+    .array(z.object({ word: z.string(), kana: z.string().describe("その語の読み（ひらがな）"), why_zh: z.string().describe("どこがずれやすいか、コツ（中国語、短く）") }))
+    .describe("注意すべき語を最大3個。点数が低い語や、中国語話者が間違えやすい長音・促音・撥音・拗音を優先"),
+  score_doubt: z
+    .boolean()
+    .describe("認識結果が手本とほぼ同じなのに総合点が極端に低い（50未満など）、つまり採点の不具合が疑われるなら true"),
+  doubt_zh: z.string().describe("score_doubt が true のとき、学習者への一言（中国語）。そうでなければ空文字"),
+});
+
+export type ShadowCoach = z.infer<typeof ShadowCoachSchema>;
+
+export function coachShadow(a: {
+  ja: string;
+  kana?: string;
+  said: string;
+  scores?: { pron: number; accuracy: number; fluency: number; completeness: number; words: { word: string; accuracy: number; errorType: string }[] };
+}) {
+  const s = a.scores;
+  return haikuFirst(
+    ShadowCoachSchema,
+    `${COACH}
+学習者は手本の音声を聞いて、同じ文をまねして言う練習（シャドーイング）をしています。
+発音評価の点数と認識結果を見て、次の1回で何を直せばいいかを1つに絞って伝えてください。点数をそのまま読み上げない。`,
+    `手本：${a.ja}
+読み：${a.kana || "（なし）"}
+認識結果：${a.said}
+${
+  s
+    ? `総合 ${s.pron}・正確さ ${s.accuracy}・流暢さ ${s.fluency}・完全さ ${s.completeness}
+語ごと：${s.words.map((w) => `${w.word}(${w.accuracy}${w.errorType !== "None" ? `,${w.errorType}` : ""})`).join(" ")}`
+    : "発音評価なし"
+}`,
+  );
+}
+
+// 对话: a quiet note on each line the learner says, without breaking the conversation.
+const TurnCheckSchema = z.object({
+  verdict: z.enum(["good", "ok", "off"]).describe("good: この場面で自然。ok: 通じるが直したい所がある。off: 意味が通じない・場面に合わない"),
+  better: z.string().describe("より自然な言い方（日本語、1文）。good なら空文字"),
+  why_zh: z.string().describe("一言の説明（中国語、1文）。good なら褒める一言"),
+  points: PointsSchema,
+});
+
+export type TurnCheck = z.infer<typeof TurnCheckSchema>;
+
+export function checkTurn(s: Talk, history: Turn[], known?: string[]) {
+  const said = history[history.length - 1]?.text ?? "";
+  const before = history.slice(-5, -1);
+  return haikuFirst(
+    TurnCheckSchema,
+    `${COACH}
+学習者はロールプレイで会話をしています。学習者の最後の発言だけを見て、その場面で自然かどうかを判定してください。
+言い方の違いだけで減点しない。丁寧さが相手や場面に合っているかは見る。${knownLine(known)}`,
+    `場面：${s.talk.setup}
+相手：${s.talk.aiRole}
+学習者の役：${s.talk.userRole}
+目標：${s.talk.goalZh}
+直前の会話：
+${before.map((t) => `${t.role === "user" ? "学習者" : "相手"}：${t.text}`).join("\n") || "（なし）"}
+学習者の発言：${said}`,
+  );
+}
+
+// 复习: a fresh sentence built on the same pattern, so a card isn't memorised as one fixed string.
+const VariantSchema = z.object({
+  zh: z.string().describe("学習者に見せる中国語（言いたいこと）"),
+  ja: z.string().describe("元の文と同じ文法・表現を使い、内容や場面を少し変えた自然な日本語。元の文と同じくらいの長さ"),
+  reading: z.string().describe("ja の全文をひらがなで"),
+  pattern_zh: z.string().describe("元の文と共通する文法・表現（中国語、短く）"),
+});
+
+export type Variant = z.infer<typeof VariantSchema>;
+
+export function makeVariant(c: { ja: string; zh: string }) {
+  return haikuFirst(
+    VariantSchema,
+    `${COACH}
+学習者が覚えた文の復習用に、同じ文法・表現を使った別の文を1つ作ってください。語彙は N3 程度。職場や日常生活でそのまま使える文にする。`,
+    `元の文：${c.ja}
+意味：${c.zh}`,
+  );
+}
