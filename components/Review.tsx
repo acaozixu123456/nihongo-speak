@@ -222,7 +222,7 @@ export default function Review() {
           </>
         ) : (
           <>
-            <p className="muted">用日语怎么说？按住下面的按钮说出来。</p>
+            <p className="muted">用日语怎么说？点下面的按钮说出来。</p>
             {ask && ask.ja !== card.ja && (
               <button className="small" onClick={() => setPlain(true)}>还是考原句</button>
             )}
@@ -246,7 +246,7 @@ export default function Review() {
             <div className="row" style={{ flexWrap: "nowrap" }}>
               <button onClick={() => setRevealed(true)} disabled={busy}>看答案</button>
               <div style={{ flex: 1 }}>
-                <HoldButton label={busy ? "评分中…" : "按住说日语"} disabled={busy} onRecorded={onRecorded} onError={setError} />
+                <HoldButton label={busy ? "评分中…" : "点一下说日语"} disabled={busy} onRecorded={onRecorded} onError={setError} />
               </div>
             </div>
           )}

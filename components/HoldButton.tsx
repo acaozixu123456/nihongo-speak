@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { Recorder } from "@/lib/client/recorder";
 import { stop as stopAudio, unlock } from "@/lib/client/player";
 
@@ -14,25 +15,33 @@ type Props = {
 
 // A press shorter than this is a tap: recording keeps going until the next tap.
 const TAP_MS = 400;
+// Stops by itself so a forgotten recording doesn't run on.
+const LIMIT_S = 60;
 
-// Press and hold to record, release to finish. A quick tap also works: tap to start, tap again to finish.
+// Tap to start, tap again to finish. Pressing and holding also works: release to finish.
+// The button changes the moment it is touched ("准备…"), and shows the red dot and clock only once the mic is
+// really capturing, so nothing said before that is lost without warning.
 // iPhone sometimes loses the release (the mic permission sheet, a system gesture), so the release is
 // also caught on the whole window and recording state lives in refs, never in a stale render.
-export default function HoldButton({ label = "按住说话", disabled, onStart, onRecorded, onError }: Props) {
+export default function HoldButton({ label = "点一下说话", disabled, onStart, onRecorded, onError }: Props) {
   const recorder = useRef<Recorder | null>(null);
   const starting = useRef<Promise<void> | null>(null);
   const active = useRef(false);
   const pressedAt = useRef(0);
-  const [mode, setMode] = useState<"idle" | "hold" | "latched">("idle");
-  const modeRef = useRef(mode);
-  modeRef.current = mode;
+  const liveAt = useRef(0);
+  const [phase, setPhase] = useState<"idle" | "starting" | "live">("idle");
+  const [latched, setLatched] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const holding = useRef(false);
   const cb = useRef({ onStart, onRecorded, onError });
   cb.current = { onStart, onRecorded, onError };
 
   async function finish() {
     if (!active.current) return;
     active.current = false;
-    setMode("idle");
+    holding.current = false;
+    setPhase("idle");
+    setLatched(false);
     const pending = starting.current;
     starting.current = null;
     try {
@@ -40,9 +49,15 @@ export default function HoldButton({ label = "按住说话", disabled, onStart, 
     } catch {
       return;
     }
-    const wav = recorder.current!.stop();
+    let wav: Blob;
+    try {
+      wav = await recorder.current!.stop();
+    } catch {
+      cb.current.onError("录音出错了，再试一次");
+      return;
+    }
     // Shorter than ~0.3s is almost always an accidental tap.
-    if (wav.size < 10_000) cb.current.onError("说得太短了，按住按钮再说");
+    if (wav.size < 10_000) cb.current.onError("说得太短了，等红点出现再说");
     else cb.current.onRecorded(wav);
   }
 
@@ -51,41 +66,60 @@ export default function HoldButton({ label = "按住说话", disabled, onStart, 
     stopAudio();
     recorder.current ??= new Recorder();
     active.current = true;
+    holding.current = true;
     pressedAt.current = Date.now();
-    setMode("hold");
+    liveAt.current = 0;
+    // Paint the pressed state right away; opening the mic can take a moment on iPhone.
+    flushSync(() => {
+      setPhase("starting");
+      setLatched(false);
+      setElapsed(0);
+    });
     cb.current.onError("");
     cb.current.onStart?.();
-    starting.current = recorder.current.start().catch((err: unknown) => {
-      active.current = false;
-      setMode("idle");
-      cb.current.onError(err instanceof Error && err.name === "NotAllowedError" ? "需要允许使用麦克风" : "无法打开麦克风");
-      throw err;
-    });
+    const rec = recorder.current;
+    starting.current = new Promise<void>((resolve) => setTimeout(resolve, 0))
+      .then(() => rec.start())
+      .then(() => {
+        liveAt.current = Date.now();
+        if (active.current) setPhase("live");
+      })
+      .catch((err: unknown) => {
+        active.current = false;
+        holding.current = false;
+        setPhase("idle");
+        setLatched(false);
+        cb.current.onError(err instanceof Error && err.name === "NotAllowedError" ? "需要允许使用麦克风" : "无法打开麦克风");
+        throw err;
+      });
   }
 
   function down(e: React.PointerEvent) {
-    if (disabled) return;
+    if (disabled && !active.current) return;
     e.preventDefault();
-    // Second tap of a tap-to-talk recording ends it.
+    // Any touch while recording ends it.
     if (active.current) {
-      if (modeRef.current === "latched") finish();
+      if (!holding.current) finish();
       return;
     }
     begin();
   }
 
   function release() {
-    if (!active.current || modeRef.current !== "hold") return;
-    if (Date.now() - pressedAt.current < TAP_MS) {
-      setMode("latched");
+    if (!active.current || !holding.current) return;
+    holding.current = false;
+    // A quick tap, or letting go before the mic was even ready, keeps recording until the next tap.
+    const now = Date.now();
+    if (now - pressedAt.current < TAP_MS || !liveAt.current || now - liveAt.current < TAP_MS) {
+      setLatched(true);
       return;
     }
     finish();
   }
 
-  // Catch the release anywhere, and stop if the app goes to the background.
+  // Catch the release anywhere.
   useEffect(() => {
-    if (mode !== "hold") return;
+    if (phase === "idle") return;
     const up = () => release();
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
@@ -98,26 +132,53 @@ export default function HoldButton({ label = "按住说话", disabled, onStart, 
       window.removeEventListener("touchcancel", up);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
+  }, [phase]);
 
+  // Running clock while listening, with a hard stop.
+  useEffect(() => {
+    if (phase !== "live") return;
+    const t = setInterval(() => {
+      const s = (Date.now() - liveAt.current) / 1000;
+      setElapsed(s);
+      if (s >= LIMIT_S) finish();
+    }, 250);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
+
+  // Stop if the app goes to the background or the page is left.
   useEffect(() => {
     const hide = () => {
       if (document.hidden) finish();
     };
     document.addEventListener("visibilitychange", hide);
-    return () => document.removeEventListener("visibilitychange", hide);
+    return () => {
+      document.removeEventListener("visibilitychange", hide);
+      if (active.current) {
+        active.current = false;
+        void starting.current?.then(() => recorder.current?.stop()).catch(() => {});
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const secs = `0:${String(Math.floor(elapsed)).padStart(2, "0")}`;
   return (
     <button
-      className={`hold ${mode !== "idle" ? "recording" : ""}`}
-      disabled={disabled && mode === "idle"}
+      className={`hold ${phase !== "idle" ? "recording" : ""} ${phase === "starting" ? "starting" : ""}`}
+      disabled={disabled && phase === "idle"}
       onPointerDown={down}
       onPointerUp={release}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {mode === "hold" ? "正在录音，松开结束" : mode === "latched" ? "正在录音，再点一下结束" : label}
+      {phase === "idle" && label}
+      {phase === "starting" && "准备…"}
+      {phase === "live" && (
+        <>
+          <span className="rec-dot" />
+          {secs} {latched ? "点我结束" : "松开结束"}
+        </>
+      )}
     </button>
   );
 }

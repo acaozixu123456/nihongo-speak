@@ -79,7 +79,7 @@ export default function Shadow({ scenario, active, onNext }: Props) {
     <div>
       <div className="card">
         <p className="muted" style={{ marginTop: 0 }}>
-          先听原声，再按住按钮模仿着说。注意语调的高低和停顿，不只是读对假名。80 分以上算过关。
+          先听原声，再点按钮模仿着说。注意语调的高低和停顿，不只是读对假名。80 分以上算过关。
         </p>
         <RatePicker
           rate={rate}
@@ -178,7 +178,7 @@ export default function Shadow({ scenario, active, onNext }: Props) {
               <button onClick={() => go(-1)} disabled={index === 0 || busy}>上一句</button>
               <div style={{ flex: 1 }}>
                 <HoldButton
-                  label={busy ? "评分中…" : "按住跟读"}
+                  label={busy ? "评分中…" : "点一下跟读"}
                   disabled={busy}
                   onRecorded={onRecorded}
                   onError={setError}

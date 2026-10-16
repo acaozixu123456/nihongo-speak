@@ -174,7 +174,7 @@ export default function Call({ call }: { call: CallDef }) {
             <div>{talk.goalZh}</div>
             <div className="small-text" style={{ marginTop: 6 }}>你是：{talk.userRole}</div>
           </div>
-          <p className="muted" style={{ textAlign: "center" }}>接通后只有声音。按住下面的按钮说话，松开就发给对方。</p>
+          <p className="muted" style={{ textAlign: "center" }}>接通后只有声音。点下面的按钮说话，说完再点一下就发给对方。</p>
           <button className="primary call-go" onClick={pickUp}>
             {call.incoming ? "接听" : "拨打"}
           </button>
@@ -220,7 +220,7 @@ export default function Call({ call }: { call: CallDef }) {
               <div className="row" style={{ flexWrap: "nowrap" }}>
                 <button className="hangup" onClick={hangUp}>挂断</button>
                 <div style={{ flex: 1 }}>
-                  <HoldButton label={busy === "stt" ? "识别中…" : "按住说话"} disabled={!!busy} onRecorded={onRecorded} onError={setError} />
+                  <HoldButton label={busy === "stt" ? "识别中…" : "点一下说话"} disabled={!!busy} onRecorded={onRecorded} onError={setError} />
                 </div>
               </div>
             </div>

@@ -81,7 +81,7 @@ function Sentence({ s, entryId }: { s: DiaryEntry["natural"][number]; entryId: s
           听
         </button>
         <div style={{ flex: 1 }}>
-          <HoldButton label={busy ? "评分中…" : "按住跟读"} disabled={busy} onRecorded={onRecorded} onError={setError} />
+          <HoldButton label={busy ? "评分中…" : "点一下跟读"} disabled={busy} onRecorded={onRecorded} onError={setError} />
         </div>
         {score !== null && (
           <strong className={score >= 80 ? "good" : score >= 60 ? "warn" : "bad"} style={{ fontSize: 20 }}>
@@ -193,7 +193,14 @@ export default function Diary() {
   async function finish() {
     if (!recorder.current || !recording.current) return;
     recording.current = false;
-    const wav = recorder.current.stop();
+    let wav: Blob;
+    try {
+      wav = await recorder.current.stop();
+    } catch {
+      setPhase("idle");
+      setError("录音出错了，再试一次");
+      return;
+    }
     const sec = wavSeconds(wav);
     if (sec < 3) {
       setPhase("idle");
