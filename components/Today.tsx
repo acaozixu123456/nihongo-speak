@@ -114,6 +114,14 @@ export default function Today() {
           </span>
           <span className="chev" aria-hidden>›</span>
         </Link>
+        <Link href="/call" className="row-link">
+          <span className="glyph">電</span>
+          <span className="row-text">
+            打电话
+            <small>只有声音的电话练习：预约、订餐、接客户电话</small>
+          </span>
+          <span className="chev" aria-hidden>›</span>
+        </Link>
         <Link href="/podcast" className="row-link">
           <span className="glyph">聴</span>
           <span className="row-text">

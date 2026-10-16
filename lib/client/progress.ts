@@ -279,6 +279,8 @@ export type QuickItem = {
   where: string; // the situation the line comes from, e.g. "☀️ 早会汇报进度 · 佐藤"
 };
 
+const DIARY_VOICE = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-NanamiNeural";
+
 // Short lines only: the drill is about getting a sentence out in a few seconds.
 const QUICK_MAX_CHARS = 32;
 
@@ -288,7 +290,7 @@ export function quickPool(p: Progress): QuickItem[] {
   const byId = new Map(all.map((s) => [s.id, s]));
   const fromCards: QuickItem[] = p.cards.map((c) => {
     const s = byId.get(c.scenarioId);
-    return { key: c.id, ja: c.ja, reading: c.reading, zh: c.zh, voice: c.voice, scenarioId: c.scenarioId, where: s ? `${s.icon} ${s.titleZh} · 收藏` : "收藏" };
+    return { key: c.id, ja: c.ja, reading: c.reading, zh: c.zh, voice: c.voice, scenarioId: c.scenarioId, where: s ? `${s.titleZh} · 收藏` : "收藏" };
   });
   const touched = (s: Scenario) => {
     const sp = p.scenarios[s.id];
@@ -305,11 +307,25 @@ export function quickPool(p: Progress): QuickItem[] {
           zh: l.zh,
           voice: l.voice,
           scenarioId: s.id,
-          where: `${s.icon} ${s.titleZh} · 你是${l.speaker}`,
+          where: `${s.titleZh} · 你是${l.speaker}`,
         })),
     );
+  // The learner's own diary, rewritten naturally: their own words are the ones they most need.
+  const fromDiary: QuickItem[] = p.diary.slice(0, 10).flatMap((d) =>
+    d.natural
+      .filter((n) => n.ja.length <= QUICK_MAX_CHARS)
+      .map((n) => ({
+        key: `diary:${d.id}:${n.ja}`,
+        ja: n.ja,
+        reading: n.kana,
+        zh: n.zh,
+        voice: DIARY_VOICE,
+        scenarioId: `diary:${d.id}`,
+        where: `你的日记 · ${Number(d.date.slice(5, 7))}月${Number(d.date.slice(8))}日`,
+      })),
+  );
   const seen = new Set<string>();
-  return [...fromCards, ...fromLines(all.filter(touched)), ...fromLines(all.filter((s) => !touched(s)))].filter((i) => {
+  return [...fromCards, ...fromDiary, ...fromLines(all.filter(touched)), ...fromLines(all.filter((s) => !touched(s)))].filter((i) => {
     if (seen.has(i.ja)) return false;
     seen.add(i.ja);
     return true;
