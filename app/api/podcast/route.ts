@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { makePodcast } from "@/lib/claude";
+import { makeRadio } from "@/lib/radio";
 
 export const maxDuration = 60;
 
 const str = (s: unknown, n: number): s is string => typeof s === "string" && s.length <= n;
 
-// Haiku writes today's episode from the learner's profile. 摸鱼模式 turns it into audio (see lib/client/moyu.ts).
+// script: Haiku writes today's episode from the learner's profile. 摸鱼模式 turns it into audio (see lib/client/moyu.ts).
+// radio: one 趣味电台 episode (lib/radio.ts), avoiding the titles the phone has already heard.
 export async function POST(request: Request) {
-  const body = (await request.json()) as { kind: "script"; weak?: unknown; cards?: unknown; scenes?: unknown };
+  const body = (await request.json()) as { kind: "script" | "radio"; weak?: unknown; cards?: unknown; scenes?: unknown; avoid?: unknown };
   try {
     if (body.kind === "script") {
       const weak = (Array.isArray(body.weak) ? body.weak : []).slice(0, 3).filter((w) => str(w?.tag, 80) && str(w?.zh, 200));
@@ -26,6 +28,10 @@ export async function POST(request: Request) {
           scenes,
         }),
       );
+    }
+    if (body.kind === "radio") {
+      const avoid = (Array.isArray(body.avoid) ? body.avoid : []).slice(-30).filter((t) => str(t, 60));
+      return NextResponse.json(await makeRadio(avoid));
     }
     return NextResponse.json({ error: "unknown kind" }, { status: 400 });
   } catch (e) {

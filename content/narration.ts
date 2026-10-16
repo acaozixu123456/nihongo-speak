@@ -8,6 +8,7 @@ export const NARRATION = {
   lines: "再一句一句听。",
   said: "你当时说的是：",
   better: "更自然的说法是：",
+  radioKeep: "今天这期里，记住这几句。",
 };
 
 export const listenIntro = (titleZh: string) => `偷听：${titleZh}。先听一遍整段。`;
