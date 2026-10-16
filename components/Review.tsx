@@ -97,21 +97,21 @@ export default function Review() {
   if (p.cards.length === 0) {
     return (
       <main>
+        <Link href="/" className="back">← 今天</Link>
         <header className="page-mast">
-          <span className="icon" aria-hidden>⛩️</span>
           <div>
-            <h1>神社</h1>
-            <p className="muted">复习 · 按 1、3、7、14 天的间隔再说一遍</p>
+            <h1>复习</h1>
+            <p className="muted">按 1、3、7、14 天的间隔再说一遍</p>
           </div>
         </header>
         <div className="card">
           <p style={{ marginTop: 0 }}>还没有收藏的句子。</p>
           <p className="muted">
-            跟读时点 ☆，或者对话点评里点「☆ 收藏」，句子就会来到这里。之后按 1、3、7、14 天的间隔提醒你开口说一遍。
+            跟读或对话时点「收藏」，句子就会来到这里。之后按 1、3、7、14 天的间隔提醒你开口说一遍。
           </p>
           <Link href="/scenes">去练习 →</Link>
         </div>
-        <Nav on="train" />
+        <Nav on="today" />
       </main>
     );
   }
@@ -119,11 +119,11 @@ export default function Review() {
   if (!queue) {
     return (
       <main>
+        <Link href="/" className="back">← 今天</Link>
         <header className="page-mast">
-          <span className="icon" aria-hidden>⛩️</span>
           <div>
-            <h1>神社</h1>
-            <p className="muted">复习 · 按 1、3、7、14 天的间隔再说一遍</p>
+            <h1>复习</h1>
+            <p className="muted">按 1、3、7、14 天的间隔再说一遍</p>
           </div>
         </header>
         <div className="card flash">
@@ -136,14 +136,13 @@ export default function Review() {
             </>
           ) : (
             <>
-              <div style={{ fontSize: 48 }}>✅</div>
-              <p>今天没有要复习的了</p>
+                            <p>今天没有要复习的了</p>
               <p className="muted">已收藏 {p.cards.length} 句，到期的会自动出现。</p>
               <Link href="/quick">去练瞬间说 →</Link>
             </>
           )}
         </div>
-        <Nav on="train" />
+        <Nav on="today" />
       </main>
     );
   }
@@ -151,25 +150,24 @@ export default function Review() {
   if (!card) {
     return (
       <main>
+        <Link href="/" className="back">← 今天</Link>
         <header className="page-mast">
-          <span className="icon" aria-hidden>⛩️</span>
           <div>
-            <h1>神社</h1>
-            <p className="muted">复习 · 按 1、3、7、14 天的间隔再说一遍</p>
+            <h1>复习</h1>
+            <p className="muted">按 1、3、7、14 天的间隔再说一遍</p>
           </div>
         </header>
         <div className="card flash">
-          <div style={{ fontSize: 48 }}>🎉</div>
-          <p>今天的复习做完了</p>
+                    <p>今天的复习做完了</p>
           {again > 0 && <p className="muted">有 {again} 次「再练」，明天还会再见到它们。</p>}
           {Object.keys(p.weak).length > 0 && (
             <p>
-              <Link href="/train#weak">看 AI 找出的薄弱点 →</Link>
+              <Link href="/weak">看 AI 找出的薄弱点 →</Link>
             </p>
           )}
-          <Link href="/train" className="btn primary next-cta" style={{ display: "block" }}>回到今日训练 →</Link>
+          <Link href="/" className="btn primary next-cta" style={{ display: "block" }}>回到今日训练 →</Link>
         </div>
-        <Nav on="train" />
+        <Nav on="today" />
       </main>
     );
   }
@@ -189,9 +187,9 @@ export default function Review() {
       </div>
 
       <div className="card flash">
-        {scenario && <div className="muted">{scenario.icon} {scenario.titleZh}</div>}
+        {scenario && <div className="muted">{scenario.titleZh}</div>}
         {ask && ask.ja !== card.ja && (
-          <div className="small-text y">🔀 换了个新句子 · 同样考「{ask.pattern}」</div>
+          <div className="small-text y">换了个新句子 · 同样考「{ask.pattern}」</div>
         )}
         {wantVariant && !variant && !heard && <div className="small-text judge-wait">AI 正在出一个新句子…</div>}
         <div className="prompt">{ask?.zh ?? card.zh}</div>
@@ -214,13 +212,13 @@ export default function Review() {
               <AiJudge
                 zh={heard.ask.zh}
                 ja={heard.ask.ja}
-                where={scenario ? `${scenario.icon} ${scenario.titleZh}` : undefined}
+                where={scenario ? scenario.titleZh : undefined}
                 said={heard.text}
                 voice={card.voice}
                 onVerdict={setVerdict}
               />
             )}
-            <button style={{ marginTop: 12 }} onClick={() => listen(card, ask?.ja)}>▶ 听原声</button>
+            <button style={{ marginTop: 12 }} onClick={() => listen(card, ask?.ja)}>听原声</button>
           </>
         ) : (
           <>

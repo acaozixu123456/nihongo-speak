@@ -78,7 +78,7 @@ function Sentence({ s, entryId }: { s: DiaryEntry["natural"][number]; entryId: s
             play(ttsUrl(s.ja, VOICE)).catch(() => setError("音频播放失败"));
           }}
         >
-          ▶ 听
+          听
         </button>
         <div style={{ flex: 1 }}>
           <HoldButton label={busy ? "评分中…" : "按住跟读"} disabled={busy} onRecorded={onRecorded} onError={setError} />
@@ -93,7 +93,7 @@ function Sentence({ s, entryId }: { s: DiaryEntry["natural"][number]; entryId: s
           aria-label={saved ? "取消收藏" : "收藏到复习"}
           onClick={() => toggleCard({ ja: s.ja, reading: s.kana, zh: s.zh, voice: VOICE, scenarioId: `diary:${entryId}` })}
         >
-          {saved ? "★" : "☆"}
+          {saved ? "已收藏" : "收藏"}
         </button>
       </div>
       {error && <p className="error">{error}</p>}
@@ -238,10 +238,9 @@ export default function Diary() {
     <main>
       <Link href="/me" className="back">← 我</Link>
       <header className="page-mast">
-        <span className="icon" aria-hidden>🏠</span>
         <div>
-          <h1>自宅</h1>
-          <p className="muted">一分钟口语日记 · 说说今天</p>
+          <h1>口语日记</h1>
+          <p className="muted">一分钟，说说今天</p>
         </div>
       </header>
 

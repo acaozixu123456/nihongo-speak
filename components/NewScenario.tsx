@@ -76,10 +76,9 @@ export default function NewScenario(props: { topic?: string; category?: "work" |
     <main>
       <Link href="/scenes" className="back">← 场景</Link>
       <header className="page-mast">
-        <span className="icon" aria-hidden>📸</span>
         <div>
-          <h1>やり直し</h1>
-          <p className="muted">重来一次 · 把今天遇到的情况变成场景</p>
+          <h1>重来一次</h1>
+          <p className="muted">把今天没说出来的话，变成场景再练一次</p>
         </div>
       </header>
       <div className="card">
@@ -100,11 +99,11 @@ export default function NewScenario(props: { topic?: string; category?: "work" |
           <div className="photo-pick">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={photo} alt="照片" />
-            <button className="small" onClick={() => setPhoto(null)}>✕ 不用这张</button>
+            <button className="small" onClick={() => setPhoto(null)}>不用这张</button>
           </div>
         ) : (
           <button style={{ width: "100%", marginTop: 10 }} onClick={() => file.current?.click()}>
-            📷 拍照 / 选照片（站牌、菜单、邮件、聊天截图…）
+            拍照或选一张截图
           </button>
         )}
         <div className="suggest">
@@ -120,7 +119,7 @@ export default function NewScenario(props: { topic?: string; category?: "work" |
         {error && <p className="error">{error}</p>}
       </div>
       <p className="small-text">
-        AI 会写出这个场合的对话（包括你当时没说出来的那句），配上读音、中文和配音，然后直接进入模仿说话和对话。场景会留在「场景 · 我的」里。
+        AI 会写出这个场合的对话（包括你当时没说出来的那句），配上读音、中文和配音，然后直接进入跟读和对话。场景会留在「场景 · 我的」里。
       </p>
     </main>
   );

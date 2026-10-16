@@ -12,7 +12,7 @@ export function WeakList() {
     <>
       {list.length === 0 ? (
         <div className="card">
-          <p style={{ marginTop: 0 }}>{Object.keys(p.weak).length ? "现在没有明显的薄弱点 🎉" : "还没有记录。"}</p>
+          <p style={{ marginTop: 0 }}>{Object.keys(p.weak).length ? "现在没有明显的薄弱点。" : "还没有记录。"}</p>
           <p className="muted" style={{ marginBottom: 0 }}>
             每次开口 AI 都会看这句考的是哪个语法或说法、你用对了没有。同一个点错得多，就会出现在这里，可以针对它专门练。
           </p>

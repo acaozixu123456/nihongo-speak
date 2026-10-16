@@ -98,7 +98,7 @@ export default function Listen({ scenario, onNext }: { scenario: Scenario; onNex
         </div>
         <div className="row" style={{ marginTop: 10 }}>
           {current === null ? (
-            <button className="primary" onClick={() => playFrom(0, false)}>▶ 整段播放</button>
+            <button className="primary" onClick={() => playFrom(0, false)}>整段播放</button>
           ) : (
             <button onClick={halt}>■ 停止</button>
           )}
@@ -108,7 +108,7 @@ export default function Listen({ scenario, onNext }: { scenario: Scenario; onNex
 
       {finished && (
         <div className="card">
-          <strong>整段听完了 👏</strong>
+          <strong>整段听完了</strong>
           <p className="muted" style={{ margin: "4px 0 0" }}>
             听不出的句子点开再听几遍。觉得差不多了，就开口跟着说。
           </p>

@@ -104,11 +104,10 @@ export default function Podcast() {
 
   return (
     <main>
-      <Link href="/" className="back">← 小镇</Link>
+      <Link href="/" className="back">← 今天</Link>
       <header className="page-mast">
-        <span className="icon" aria-hidden>🚉</span>
         <div>
-          <h1>通勤ラジオ</h1>
+          <h1>通勤播客</h1>
           <p className="muted">每天 3 分钟 · 讲你的薄弱点和收藏的话 · 锁屏也能听</p>
         </div>
       </header>
@@ -117,7 +116,7 @@ export default function Podcast() {
         {ep ? (
           <>
             <div className="small-text">{fresh ? "今天的一期" : `${ep.day.slice(5).replace("-", "月")}日的一期`}</div>
-            <div className="y" style={{ fontSize: 20, margin: "4px 0 10px" }}>📻 {ep.title_zh}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, margin: "4px 0 12px" }}>{ep.title_zh}</div>
             {src ? (
               <audio controls src={src} style={{ width: "100%" }} />
             ) : (
@@ -147,7 +146,7 @@ export default function Podcast() {
               ) : (
                 <div key={i} className="pod-ja">
                   <div className="ja">
-                    {s.kind === "repeat" && <span className="y">🔁 </span>}
+                    {s.kind === "repeat" && <span className="y">跟读 · </span>}
                     {s.text}
                   </div>
                   <div className="zh">{s.zh}</div>
@@ -157,7 +156,7 @@ export default function Podcast() {
           </div>
         </>
       )}
-      <Nav on="town" />
+      <Nav on="today" />
     </main>
   );
 }

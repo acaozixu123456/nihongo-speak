@@ -6,15 +6,15 @@ import type { Scenario } from "@/content/scenarios";
 import { stop } from "@/lib/client/player";
 import { findScenario, stepsDone, useProgress, type Step } from "@/lib/client/progress";
 import { useHydrated } from "@/lib/client/hydrated";
-import { BUILDINGS, buildingOf, buildingScenarios, npc, stars, starText } from "@/lib/client/game";
+import { BUILDINGS, buildingOf, npc } from "@/lib/client/game";
 import Listen from "./Listen";
 import Shadow from "./Shadow";
 import Talk from "./Talk";
 
 const TABS = [
-  { key: "listen", icon: "👂", label: "偷听" },
-  { key: "shadow", icon: "🦜", label: "模仿说话" },
-  { key: "talk", icon: "💬", label: "对话" },
+  { key: "listen", label: "听" },
+  { key: "shadow", label: "跟读" },
+  { key: "talk", label: "对话" },
 ] as const;
 
 export default function ScenarioView({ scenario, step }: { scenario: Scenario; step?: Step }) {
@@ -22,8 +22,6 @@ export default function ScenarioView({ scenario, step }: { scenario: Scenario; s
   const p = useProgress();
   const done = stepsDone(p, scenario);
   const b = buildingOf(scenario, p);
-  const floor = buildingScenarios(p, b).findIndex((s) => s.id === scenario.id) + 1;
-  const where = b === "work" ? `${floor}F` : b === "life" ? `${floor}番` : `#${floor}`;
 
   function go(next: Step) {
     stop();
@@ -35,19 +33,15 @@ export default function ScenarioView({ scenario, step }: { scenario: Scenario; s
     <main>
       <Link href={`/scenes?tab=${b}`} className="back">← 场景</Link>
       <header className="scene-head">
-        <div className="scene-icon">{scenario.icon}</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="scene-where">
-            {BUILDINGS[b].icon} {BUILDINGS[b].name} {where} · {npc(scenario).name} <span className="y">{starText(stars(p, scenario))}</span>
-          </div>
-          <h1>{scenario.titleZh}</h1>
-          <div className="scene-ja">{scenario.title}</div>
+        <div className="scene-where">
+          {BUILDINGS[b].label} · 和{npc(scenario).name}
         </div>
+        <h1>{scenario.titleZh}</h1>
+        <div className="scene-ja">{scenario.title}</div>
       </header>
       <div className="tabs steps">
         {TABS.map((t) => (
           <button key={t.key} className={`${tab === t.key ? "on" : ""} ${done[t.key] ? "did" : ""}`} onClick={() => go(t.key)}>
-            <b>{t.icon}</b>
             {t.label}
             {done[t.key] && " ✓"}
           </button>

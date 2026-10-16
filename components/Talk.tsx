@@ -16,7 +16,6 @@ import {
   wavSeconds,
   type Progress,
 } from "@/lib/client/progress";
-import { npc } from "@/lib/client/game";
 import HoldButton from "./HoldButton";
 import TurnNote from "./TurnNote";
 
@@ -30,7 +29,7 @@ function Star({ p, ja, zh, reading, voice, scenarioId }: { p: Progress; ja: stri
       aria-label={saved ? "取消收藏" : "收藏到复习"}
       onClick={() => toggleCard({ ja, zh, reading, voice, scenarioId })}
     >
-      {saved ? "★ 已收藏" : "☆ 收藏"}
+      {saved ? "已收藏" : "收藏"}
     </button>
   );
 }
@@ -165,34 +164,12 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
   }
 
   const userTurns = messages.filter((m) => m.role === "user").length;
-  const who = npc(scenario);
-  // Affinity grows with every reply the learner manages, up to five hearts.
-  const hearts = Math.min(5, userTurns);
 
   return (
     <div>
-      <div className="npc-top">
-        <div className="win">
-          {who.name} <span className="small-text">好感度</span>
-          <div className="hearts" aria-label={`好感度 ${hearts} / 5`}>
-            {"♥".repeat(hearts)}
-            <span style={{ opacity: 0.35 }}>{"♥".repeat(5 - hearts)}</span>
-          </div>
-        </div>
-        <div className="win">
-          回合 {userTurns}
-          <div className="small-text">EXP +{userTurns * 3}</div>
-        </div>
-      </div>
-      <div className="stage" aria-hidden>
-        <span className="npc">{who.sprite}</span>
-        <span className="me">🧑‍💼</span>
-        {userTurns > 0 && userTurns <= 5 && (
-          <span key={userTurns} className="like">好感度 +1 ♥</span>
-        )}
-      </div>
       <div className="card goal-win">
-        <div>🎯 目标：{talk.goalZh}</div>
+        <div className="label">这次的目标</div>
+        <div>{talk.goalZh}</div>
         <div className="small-text" style={{ marginTop: 4 }}>对方：{talk.aiRole}</div>
         <div className="small-text">你：{talk.userRole}</div>
         <div className="row" style={{ marginTop: 10 }}>
@@ -211,7 +188,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
             <div className="ja">{m.text}</div>
             {shownZh.has(i) && <div className="zh">{m.zh}</div>}
             <div className="row" style={{ marginTop: 6 }}>
-              <button className="small" onClick={() => { unlock(); say(m.text); }}>▶ 再听</button>
+              <button className="small" onClick={() => { unlock(); say(m.text); }}>再听</button>
               <button className="small" onClick={() => toggleZh(i)}>{shownZh.has(i) ? "隐藏中文" : "中文"}</button>
               {m.zh && <Star {...card} ja={m.text} zh={m.zh} />}
             </div>
@@ -252,7 +229,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
             <div key={i} style={{ marginTop: 10 }}>
               <div className="ja">{s.ja}</div>
               <div className="zh">{s.zh}</div>
-              <button className="small" onClick={() => { unlock(); say(s.ja); }}>▶ 听一下</button>
+              <button className="small" onClick={() => { unlock(); say(s.ja); }}>听一下</button>
             </div>
           ))}
         </div>
@@ -270,7 +247,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
               <div className="ja">→ {c.better}</div>
               <div className="zh">{c.why_zh}</div>
               <div className="row">
-                <button className="small" onClick={() => { unlock(); say(c.better); }}>▶ 听一下</button>
+                <button className="small" onClick={() => { unlock(); say(c.better); }}>听一下</button>
                 <Star {...card} ja={c.better} zh={`换个更自然的说法：${c.you_said}`} />
               </div>
             </div>
@@ -282,12 +259,12 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
               <div className="kana">{p.reading}</div>
               <div className="zh">{p.zh}</div>
               <div className="row">
-                <button className="small" onClick={() => { unlock(); say(p.ja); }}>▶ 听一下</button>
+                <button className="small" onClick={() => { unlock(); say(p.ja); }}>听一下</button>
                 <Star {...card} ja={p.ja} zh={p.zh} reading={p.reading} />
               </div>
             </div>
           ))}
-          <p className="muted">收藏的句子会出现在神社（复习）里，隔几天提醒你说一遍。</p>
+          <p className="muted">收藏的句子会进入复习，隔几天提醒你说一遍。</p>
           <div className="row">
             <Link href="/scenes" className="btn primary" style={{ flex: 1 }}>回到场景 →</Link>
             <button onClick={start}>再来一次</button>

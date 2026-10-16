@@ -2,13 +2,9 @@
 
 import Link from "next/link";
 import {
-  GOALS,
-  level,
   mastered,
-  setGoal,
   stepsDone,
   allScenarios,
-  totalXp,
   useProgress,
   useSyncState,
 } from "@/lib/client/progress";
@@ -16,15 +12,12 @@ import { allTime, diaryMetrics, formatDuration, lastDays, weeks } from "@/lib/cl
 import { Bars, Line } from "./Charts";
 import Nav from "./Nav";
 import Reminders from "./Reminders";
-import { jobTitle } from "@/lib/client/game";
 
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`;
 
 export default function Stats() {
   const p = useProgress();
   const sync = useSyncState();
-  const xp = totalXp(p);
-  const lv = level(xp);
   const all = allTime(p);
   const ws = weeks(p, 8);
   const thisWeek = ws[7];
@@ -46,28 +39,11 @@ export default function Stats() {
     <main>
       <Link href="/me" className="back">← 我</Link>
       <header className="page-mast">
-        <span className="icon" aria-hidden>🏆</span>
         <div>
-          <h1>成長</h1>
-          <p className="muted">ステータス · 你的冒险记录</p>
+          <h1>成长记录</h1>
+          <p className="muted">开口时长、反应速度、发音的变化</p>
         </div>
       </header>
-      <section className="win status">
-        <div className="avatar">🧑‍💼</div>
-        <div className="lvl">
-          Lv.{lv.n} {jobTitle(lv.n)}
-        </div>
-        <div className="row" style={{ flexWrap: "nowrap" }}>
-          <span>EXP</span>
-          <div className="bar" style={{ flex: 1 }}>
-            <i style={{ width: `${((xp - lv.from) / (lv.to - lv.from)) * 100}%` }} />
-          </div>
-        </div>
-        <div className="small-text">
-          累计 {xp} EXP · 再 {lv.to - xp} EXP 升为「{jobTitle(lv.n + 1)}」
-        </div>
-      </section>
-
       <h2>一共练了多少</h2>
       <div className="grid2 ledger2">
         <div className="kpi">
@@ -114,14 +90,13 @@ export default function Stats() {
         </div>
       </div>
 
-      <h2>每天的 XP（近 30 天）</h2>
+      <h2>每天开口（近 30 天，分钟）</h2>
       <div className="card">
         <Bars
-          unit="XP"
-          goal={p.goal}
-          data={days30.map((d, i) => ({ label: md(d), tick: i % 7 === 2 || i === 29 ? md(d) : undefined, value: p.days[d] ?? 0 }))}
+          unit="分钟"
+          format={(v) => String(Math.round(v * 10) / 10)}
+          data={days30.map((d, i) => ({ label: md(d), tick: i % 7 === 2 || i === 29 ? md(d) : undefined, value: (p.stats[d]?.speakSec ?? 0) / 60 }))}
         />
-        <div className="small-text">虚线是每日目标。浅色的天没达到目标。</div>
       </div>
 
       <h2>发音分数（每周平均）</h2>
@@ -167,33 +142,18 @@ export default function Stats() {
 
       <h2>设置</h2>
       <div className="card">
-        <div className="row spread">
-          <span>每日目标</span>
-          <div className="row">
-            {GOALS.map((g) => (
-              <button key={g} className={`small ${p.goal === g ? "on" : ""}`} onClick={() => setGoal(g)}>
-                {g === 30 ? "轻松" : g === 50 ? "标准" : "认真"} {g}
-              </button>
-            ))}
-          </div>
-        </div>
-        <p className="small-text" style={{ marginBottom: 0 }}>
-          整段听 +10，跟读一句 +2（首次 80 分 +5），对话一轮 +3，点评 +10，日记 +15，复习一句 +2，三项任务全做完 +10。
-        </p>
-      </div>
-      <div className="card">
         <div style={{ fontWeight: 600, marginBottom: 4 }}>练习提醒</div>
         <Reminders />
-        <p className="small-text" style={{ marginBottom: 0 }}>当天目标已经完成就不会提醒。</p>
+        <p className="small-text" style={{ marginBottom: 0 }}>当天已经练过就不会提醒。</p>
       </div>
       <div className="card">
         <div className="row spread">
           <span>云端备份</span>
           <span className="small-text">
-            {sync === "ok" ? "✓ 已同步" : sync === "syncing" ? "同步中…" : sync === "error" ? "同步失败，稍后自动重试" : "未开启"}
+            {sync === "ok" ? "已同步" : sync === "syncing" ? "同步中…" : sync === "error" ? "同步失败，稍后自动重试" : "未开启"}
           </span>
         </div>
-        <p className="small-text" style={{ marginBottom: 0 }}>进度会自动备份。换手机或清除 Safari 数据后，登录就能恢复。</p>
+        <p className="small-text" style={{ marginBottom: 0 }}>进度会自动备份到云端，清除浏览器数据后也能恢复。</p>
       </div>
       <Nav on="me" />
     </main>

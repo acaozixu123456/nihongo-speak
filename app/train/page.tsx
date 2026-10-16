@@ -1,5 +1,6 @@
-import Train from "@/components/Train";
+import { redirect } from "next/navigation";
 
+// Today's training is the home page now.
 export default function TrainPage() {
-  return <Train />;
+  redirect("/");
 }

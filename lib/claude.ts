@@ -7,7 +7,8 @@ import type { Scenario } from "@/content/scenarios";
 // Only the role-play part of a scenario is needed here.
 type Talk = Pick<Scenario, "talk">;
 
-const MODEL = "claude-sonnet-5-5";
+// Haiku everywhere: fast, and cheap enough to run on every utterance.
+const MODEL = "claude-haiku-5-5";
 // A key created outside any workspace must name one on every request.
 const workspace = process.env.ANTHROPIC_WORKSPACE_ID;
 const client = new Anthropic(workspace ? { defaultHeaders: { "anthropic-workspace-id": workspace } } : {});
@@ -54,7 +55,7 @@ export async function roleplayReply(s: Talk, history: Turn[]) {
     max_tokens: 2000,
     system: roleplaySystem(s),
     messages: toMessages(history),
-    output_config: { effort: "low", format: zodOutputFormat(ReplySchema) },
+    output_config: { format: zodOutputFormat(ReplySchema) },
   });
   checkStop(res.stop_reason);
   if (!res.parsed_output) throw new Error("AI 返回格式不对，请重试");
@@ -81,7 +82,7 @@ export async function hint(s: Talk, history: Turn[], wantZh?: string) {
       ...toMessages(history),
       { role: "user", content: ask },
     ],
-    output_config: { effort: "low", format: zodOutputFormat(HintSchema) },
+    output_config: { format: zodOutputFormat(HintSchema) },
   });
   checkStop(res.stop_reason);
   if (!res.parsed_output) throw new Error("AI 返回格式不对，请重试");
@@ -120,7 +121,7 @@ export async function feedback(s: Talk, history: Turn[]) {
 - 文法の誤りだけでなく、敬語のレベル、日本の職場・生活での自然さ、より短く言える表現も見る。
 - 説明は中国語で、具体的に。`,
     messages: [{ role: "user", content: transcript }],
-    output_config: { effort: "medium", format: zodOutputFormat(FeedbackSchema) },
+    output_config: { format: zodOutputFormat(FeedbackSchema) },
   });
   checkStop(res.stop_reason);
   if (!res.parsed_output) throw new Error("AI 返回格式不对，请重试");
@@ -188,7 +189,7 @@ export async function generateScenario(topic: string, category: "work" | "life",
         ],
       },
     ],
-    output_config: { effort: "medium", format: zodOutputFormat(GeneratedSchema) },
+    output_config: { format: zodOutputFormat(GeneratedSchema) },
   });
   checkStop(res.stop_reason);
   if (!res.parsed_output) throw new Error("AI 返回格式不对，请重试");
@@ -219,7 +220,7 @@ export async function diaryFeedback(prompt: string, text: string) {
 - natural は、学習者が言いたかったことを、日本人が普段話すような自然な日本語で。難しすぎる言葉は使わない。
 - 説明は中国語で、具体的に。`,
     messages: [{ role: "user", content: text }],
-    output_config: { effort: "medium", format: zodOutputFormat(DiarySchema) },
+    output_config: { format: zodOutputFormat(DiarySchema) },
   });
   checkStop(res.stop_reason);
   if (!res.parsed_output) throw new Error("AI 返回格式不对，请重试");
@@ -227,9 +228,6 @@ export async function diaryFeedback(prompt: string, text: string) {
 }
 
 // ---- Judging one spoken answer (瞬间说 / 复习) ----
-
-// Fast and cheap: this runs after every single answer.
-const JUDGE_MODEL = "claude-haiku-5-5";
 
 const JudgeSchema = z.object({
   verdict: z
@@ -256,20 +254,19 @@ const JudgeSchema = z.object({
 
 export type Judge = z.infer<typeof JudgeSchema>;
 
-// Haiku first for speed; if it errors or returns nothing usable, the main model answers instead,
-// so the learner always gets feedback.
+// Runs after every single answer; one retry if the model errors or returns nothing usable.
 export async function judgeAnswer(a: { zh: string; ja: string; where?: string; said: string; known?: string[] }) {
   try {
-    return await judgeWith(JUDGE_MODEL, a);
+    return await judgeOnce(a);
   } catch (e) {
-    console.error(`judge with ${JUDGE_MODEL} failed, falling back to ${MODEL}:`, e);
-    return judgeWith(MODEL, a);
+    console.error("judge failed, retrying:", e);
+    return judgeOnce(a);
   }
 }
 
-async function judgeWith(model: string, a: { zh: string; ja: string; where?: string; said: string; known?: string[] }) {
+async function judgeOnce(a: { zh: string; ja: string; where?: string; said: string; known?: string[] }) {
   const res = await client.messages.parse({
-    model,
+    model: MODEL,
     max_tokens: 4000,
     system: `あなたは日本在住の社会人向けの日本語コーチです。学習者は中国人、レベルはN4〜N3。
 学習者は中国語を見て、すぐに日本語で言う練習をしています。模範解答と一字一句同じである必要はありません。
@@ -289,7 +286,7 @@ points は学習者の弱点を記録するために使います。同じ文法�
 学習者が言ったこと：${a.said}`,
       },
     ],
-    output_config: model === MODEL ? { effort: "low", format: zodOutputFormat(JudgeSchema) } : { format: zodOutputFormat(JudgeSchema) },
+    output_config: { format: zodOutputFormat(JudgeSchema) },
   });
   checkStop(res.stop_reason);
   if (!res.parsed_output) throw new Error(`AI 返回格式不对（${res.stop_reason}），请重试`);
@@ -333,7 +330,7 @@ export async function makeDrill(w: { tag: string; zh: string; examples: { said: 
 ${w.examples.map((e) => `- 言った：${e.said} → 正しくは：${e.better}`).join("\n") || "（記録なし）"}`,
       },
     ],
-    output_config: { effort: "low", format: zodOutputFormat(DrillSchema) },
+    output_config: { format: zodOutputFormat(DrillSchema) },
   });
   checkStop(res.stop_reason);
   if (!res.parsed_output) throw new Error("AI 返回格式不对，请重试");
@@ -361,25 +358,25 @@ function knownLine(known?: string[]) {
     : "";
 }
 
-// Haiku first; if it fails, the main model answers so the learner still gets feedback.
+// Short coaching calls; one retry so the learner still gets feedback after a hiccup.
 async function haikuFirst<S extends z.ZodType>(schema: S, system: string, content: string): Promise<z.infer<S>> {
-  const run = async (model: string) => {
+  const run = async () => {
     const res = await client.messages.parse({
-      model,
+      model: MODEL,
       max_tokens: 3000,
       system,
       messages: [{ role: "user", content }],
-      output_config: model === MODEL ? { effort: "low", format: zodOutputFormat(schema) } : { format: zodOutputFormat(schema) },
+      output_config: { format: zodOutputFormat(schema) },
     });
     checkStop(res.stop_reason);
     if (!res.parsed_output) throw new Error(`AI 返回格式不对（${res.stop_reason}），请重试`);
     return res.parsed_output as z.infer<S>;
   };
   try {
-    return await run(JUDGE_MODEL);
+    return await run();
   } catch (e) {
-    console.error(`${JUDGE_MODEL} failed, falling back to ${MODEL}:`, e);
-    return run(MODEL);
+    console.error("coach call failed, retrying:", e);
+    return run();
   }
 }
 
