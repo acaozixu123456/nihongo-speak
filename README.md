@@ -21,7 +21,8 @@ npm run dev
 ```
 
 ## 结构
-- `content/scenarios.ts` 场景素材（台词、读音、中文、对话设定）
+- `content/scenarios.ts` 场景素材（台词、读音、中文、对话设定），新增的在 `scenes-work.ts`、`scenes-life.ts`
+- `public/voice/` 固定内容的预录语音（HD），播放时不再经过 Azure。改了场景台词后运行 `npx tsx scripts/bake-voices.ts` 补录
 - `lib/azure.ts` Azure TTS / 语音识别 / 发音评估
 - `lib/claude.ts` 角色扮演、提示、点评的提示词和结构化输出
 - `lib/client/recorder.ts` 浏览器端录成 16kHz WAV（iPhone 的 MediaRecorder 只能出 mp4）

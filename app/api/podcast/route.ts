@@ -5,7 +5,7 @@ export const maxDuration = 60;
 
 const str = (s: unknown, n: number): s is string => typeof s === "string" && s.length <= n;
 
-// Haiku writes today's episode from the learner's profile. 摸鱼模式 turns it into audio (see /api/moyu).
+// Haiku writes today's episode from the learner's profile. 摸鱼模式 turns it into audio (see lib/client/moyu.ts).
 export async function POST(request: Request) {
   const body = (await request.json()) as { kind: "script"; weak?: unknown; cards?: unknown; scenes?: unknown };
   try {

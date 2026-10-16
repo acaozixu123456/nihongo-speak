@@ -1,5 +1,7 @@
 "use client";
 
+import { VOICE_LIBRARY } from "@/lib/voice-library";
+import { voiceKey } from "@/lib/voice-key";
 import { isRecording, setAudioSession } from "./recorder";
 
 // iOS Safari only lets an <audio> element play without a tap once that same element
@@ -36,7 +38,11 @@ export function setRate(r: number) {
   a.playbackRate = r;
 }
 
+// Fixed content was recorded ahead of time (scripts/bake-voices.ts) and ships with the site, so
+// it keeps its HD voice and plays without Azure. Anything else is synthesized on demand.
 export function ttsUrl(text: string, voice: string) {
+  const key = voiceKey(text, voice);
+  if (VOICE_LIBRARY.has(key)) return `/voice/${key}.mp3`;
   return `/api/tts?${new URLSearchParams({ text, voice })}`;
 }
 

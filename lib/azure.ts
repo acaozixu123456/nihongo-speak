@@ -48,19 +48,35 @@ async function synthesizeWith(text: string, voice: string, { key, region }: { ke
 // voiceId lists voices to try in order, separated by "|". An HD voice is skipped
 // when the HD resource isn't configured or fails (for example after the Azure
 // trial credit runs out), so playback falls back to the free standard voice.
+// Standard voices also go to the second (paid) resource when there is one: the free
+// resource allows only about 20 requests a minute, and 摸鱼模式 asks for many at once.
+async function synthesizeOne(text: string, voice: string, hd: { key: string; region: string } | null) {
+  if (isHd(voice)) {
+    if (!hd) throw new Error(`no HD resource for ${voice}`);
+    return synthesizeWith(text, voice, hd);
+  }
+  if (hd) {
+    try {
+      return await synthesizeWith(text, voice, hd);
+    } catch (e) {
+      console.warn(e);
+    }
+  }
+  return synthesizeWith(text, voice, config());
+}
+
 export async function synthesize(text: string, voiceId: string) {
   const voices = voiceId.split("|");
   const hd = hdConfig();
   for (const voice of voices.slice(0, -1)) {
     if (isHd(voice) && !hd) continue;
     try {
-      return await synthesizeWith(text, voice, isHd(voice) ? hd! : config());
+      return await synthesizeOne(text, voice, hd);
     } catch (e) {
       console.warn(e);
     }
   }
-  const last = voices[voices.length - 1];
-  return synthesizeWith(text, last, isHd(last) && hd ? hd : config());
+  return synthesizeOne(text, voices[voices.length - 1], hd);
 }
 
 export type WordScore = { word: string; accuracy: number; errorType: string };
@@ -167,52 +183,4 @@ export async function recognize(wav: ArrayBuffer, referenceText?: string): Promi
         })),
     },
   };
-}
-
-// One audio file from several voices and pauses. Each voice may be a "HD|fallback" list like
-// synthesize() takes: the first choices go to the HD resource when any of them is an HD voice,
-// and if that fails the whole file is made again from the last choices.
-export type Part = { voice: string; text?: string; pauseMs?: number };
-
-function partsSsml(parts: Part[]) {
-  const body = parts
-    .map((p) => {
-      const [name, style] = p.voice.split("@");
-      const breaks: string[] = [];
-      for (let ms = p.pauseMs ?? 0; ms > 0; ms -= 5000) breaks.push(`<break time="${Math.min(5000, ms)}ms"/>`);
-      const text = p.text ? escapeXml(p.text) : "";
-      const said = style && text ? `<mstts:express-as style="${escapeXml(style)}">${text}</mstts:express-as>` : text;
-      return `<voice name="${escapeXml(name)}">${said}${breaks.join("")}</voice>`;
-    })
-    .join("");
-  return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="ja-JP">${body}</speak>`;
-}
-
-async function partsWith(parts: Part[], { key, region }: { key: string; region: string }) {
-  const res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
-    method: "POST",
-    headers: {
-      "Ocp-Apim-Subscription-Key": key,
-      "Content-Type": "application/ssml+xml",
-      "X-Microsoft-OutputFormat": "audio-24khz-48kbitrate-mono-mp3",
-      "User-Agent": "nihongo-speak",
-    },
-    body: partsSsml(parts),
-  });
-  if (!res.ok) throw new Error(`Azure TTS ${res.status}: ${await res.text()}`);
-  return res.arrayBuffer();
-}
-
-export async function synthesizeParts(parts: Part[]) {
-  const hd = hdConfig();
-  const first = parts.map((p) => ({ ...p, voice: p.voice.split("|")[0] }));
-  const last = parts.map((p) => ({ ...p, voice: p.voice.split("|").at(-1)! }));
-  if (hd && first.some((p) => isHd(p.voice))) {
-    try {
-      return await partsWith(first, hd);
-    } catch (e) {
-      console.warn(e);
-    }
-  }
-  return partsWith(last, hd && last.some((p) => isHd(p.voice)) ? hd : config());
 }
