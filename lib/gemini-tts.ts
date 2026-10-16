@@ -64,7 +64,7 @@ function apiKey() {
 }
 
 // Only the sentence is sent: a style instruction in front of it gets read out loud.
-const request = (text: string, voice: string) => ({
+export const request = (text: string, voice: string) => ({
   contents: [{ parts: [{ text }] }],
   generationConfig: {
     responseModalities: ["AUDIO"],
@@ -72,9 +72,9 @@ const request = (text: string, voice: string) => ({
   },
 });
 
-type Reply = { candidates?: { content?: { parts?: { inlineData?: { data?: string } }[] } }[] };
+export type Reply = { candidates?: { content?: { parts?: { inlineData?: { data?: string } }[] } }[] };
 
-function audio(reply: Reply, voice: string) {
+export function audio(reply: Reply, voice: string) {
   const b64 = reply.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data)?.inlineData?.data;
   if (!b64) throw new Error(`Gemini TTS returned no audio for ${voice}`);
   return mp3(pcm(Buffer.from(b64, "base64")));
