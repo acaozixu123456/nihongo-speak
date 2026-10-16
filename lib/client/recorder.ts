@@ -1,8 +1,12 @@
 "use client";
 
-// Records the microphone as 16kHz mono 16-bit WAV, the format Azure's
-// short-audio API expects. iPhone's MediaRecorder only produces mp4/aac,
-// so this captures raw samples with Web Audio instead.
+// Records the microphone and hands back 16kHz mono 16-bit WAV, the format Azure's
+// short-audio API expects.
+//
+// Capture uses MediaRecorder, not Web Audio. On iPhone a live AudioContext can only be
+// started from the end of a tap, so a Web Audio recorder pressed and held stays silent
+// until the finger lifts. MediaRecorder needs no gesture, and its compressed output is
+// decoded and resampled afterwards with an OfflineAudioContext, which needs none either.
 
 type AudioSessionNavigator = Navigator & { audioSession?: { type: string } };
 
@@ -15,60 +19,78 @@ export function setAudioSession(type: "play-and-record" | "playback") {
   if (s) s.type = type;
 }
 
-export class Recorder {
-  private ctx: AudioContext | null = null;
-  private stream: MediaStream | null = null;
-  private node: ScriptProcessorNode | null = null;
-  private chunks: Float32Array[] = [];
+const RATE = 16000;
 
+export class Recorder {
+  private stream: MediaStream | null = null;
+  private rec: MediaRecorder | null = null;
+  private chunks: Blob[] = [];
+  private stopped: Promise<void> = Promise.resolve();
+
+  // Resolves once audio is actually being captured, so the caller can say "speak now".
   async start() {
     live = true;
     setAudioSession("play-and-record");
-    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    this.ctx = this.ctx ?? new Ctx();
-    // Must happen inside the tap; awaiting getUserMedia first would lose the gesture.
-    const resumed = this.ctx.resume();
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
+      const rec = new MediaRecorder(this.stream);
+      this.rec = rec;
+      this.chunks = [];
+      rec.ondataavailable = (e) => {
+        if (e.data.size) this.chunks.push(e.data);
+      };
+      this.stopped = new Promise((resolve) => (rec.onstop = () => resolve()));
+      await new Promise<void>((resolve, reject) => {
+        rec.onstart = () => resolve();
+        rec.onerror = () => reject(new Error("recorder failed"));
+        rec.start();
+      });
     } catch (e) {
-      live = false;
-      setAudioSession("playback");
+      this.release();
       throw e;
     }
-    await resumed;
-    const source = this.ctx.createMediaStreamSource(this.stream);
-    this.node = this.ctx.createScriptProcessor(4096, 1, 1);
-    this.chunks = [];
-    this.node.onaudioprocess = (e) => {
-      this.chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
-    };
-    source.connect(this.node);
-    this.node.connect(this.ctx.destination);
   }
 
-  stop(): Blob {
+  // The stream as it is being recorded, for a level meter.
+  get input() {
+    return this.stream;
+  }
+
+  async stop(): Promise<Blob> {
+    const rec = this.rec;
+    if (rec && rec.state !== "inactive") rec.stop();
+    await this.stopped;
+    const type = rec?.mimeType || this.chunks[0]?.type || "";
+    const data = new Blob(this.chunks, { type });
+    this.chunks = [];
+    this.release();
+    return encodeWav(await decode(data), RATE);
+  }
+
+  private release() {
     live = false;
-    this.node?.disconnect();
-    this.node = null;
+    this.rec = null;
     // Releasing the mic puts iOS back into normal speaker playback.
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
     setAudioSession("playback");
-    const rate = this.ctx?.sampleRate ?? 48000;
-    return encodeWav(downsample(concat(this.chunks), rate, 16000), 16000);
   }
 }
 
-function concat(chunks: Float32Array[]) {
-  const out = new Float32Array(chunks.reduce((n, c) => n + c.length, 0));
-  let offset = 0;
-  for (const c of chunks) {
-    out.set(c, offset);
-    offset += c.length;
+// Decodes the recording straight to 16kHz mono; decoding into a 16kHz context resamples it.
+async function decode(data: Blob): Promise<Float32Array> {
+  if (!data.size) return new Float32Array(0);
+  const bytes = await data.arrayBuffer();
+  try {
+    const buf = await new OfflineAudioContext(1, 1, RATE).decodeAudioData(bytes.slice(0));
+    return buf.getChannelData(0);
+  } catch {
+    // Older Safari only decodes into 44.1/48kHz contexts.
+    const buf = await new OfflineAudioContext(1, 1, 48000).decodeAudioData(bytes);
+    return downsample(buf.getChannelData(0), buf.sampleRate, RATE);
   }
-  return out;
 }
 
 function downsample(input: Float32Array, from: number, to: number) {

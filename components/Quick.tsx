@@ -219,7 +219,7 @@ export default function Quick({ drill }: { drill?: string }) {
     try {
       const r = await transcribe(wav, item.ja);
       if (!r.text) {
-        setError("没听清，再按住说一次");
+        setError("没听清，再说一次");
         return;
       }
       recordSpeech(wavSeconds(wav), r.scores?.pron);
@@ -332,7 +332,7 @@ export default function Quick({ drill }: { drill?: string }) {
         </header>
         <div className="card">
           <p style={{ marginTop: 0 }}>
-            真实对话里只有一两秒反应时间。每题给你一句中文和它出现的场合，<strong>3 秒内按住按钮开口</strong>
+            真实对话里只有一两秒反应时间。每题给你一句中文和它出现的场合，<strong>3 秒内点按钮开口</strong>
             ，说完对照标准说法。
           </p>
           <p className="muted">
@@ -494,7 +494,7 @@ export default function Quick({ drill }: { drill?: string }) {
               )}
             </div>
             {again === "covered" ? (
-              <p className="muted">答案盖住了。不看原文，按住再说一遍。</p>
+              <p className="muted">答案盖住了。不看原文，再说一遍。</p>
             ) : (
               <>
                 <div className="answer">{item.ja}</div>
@@ -559,7 +559,7 @@ export default function Quick({ drill }: { drill?: string }) {
               <button onClick={giveUp} disabled={busy}>说不出来</button>
               <div style={{ flex: 1 }}>
                 <HoldButton
-                  label={busy ? "识别中…" : "按住说日语"}
+                  label={busy ? "识别中…" : "点一下说日语"}
                   disabled={busy}
                   onStart={onStart}
                   onRecorded={onRecorded}
@@ -571,7 +571,7 @@ export default function Quick({ drill }: { drill?: string }) {
             <div className="row" style={{ flexWrap: "nowrap" }}>
               <button onClick={() => setAgain("off")} disabled={busy}>算了</button>
               <div style={{ flex: 1 }}>
-                <HoldButton label={busy ? "识别中…" : "按住再说一遍"} disabled={busy} onRecorded={onAgain} onError={setError} />
+                <HoldButton label={busy ? "识别中…" : "再说一遍"} disabled={busy} onRecorded={onAgain} onError={setError} />
               </div>
             </div>
           ) : (
