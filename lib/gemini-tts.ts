@@ -1,7 +1,9 @@
 // Japanese speech from Gemini TTS, encoded as the same MP3 Azure gives us (24 kHz, 48 kbit/s,
 // mono) so 摸鱼模式 can keep joining clips frame by frame. No "server-only" here because
 // scripts/bake-voices.ts uses it too.
-const MODEL = "gemini-3.8-flash-tts";
+export const FLASH = "gemini-3.8-flash-tts";
+// Same voices, its own daily quota; scripts/bake-voices.ts --lite uses it.
+export const FLASH_LITE = "gemini-3.8-flash-lite-tts";
 
 // The scenarios name Azure voices; each one maps to a Gemini voice of the same gender and feel.
 const VOICES: Record<string, string> = {
@@ -50,10 +52,10 @@ async function mp3(samples: Int16Array) {
 }
 
 // Only the sentence is sent: a style instruction in front of it gets read out loud.
-export async function synthesizeGemini(text: string, voice: string, timeoutMs = 15000) {
+export async function synthesizeGemini(text: string, voice: string, timeoutMs = 15000, model = FLASH) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY is not set");
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
     headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -65,7 +67,11 @@ export async function synthesizeGemini(text: string, voice: string, timeoutMs = 
     }),
     signal: AbortSignal.timeout(timeoutMs),
   });
-  if (!res.ok) throw new Error(`Gemini TTS ${res.status} for ${voice}: ${(await res.text()).slice(0, 300)}`);
+  if (!res.ok) {
+    const body = await res.text();
+    const daily = body.includes("per_day") ? " (daily quota)" : "";
+    throw new Error(`Gemini TTS ${res.status}${daily} for ${voice} on ${model}: ${body.slice(0, 200)}`);
+  }
   const data = (await res.json()) as {
     candidates?: { content?: { parts?: { inlineData?: { data?: string } }[] } }[];
   };
