@@ -122,11 +122,11 @@ export default function Today() {
           </span>
           <span className="chev" aria-hidden>›</span>
         </Link>
-        <Link href="/podcast" className="row-link">
+        <Link href="/moyu" className="row-link">
           <span className="glyph">聴</span>
           <span className="row-text">
-            通勤播客
-            <small>约 3 分钟，讲你的薄弱点和收藏的话</small>
+            摸鱼模式
+            <small>戴上耳机一直听，不用开口，通勤也能用</small>
           </span>
           <span className="chev" aria-hidden>›</span>
         </Link>

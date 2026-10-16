@@ -429,8 +429,6 @@ main.home { padding: 0 0 calc(env(safe-area-inset-bottom) + 100px); }
 
 .photo-pick { display: flex; gap: 10px; align-items: flex-end; margin-top: 10px; }
 .photo-pick img { width: 120px; max-height: 160px; object-fit: cover; border-radius: 12px; }
-.podcast-script p { margin: 8px 0; }
-.pod-ja { margin: 12px 0; padding-left: 12px; border-left: 2px solid var(--accent); font-family: var(--ja); }
 .row .seg, .card > .seg:first-child { margin: 0; }
 
 /* ---- Phone call ---- */
@@ -469,3 +467,36 @@ button.hangup { background: var(--text); border-color: var(--text); color: #fff;
 .call-line { padding: 8px 0; border-bottom: 1px solid var(--line); }
 .call-line:last-child { border-bottom: 0; }
 .call-line.me .ja { color: var(--accent-ink); }
+
+/* ---- 摸鱼模式: dark and quiet, nothing that catches a colleague's eye ---- */
+body.moyu-on {
+  --bg: #1c1c1e;
+  --card: #2a2a2c;
+  --soft: #2a2a2c;
+  --text: #e6e3dc;
+  --muted: #8a867e;
+  --line: #36363a;
+  background: var(--bg);
+  color: var(--text);
+  color-scheme: dark;
+}
+body.moyu-on .nav { background: rgba(28, 28, 30, 0.92); }
+body.moyu-on .nav a.on::after { background: var(--muted); }
+body.moyu-on button.on { color: var(--bg); }
+.moyu-now { min-height: 150px; margin: 28px 0 8px; }
+.moyu-block { font-size: 12px; color: var(--muted); letter-spacing: 0.12em; }
+.moyu-show { font-family: var(--ja); font-size: 20px; line-height: 1.5; margin: 8px 0 6px; }
+.moyu-sub { font-size: 14px; color: var(--muted); margin: 0; }
+.moyu-controls { display: flex; align-items: center; justify-content: space-between; margin: 18px 0; }
+.moyu-play {
+  width: 84px;
+  height: 84px;
+  padding: 0;
+  font-size: 18px;
+  border-radius: 50%;
+  background: var(--card);
+  border-color: var(--line);
+}
+.moyu-rates { display: flex; justify-content: center; gap: 8px; }
+.moyu-foot { text-align: center; font-size: 13px; color: var(--muted); margin: 26px 0 4px; font-variant-numeric: tabular-nums; }
+.moyu-hint { text-align: center; font-size: 12px; color: var(--muted); margin: 0; opacity: 0.8; }

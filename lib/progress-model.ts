@@ -36,7 +36,11 @@ export type DayStats = {
   quickMsSum?: number;
   quickFast?: number;
   xp?: Partial<Record<XpKind, number>>;
+  moyuSec?: number; // seconds listened in 摸鱼模式
+  stuck?: StuckLine[]; // sentences replayed in 摸鱼模式, to say out loud later
 };
+
+export type StuckLine = { ja: string; reading?: string; zh: string; voice: string };
 
 export type DiaryEntry = {
   id: string;
@@ -152,7 +156,8 @@ const max = (a = 0, b = 0) => Math.max(a, b);
 
 function mergeStats(a: DayStats = {}, b: DayStats = {}): DayStats {
   // Two devices rarely practise on the same day; keep whichever recorded more.
-  return (a.said ?? 0) + (a.listenLines ?? 0) >= (b.said ?? 0) + (b.listenLines ?? 0) ? a : b;
+  const weight = (s: DayStats) => (s.said ?? 0) + (s.listenLines ?? 0) + (s.moyuSec ?? 0) / 60;
+  return weight(a) >= weight(b) ? a : b;
 }
 
 // Combine two copies of progress (this phone and the server) without losing practice.

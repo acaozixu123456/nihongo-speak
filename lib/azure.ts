@@ -169,20 +169,26 @@ export async function recognize(wav: ArrayBuffer, referenceText?: string): Promi
   };
 }
 
-// One audio file from several voices and pauses, for the commute podcast. Standard voices only,
-// so it runs on the free resource and the whole episode is a single file the phone can play locked.
+// One audio file from several voices and pauses. Each voice may be a "HD|fallback" list like
+// synthesize() takes: the first choices go to the HD resource when any of them is an HD voice,
+// and if that fails the whole file is made again from the last choices.
 export type Part = { voice: string; text?: string; pauseMs?: number };
 
-export async function synthesizeParts(parts: Part[]) {
+function partsSsml(parts: Part[]) {
   const body = parts
     .map((p) => {
+      const [name, style] = p.voice.split("@");
       const breaks: string[] = [];
       for (let ms = p.pauseMs ?? 0; ms > 0; ms -= 5000) breaks.push(`<break time="${Math.min(5000, ms)}ms"/>`);
-      return `<voice name="${escapeXml(p.voice)}">${p.text ? escapeXml(p.text) : ""}${breaks.join("")}</voice>`;
+      const text = p.text ? escapeXml(p.text) : "";
+      const said = style && text ? `<mstts:express-as style="${escapeXml(style)}">${text}</mstts:express-as>` : text;
+      return `<voice name="${escapeXml(name)}">${said}${breaks.join("")}</voice>`;
     })
     .join("");
-  const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="ja-JP">${body}</speak>`;
-  const { key, region } = config();
+  return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="ja-JP">${body}</speak>`;
+}
+
+async function partsWith(parts: Part[], { key, region }: { key: string; region: string }) {
   const res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
     method: "POST",
     headers: {
@@ -191,8 +197,22 @@ export async function synthesizeParts(parts: Part[]) {
       "X-Microsoft-OutputFormat": "audio-24khz-48kbitrate-mono-mp3",
       "User-Agent": "nihongo-speak",
     },
-    body: ssml,
+    body: partsSsml(parts),
   });
   if (!res.ok) throw new Error(`Azure TTS ${res.status}: ${await res.text()}`);
   return res.arrayBuffer();
+}
+
+export async function synthesizeParts(parts: Part[]) {
+  const hd = hdConfig();
+  const first = parts.map((p) => ({ ...p, voice: p.voice.split("|")[0] }));
+  const last = parts.map((p) => ({ ...p, voice: p.voice.split("|").at(-1)! }));
+  if (hd && first.some((p) => isHd(p.voice))) {
+    try {
+      return await partsWith(first, hd);
+    } catch (e) {
+      console.warn(e);
+    }
+  }
+  return partsWith(last, hd && last.some((p) => isHd(p.voice)) ? hd : config());
 }
