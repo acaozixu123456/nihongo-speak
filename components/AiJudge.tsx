@@ -42,7 +42,7 @@ export default function AiJudge({
   onVerdict?: (v: Verdict) => void;
 }) {
   const [data, setData] = useState<Judge | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const cb = useRef(onVerdict);
   cb.current = onVerdict;
@@ -55,12 +55,12 @@ export default function AiJudge({
     const hit = cache.get(key);
     if (hit) {
       setData(hit);
-      setFailed(false);
+      setFailed(null);
       return;
     }
     const ctrl = new AbortController();
     setData(null);
-    setFailed(false);
+    setFailed(null);
     fetch("/api/judge", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -68,16 +68,17 @@ export default function AiJudge({
       signal: ctrl.signal,
     })
       .then(async (res) => {
-        if (!res.ok) throw new Error();
-        const j = (await res.json()) as Judge;
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+        const j = body as Judge;
         j.points ??= [];
         cache.set(key, j);
         recordPoints(j.points, j.fixes);
         setData(j);
         cb.current?.(j.verdict);
       })
-      .catch(() => {
-        if (!ctrl.signal.aborted) setFailed(true);
+      .catch((e: unknown) => {
+        if (!ctrl.signal.aborted) setFailed(e instanceof Error ? e.message : "网络错误");
       });
     return () => ctrl.abort();
   }, [zh, ja, where, said, attempt]);
@@ -90,7 +91,7 @@ export default function AiJudge({
   if (failed) {
     return (
       <div className="judge">
-        <span className="muted">AI 点评没连上。</span>
+        <span className="muted">AI 点评没连上{failed ? `（${failed}）` : ""}。</span>
         <button className="small" onClick={() => setAttempt((n) => n + 1)}>重试</button>
       </div>
     );
