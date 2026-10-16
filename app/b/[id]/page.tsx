@@ -1,12 +1,7 @@
-import { notFound } from "next/navigation";
-import Building from "@/components/Building";
-import type { BuildingId } from "@/lib/client/game";
+import { redirect } from "next/navigation";
 
-const IDS: BuildingId[] = ["work", "life", "custom"];
-
+// The buildings were merged into one scenario list.
 export default async function BuildingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const b = IDS.find((x) => x === id);
-  if (!b) notFound();
-  return <Building key={b} id={b} />;
+  redirect(`/scenes?tab=${encodeURIComponent(id)}`);
 }

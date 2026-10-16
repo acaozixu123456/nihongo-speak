@@ -1,5 +1,6 @@
-import Weak from "@/components/Weak";
+import { redirect } from "next/navigation";
 
+// Weak points now live in 今日训练.
 export default function WeakPage() {
-  return <Weak />;
+  redirect("/train#weak");
 }

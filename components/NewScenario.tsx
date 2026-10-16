@@ -40,7 +40,7 @@ export default function NewScenario(props: { topic?: string; category?: "work" |
 
   return (
     <main>
-      <Link href="/b/custom" className="back">← コンビニ</Link>
+      <Link href="/scenes" className="back">← 场景</Link>
       <header className="page-mast">
         <span className="icon" aria-hidden>🏪</span>
         <div>

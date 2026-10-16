@@ -33,7 +33,7 @@ export default function ScenarioView({ scenario, step }: { scenario: Scenario; s
 
   return (
     <main>
-      <Link href={`/b/${b}`} className="back">← {BUILDINGS[b].name}</Link>
+      <Link href={`/scenes?tab=${b}`} className="back">← 场景</Link>
       <header className="scene-head">
         <div className="scene-icon">{scenario.icon}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -70,7 +70,7 @@ export function CustomScenarioView({ id, step }: { id: string; step?: Step }) {
   if (scenario) return <ScenarioView scenario={scenario} step={step} />;
   return (
     <main>
-      <Link href="/" className="back">← 小镇</Link>
+      <Link href="/scenes" className="back">← 场景</Link>
       <p className="muted">{hydrated ? "找不到这个场景，可能已经删除了。" : "加载中…"}</p>
     </main>
   );

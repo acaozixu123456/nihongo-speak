@@ -289,7 +289,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
           ))}
           <p className="muted">收藏的句子会出现在神社（复习）里，隔几天提醒你说一遍。</p>
           <div className="row">
-            <Link href="/" className="btn primary" style={{ flex: 1 }}>回到小镇 →</Link>
+            <Link href="/scenes" className="btn primary" style={{ flex: 1 }}>回到场景 →</Link>
             <button onClick={start}>再来一次</button>
           </div>
         </div>

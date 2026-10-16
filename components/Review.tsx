@@ -109,9 +109,9 @@ export default function Review() {
           <p className="muted">
             跟读时点 ☆，或者对话点评里点「☆ 收藏」，句子就会来到这里。之后按 1、3、7、14 天的间隔提醒你开口说一遍。
           </p>
-          <Link href="/">去练习 →</Link>
+          <Link href="/scenes">去练习 →</Link>
         </div>
-        <Nav on="town" />
+        <Nav on="train" />
       </main>
     );
   }
@@ -143,7 +143,7 @@ export default function Review() {
             </>
           )}
         </div>
-        <Nav on="town" />
+        <Nav on="train" />
       </main>
     );
   }
@@ -164,12 +164,12 @@ export default function Review() {
           {again > 0 && <p className="muted">有 {again} 次「再练」，明天还会再见到它们。</p>}
           {Object.keys(p.weak).length > 0 && (
             <p>
-              <Link href="/weak">看 AI 找出的薄弱点 →</Link>
+              <Link href="/train#weak">看 AI 找出的薄弱点 →</Link>
             </p>
           )}
-          <Link href="/" className="btn primary next-cta" style={{ display: "block" }}>回到小镇 →</Link>
+          <Link href="/train" className="btn primary next-cta" style={{ display: "block" }}>回到今日训练 →</Link>
         </div>
-        <Nav on="town" />
+        <Nav on="train" />
       </main>
     );
   }

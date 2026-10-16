@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   GOALS,
   level,
@@ -43,6 +44,7 @@ export default function Stats() {
 
   return (
     <main>
+      <Link href="/me" className="back">← 我</Link>
       <header className="page-mast">
         <span className="icon" aria-hidden>🏆</span>
         <div>
@@ -193,7 +195,7 @@ export default function Stats() {
         </div>
         <p className="small-text" style={{ marginBottom: 0 }}>进度会自动备份。换手机或清除 Safari 数据后，登录就能恢复。</p>
       </div>
-      <Nav on="stats" />
+      <Nav on="me" />
     </main>
   );
 }
