@@ -110,7 +110,7 @@ export default function AiJudge({
         <strong className={l.tone}>{l.text}</strong>
         <span>{data.summary_zh}</span>
       </div>
-      {data.right_zh && <p className="judge-right">👍 {data.right_zh}</p>}
+      {data.right_zh && <p className="judge-right">{data.right_zh}</p>}
       {data.fixes.map((f, i) => (
         <div key={i} className="judge-fix">
           <div>
@@ -129,7 +129,7 @@ export default function AiJudge({
             </span>
           ))}
           {data.points.some((pt) => !pt.ok) && (
-            <Link href="/train#weak" className="small-text">已记进薄弱点 →</Link>
+            <Link href="/weak" className="small-text">已记进薄弱点 →</Link>
           )}
         </div>
       )}
@@ -138,7 +138,7 @@ export default function AiJudge({
           <div className="small-text">还可以这样说</div>
           {data.others.map((o, i) => (
             <button key={i} className="judge-alt" onClick={() => hear(o.ja)}>
-              <span>▶ {o.ja}</span>
+              <span>{o.ja}</span>
               <span className="small-text">{o.zh}</span>
             </button>
           ))}

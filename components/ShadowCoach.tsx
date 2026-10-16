@@ -25,7 +25,7 @@ export default function ShadowCoach({ ja, kana, result }: { ja: string; kana?: s
   }
   return (
     <div className="judge">
-      {data.score_doubt && <p className="judge-right">🤔 {data.doubt_zh}</p>}
+      {data.score_doubt && <p className="judge-right">{data.doubt_zh}</p>}
       <div className="judge-head">
         <strong className="y">教练</strong>
         <span>{data.tip_zh}</span>

@@ -18,7 +18,6 @@ import {
   toggleCard,
   useProgress,
   wavSeconds,
-  weakList,
   type QuickItem,
 } from "@/lib/client/progress";
 import { totals } from "@/lib/client/metrics";
@@ -265,19 +264,18 @@ export default function Quick({ drill }: { drill?: string }) {
     return (
       <main>
         <div className="row spread">
-          <Link href="/train#weak" className="back">← 今日训练</Link>
+          <Link href="/weak" className="back">← 薄弱点</Link>
         </div>
         <header className="page-mast">
-          <span className="icon" aria-hidden>📕</span>
           <div>
-            <h1>強化</h1>
+            <h1>弱点强化</h1>
             <p className="muted">针对一个薄弱点的瞬间说</p>
           </div>
         </header>
         {!weakPoint ? (
           <div className="card">
             <p style={{ marginTop: 0 }}>找不到这个薄弱点了。</p>
-            <Link href="/train#weak">回薄弱点 →</Link>
+            <Link href="/weak">回薄弱点 →</Link>
           </div>
         ) : (
           <div className="card">
@@ -313,7 +311,7 @@ export default function Quick({ drill }: { drill?: string }) {
             )}
           </div>
         )}
-        <Nav on="train" />
+        <Nav on="today" />
       </main>
     );
   }
@@ -325,11 +323,11 @@ export default function Quick({ drill }: { drill?: string }) {
     const mastered = quickMastered(p);
     return (
       <main>
+        <Link href="/" className="back">← 今天</Link>
         <header className="page-mast">
-          <span className="icon" aria-hidden>🥋</span>
           <div>
-            <h1>道場</h1>
-            <p className="muted">瞬间说 · 看中文，3 秒内开口</p>
+            <h1>瞬间说</h1>
+            <p className="muted">看中文，3 秒内开口</p>
           </div>
         </header>
         <div className="card">
@@ -358,8 +356,7 @@ export default function Quick({ drill }: { drill?: string }) {
           </div>
           <button className="primary next-cta" onClick={() => begin()}>开始</button>
         </div>
-        <WeakTeaser />
-        <Nav on="train" />
+        <Nav on="today" />
       </main>
     );
   }
@@ -378,9 +375,8 @@ export default function Quick({ drill }: { drill?: string }) {
     return (
       <main>
         <header className="page-mast">
-          <span className="icon" aria-hidden>🥋</span>
           <div>
-            <h1>道場</h1>
+            <h1>瞬间说</h1>
             <p className="muted">这一轮的结果</p>
           </div>
         </header>
@@ -436,19 +432,16 @@ export default function Quick({ drill }: { drill?: string }) {
           <>
             <button className="primary next-cta" onClick={() => begin()}>这个点再练一轮</button>
             <p style={{ textAlign: "center" }}>
-              <Link href="/train#weak">回薄弱点 →</Link>
+              <Link href="/weak">回薄弱点 →</Link>
             </p>
           </>
         ) : (
-          <>
-            <WeakTeaser />
-            <button className="primary next-cta" onClick={() => begin()}>再来一轮</button>
-          </>
+          <button className="primary next-cta" onClick={() => begin()}>再来一轮</button>
         )}
         <p style={{ textAlign: "center" }}>
-          <Link href="/train" className="muted">回到今日训练</Link>
+          <Link href="/" className="muted">回到今天</Link>
         </p>
-        <Nav on="train" />
+        <Nav on="today" />
       </main>
     );
   }
@@ -483,7 +476,7 @@ export default function Quick({ drill }: { drill?: string }) {
               overtime &&
               spokeAt === null && (
                 <button className="small" style={{ marginTop: 10 }} onClick={() => setHinted(true)}>
-                  💡 给个开头
+                  给个开头
                 </button>
               )
             )}
@@ -544,14 +537,14 @@ export default function Quick({ drill }: { drill?: string }) {
             )}
             {comingBack && <p className="small-text">这句本轮最后会再出现一次。</p>}
             <div className="row" style={{ justifyContent: "center" }}>
-              <button onClick={() => hear(item)}>▶ 听原声</button>
+              <button onClick={() => hear(item)}>听原声</button>
               <button
                 className={`star ${saved ? "on" : ""}`}
                 onClick={() =>
                   toggleCard({ ja: item.ja, reading: item.reading, zh: item.zh, voice: item.voice, scenarioId: item.scenarioId })
                 }
               >
-                {saved ? "★ 已加入复习" : "☆ 加入复习"}
+                {saved ? "已加入复习" : "加入复习"}
               </button>
             </div>
           </>
@@ -585,7 +578,7 @@ export default function Quick({ drill }: { drill?: string }) {
             <div className="row" style={{ flexWrap: "nowrap" }}>
               {again === "off" && (
                 <button style={{ flex: 1, padding: 14 }} onClick={() => { stop(); setAgain("covered"); }}>
-                  🙈 盖住再说
+                  盖住再说
                 </button>
               )}
               <button className="primary" style={{ flex: 1, padding: 14 }} onClick={next}>
@@ -596,31 +589,5 @@ export default function Quick({ drill }: { drill?: string }) {
         </div>
       </div>
     </main>
-  );
-}
-
-// The shakiest grammar points so far, with a way into their drills.
-function WeakTeaser() {
-  const p = useProgress();
-  const list = weakList(p).slice(0, 3);
-  if (!list.length) return null;
-  return (
-    <div className="card">
-      <div className="row spread">
-        <strong>AI 发现的薄弱点</strong>
-        <Link href="/train#weak" className="small-text">全部 →</Link>
-      </div>
-      {list.map((w) => (
-        <Link key={w.tag} href={`/quick?drill=${encodeURIComponent(w.tag)}`} className="weak-row">
-          <div className="row spread">
-            <span className="weak-tag">{w.tag}</span>
-            <span className="small-text" style={{ color: "var(--accent)" }}>强化 →</span>
-          </div>
-          <div className="small-text">
-            {w.zh} · 错 {w.miss} 次
-          </div>
-        </Link>
-      ))}
-    </div>
   );
 }

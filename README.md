@@ -5,7 +5,7 @@
 ## 用到的服务
 | 用途 | 服务 | 环境变量 |
 |---|---|---|
-| 对话、提示、点评 | Claude API（Sonnet 5.5） | `ANTHROPIC_API_KEY` |
+| 对话、提示、点评 | Claude API（Haiku 5.5） | `ANTHROPIC_API_KEY` |
 | 语音识别、发音评估、日语 TTS | Azure Speech（免费层 F0，区域 Japan East） | `AZURE_SPEECH_KEY`、`AZURE_SPEECH_REGION` |
 
 ## 部署到 Vercel

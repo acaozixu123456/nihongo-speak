@@ -5,8 +5,6 @@ import type { Scenario } from "@/content/scenarios";
 import { play, setRate, ttsUrl, unlock } from "@/lib/client/player";
 import { transcribe, type SttResult } from "@/lib/client/recorder";
 import { hasCard, recordShadow, recordSpeech, shadowTarget, toggleCard, useProgress, wavSeconds } from "@/lib/client/progress";
-import { confetti } from "@/lib/client/fx";
-import { GRADES, grade, type Grade } from "@/lib/client/game";
 import HoldButton from "./HoldButton";
 import ShadowCoach from "./ShadowCoach";
 import { RatePicker } from "./Listen";
@@ -29,9 +27,6 @@ export default function Shadow({ scenario, active, onNext }: Props) {
   const best = progress.scenarios[scenario.id]?.shadow ?? {};
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  // This session's run, scored like a rhythm game.
-  const [combo, setCombo] = useState(0);
-  const [tally, setTally] = useState<Record<Grade, number>>({ PERFECT: 0, GREAT: 0, GOOD: 0, MISS: 0 });
 
   const line = scenario.lines[index];
   const attempt = attempts[index];
@@ -63,11 +58,7 @@ export default function Shadow({ scenario, active, onNext }: Props) {
       });
       if (result.scores) {
         const pron = result.scores.pron;
-        const g = grade(pron);
-        setTally((t) => ({ ...t, [g]: t[g] + 1 }));
-        setCombo((c) => (pron >= 80 ? c + 1 : 0));
         setPassed(pron >= 80);
-        if (pron >= 80 && (best[index] ?? 0) < 80) confetti(40);
         recordShadow(scenario.id, index, pron);
       }
       recordSpeech(wavSeconds(wav), result.scores?.pron);
@@ -88,7 +79,7 @@ export default function Shadow({ scenario, active, onNext }: Props) {
     <div>
       <div className="card">
         <p className="muted" style={{ marginTop: 0 }}>
-          先听原声，再按住按钮模仿着说。注意语调的高低和停顿，不只是读对假名。GREAT（80 分）以上算过关，连续过关有 COMBO。
+          先听原声，再按住按钮模仿着说。注意语调的高低和停顿，不只是读对假名。80 分以上算过关。
         </p>
         <RatePicker
           rate={rate}
@@ -115,13 +106,13 @@ export default function Shadow({ scenario, active, onNext }: Props) {
           <div className="row">
             {best[index] !== undefined && <span className={`muted ${tone(best[index])}`}>最高 {best[index]}</span>}
             <button
-              className={`star ${saved ? "on" : ""}`}
+              className={`small ${saved ? "on" : ""}`}
               aria-label={saved ? "取消收藏" : "收藏到复习"}
               onClick={() =>
                 toggleCard({ ja: line.ja, reading: line.kana, zh: line.zh, voice: line.voice, scenarioId: scenario.id })
               }
             >
-              {saved ? "★" : "☆"}
+              {saved ? "已收藏" : "收藏"}
             </button>
           </div>
         </div>
@@ -140,7 +131,7 @@ export default function Shadow({ scenario, active, onNext }: Props) {
         <div className="kana">{line.kana}</div>
         {showZh && <div className="zh">{line.zh}</div>}
         <div className="row" style={{ marginTop: 10 }}>
-          <button className="primary" onClick={listen}>▶ 听原声</button>
+          <button className="primary" onClick={listen}>听原声</button>
           {attempt && (
             <button
               onClick={() => {
@@ -148,7 +139,7 @@ export default function Shadow({ scenario, active, onNext }: Props) {
                 play(attempt.wavUrl, 1).catch(() => {});
               }}
             >
-              ▶ 听我的
+              听我的
             </button>
           )}
           <button className={`small ${showZh ? "on" : ""}`} onClick={() => setShowZh(!showZh)}>中文</button>
@@ -159,30 +150,9 @@ export default function Shadow({ scenario, active, onNext }: Props) {
         <div className="card">
           {scores ? (
             <>
-              <div className="rhythm">
-                <div key={attempt.wavUrl} className={`gr gr-${grade(scores.pron)}`}>
-                  {grade(scores.pron)}!
-                </div>
-                <div>
-                  発音 <span className={tone(scores.pron)}>{scores.pron}</span> · 流畅 {scores.fluency} · 完整 {scores.completeness}
-                </div>
-                {combo > 1 && <div className="combo">🔥 COMBO ×{combo}</div>}
-                <div className="wave" aria-hidden>
-                  {Array.from({ length: 24 }, (_, i) => {
-                    // One bar per beat, coloured by the word it falls on.
-                    const list = scores.words.length ? scores.words : [{ accuracy: scores.accuracy }];
-                    const w = list[Math.floor((i * list.length) / 24)];
-                    return (
-                      <i
-                        key={i}
-                        style={{
-                          height: `${Math.max(8, w.accuracy * 0.42 - ((i * 37) % 11) * 1.5)}px`,
-                          background: w.accuracy < 60 ? "var(--bad)" : w.accuracy < 80 ? "var(--warn)" : undefined,
-                        }}
-                      />
-                    );
-                  })}
-                </div>
+              <div className="score">
+                <b key={attempt.wavUrl} className={tone(scores.pron)}>{scores.pron}</b>
+                <span>发音 · 流畅 {scores.fluency} · 完整 {scores.completeness}</span>
               </div>
               <p className="muted" style={{ marginBottom: 0 }}>
                 {passed
@@ -196,14 +166,6 @@ export default function Shadow({ scenario, active, onNext }: Props) {
           ) : null}
           <p className="muted" style={{ marginBottom: 0 }}>识别结果：{attempt.result.text}</p>
           <ShadowCoach ja={line.ja} kana={line.kana} result={attempt.result} />
-          <div className="tally">
-            {GRADES.map((g) => (
-              <div key={g} className={`gr-${g}`}>
-                {g}
-                <b>{tally[g]}</b>
-              </div>
-            ))}
-          </div>
         </div>
       )}
 
