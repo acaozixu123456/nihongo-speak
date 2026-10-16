@@ -240,10 +240,21 @@ const JudgeSchema = z.object({
 
 export type Judge = z.infer<typeof JudgeSchema>;
 
+// Haiku first for speed; if it errors or returns nothing usable, the main model answers instead,
+// so the learner always gets feedback.
 export async function judgeAnswer(a: { zh: string; ja: string; where?: string; said: string; known?: string[] }) {
+  try {
+    return await judgeWith(JUDGE_MODEL, a);
+  } catch (e) {
+    console.error(`judge with ${JUDGE_MODEL} failed, falling back to ${MODEL}:`, e);
+    return judgeWith(MODEL, a);
+  }
+}
+
+async function judgeWith(model: string, a: { zh: string; ja: string; where?: string; said: string; known?: string[] }) {
   const res = await client.messages.parse({
-    model: JUDGE_MODEL,
-    max_tokens: 1500,
+    model,
+    max_tokens: 4000,
     system: `あなたは日本在住の社会人向けの日本語コーチです。学習者は中国人、レベルはN4〜N3。
 学習者は中国語を見て、すぐに日本語で言う練習をしています。模範解答と一字一句同じである必要はありません。
 その場面で意味が通じて自然なら good にしてください。言い方の違いだけで減点しない。
@@ -261,10 +272,10 @@ points は学習者の弱点を記録するために使います。同じ文法�
 学習者が言ったこと：${a.said}`,
       },
     ],
-    output_config: { format: zodOutputFormat(JudgeSchema) },
+    output_config: model === MODEL ? { effort: "low", format: zodOutputFormat(JudgeSchema) } : { format: zodOutputFormat(JudgeSchema) },
   });
   checkStop(res.stop_reason);
-  if (!res.parsed_output) throw new Error("AI 返回格式不对，请重试");
+  if (!res.parsed_output) throw new Error(`AI 返回格式不对（${res.stop_reason}），请重试`);
   return res.parsed_output;
 }
 
