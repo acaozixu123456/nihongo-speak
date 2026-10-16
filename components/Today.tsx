@@ -209,7 +209,7 @@ export default function Today() {
             mark={talk.place === "company" ? "❗" : undefined}
             href="/scenes"
           />
-          <Building place="station" icon="🚉" name="駅" pg="通勤播客 · 准备中" href="/" lock small />
+          <Building place="station" icon="🚉" name="駅" pg="通勤播客" mark="📻" href="/podcast" small />
           <Building
             place="dojo"
             icon="🥋"

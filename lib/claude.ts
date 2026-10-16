@@ -467,3 +467,43 @@ export function makeVariant(c: { ja: string; zh: string }) {
 意味：${c.zh}`,
   );
 }
+
+// 通勤播客: a short daily audio episode built from the learner's own weak points and saved phrases.
+const PodcastSchema = z.object({
+  title_zh: z.string().describe("今日のエピソードのタイトル（中国語、15字以内）"),
+  segments: z
+    .array(
+      z.object({
+        kind: z
+          .enum(["zh", "ja", "repeat"])
+          .describe("zh: 中国語の解説（パーソナリティが話す）。ja: 日本語の例文を読み上げる。repeat: 日本語の文を読み、聞き手が心の中で繰り返す間を空けて、もう一度読む"),
+        text: z.string().describe("読み上げる文。zh は中国語1〜3文、ja と repeat は日本語1文（30字以内）"),
+        zh: z.string().describe("ja と repeat のときの中国語訳。zh のときは空文字"),
+      }),
+    )
+    .describe("全体で約3分。20〜30個。最初に今日のテーマを中国語で紹介し、最後に中国語で一言励ます"),
+});
+
+export type Podcast = z.infer<typeof PodcastSchema>;
+
+export function makePodcast(a: {
+  weak: { tag: string; zh: string; examples: { said: string; better: string }[] }[];
+  cards: { ja: string; zh: string }[];
+  scenes: string[];
+}) {
+  return haikuFirst(
+    PodcastSchema,
+    `${COACH}
+学習者が通勤電車で聞く、約3分の個人向け音声番組の台本を作ってください。画面は見ない前提です。
+- 解説は中国語、例文は日本語。中国語の解説は短く、すぐ日本語の例文に行く。
+- 学習者の弱点（文法・表現）を1〜2個取り上げ、実際に言い間違えた文と正しい言い方を対比する。
+- 保存した表現を使った例文を repeat で何度か入れる。repeat の文は短く、そのまま職場や生活で使える文にする。
+- 例文の場面は学習者が練習している場面に合わせる。
+- 弱点や保存した表現がなければ、職場と生活でよく使う N3 の表現を選ぶ。`,
+    `弱点：
+${a.weak.map((w) => `- ${w.tag}（${w.zh}）${w.examples.map((e) => ` 言った：${e.said} → 正：${e.better}`).join("")}`).join("\n") || "（なし）"}
+保存した表現：
+${a.cards.map((c) => `- ${c.ja}（${c.zh}）`).join("\n") || "（なし）"}
+練習している場面：${a.scenes.join("、") || "（なし）"}`,
+  );
+}

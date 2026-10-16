@@ -91,6 +91,9 @@ export default function Train() {
         <Link href={now?.href ?? "/quick"} className="btn primary next-cta" style={{ display: "block", textAlign: "center" }}>
           {now ? `${doneCount ? "继续" : "开始"}：${now.label} →` : "今天练完了！再来一组瞬间说 →"}
         </Link>
+        <Link href="/podcast" className="small-text" style={{ display: "block", textAlign: "center", marginTop: 4 }}>
+          🎧 路上听今天的通勤播客 →
+        </Link>
       </div>
 
       <h2>今日任务</h2>
