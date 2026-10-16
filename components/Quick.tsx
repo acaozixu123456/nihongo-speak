@@ -265,7 +265,7 @@ export default function Quick({ drill }: { drill?: string }) {
     return (
       <main>
         <div className="row spread">
-          <Link href="/weak" className="back">← 弱点の書</Link>
+          <Link href="/train#weak" className="back">← 今日训练</Link>
         </div>
         <header className="page-mast">
           <span className="icon" aria-hidden>📕</span>
@@ -277,7 +277,7 @@ export default function Quick({ drill }: { drill?: string }) {
         {!weakPoint ? (
           <div className="card">
             <p style={{ marginTop: 0 }}>找不到这个薄弱点了。</p>
-            <Link href="/weak">回薄弱点 →</Link>
+            <Link href="/train#weak">回薄弱点 →</Link>
           </div>
         ) : (
           <div className="card">
@@ -313,7 +313,7 @@ export default function Quick({ drill }: { drill?: string }) {
             )}
           </div>
         )}
-        <Nav on="town" />
+        <Nav on="train" />
       </main>
     );
   }
@@ -359,7 +359,7 @@ export default function Quick({ drill }: { drill?: string }) {
           <button className="primary next-cta" onClick={() => begin()}>开始</button>
         </div>
         <WeakTeaser />
-        <Nav on="town" />
+        <Nav on="train" />
       </main>
     );
   }
@@ -436,7 +436,7 @@ export default function Quick({ drill }: { drill?: string }) {
           <>
             <button className="primary next-cta" onClick={() => begin()}>这个点再练一轮</button>
             <p style={{ textAlign: "center" }}>
-              <Link href="/weak">回薄弱点 →</Link>
+              <Link href="/train#weak">回薄弱点 →</Link>
             </p>
           </>
         ) : (
@@ -446,9 +446,9 @@ export default function Quick({ drill }: { drill?: string }) {
           </>
         )}
         <p style={{ textAlign: "center" }}>
-          <Link href="/" className="muted">回到小镇</Link>
+          <Link href="/train" className="muted">回到今日训练</Link>
         </p>
-        <Nav on="town" />
+        <Nav on="train" />
       </main>
     );
   }
@@ -608,7 +608,7 @@ function WeakTeaser() {
     <div className="card">
       <div className="row spread">
         <strong>AI 发现的薄弱点</strong>
-        <Link href="/weak" className="small-text">全部 →</Link>
+        <Link href="/train#weak" className="small-text">全部 →</Link>
       </div>
       {list.map((w) => (
         <Link key={w.tag} href={`/quick?drill=${encodeURIComponent(w.tag)}`} className="weak-row">

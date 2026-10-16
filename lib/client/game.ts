@@ -16,7 +16,7 @@ export type BuildingId = "work" | "life" | "custom";
 export const BUILDINGS: Record<BuildingId, { name: string; ja: string; icon: string; sub: string }> = {
   work: { name: "会社", ja: "株式会社ニホン", icon: "🏢", sub: "职场 · 每层是一个场景" },
   life: { name: "まち", ja: "ひまわり町", icon: "🏘️", sub: "生活 · 每家店是一个场景" },
-  custom: { name: "コンビニ", ja: "AI コンビニ", icon: "🏪", sub: "AI 写的新场景 · 随时进新货" },
+  custom: { name: "我的", ja: "私の場面", icon: "📸", sub: "从你自己的经历生成的场景" },
 };
 
 export function buildingOf(s: Scenario, p: Progress): BuildingId {

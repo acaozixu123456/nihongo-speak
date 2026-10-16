@@ -27,6 +27,7 @@ export default function Bag() {
 
   return (
     <main>
+      <Link href="/me" className="back">← 我</Link>
       <header className="page-mast">
         <span className="icon" aria-hidden>🎒</span>
         <div>
@@ -101,7 +102,7 @@ export default function Bag() {
               <span className="small-text" style={{ display: "block" }}>连续 7 天得一张，最多 2 张。哪天没空练，自动帮你保住连续记录。</span>
             </span>
           </div>
-          <Link href="/weak" className="quest">
+          <Link href="/train#weak" className="quest">
             <span className="qi">📕</span>
             <span className="qb">
               弱点之书 · {weak.length} 页
@@ -145,7 +146,7 @@ export default function Bag() {
           </p>
         </div>
       )}
-      <Nav on="bag" />
+      <Nav on="me" />
     </main>
   );
 }

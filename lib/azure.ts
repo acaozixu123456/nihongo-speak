@@ -143,3 +143,31 @@ export async function recognize(wav: ArrayBuffer, referenceText?: string): Promi
     },
   };
 }
+
+// One audio file from several voices and pauses, for the commute podcast. Standard voices only,
+// so it runs on the free resource and the whole episode is a single file the phone can play locked.
+export type Part = { voice: string; text?: string; pauseMs?: number };
+
+export async function synthesizeParts(parts: Part[]) {
+  const body = parts
+    .map((p) => {
+      const breaks: string[] = [];
+      for (let ms = p.pauseMs ?? 0; ms > 0; ms -= 5000) breaks.push(`<break time="${Math.min(5000, ms)}ms"/>`);
+      return `<voice name="${escapeXml(p.voice)}">${p.text ? escapeXml(p.text) : ""}${breaks.join("")}</voice>`;
+    })
+    .join("");
+  const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="ja-JP">${body}</speak>`;
+  const { key, region } = config();
+  const res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
+    method: "POST",
+    headers: {
+      "Ocp-Apim-Subscription-Key": key,
+      "Content-Type": "application/ssml+xml",
+      "X-Microsoft-OutputFormat": "audio-24khz-48kbitrate-mono-mp3",
+      "User-Agent": "nihongo-speak",
+    },
+    body: ssml,
+  });
+  if (!res.ok) throw new Error(`Azure TTS ${res.status}: ${await res.text()}`);
+  return res.arrayBuffer();
+}

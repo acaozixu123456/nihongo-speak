@@ -129,7 +129,7 @@ export default function AiJudge({
             </span>
           ))}
           {data.points.some((pt) => !pt.ok) && (
-            <Link href="/weak" className="small-text">已记进薄弱点 →</Link>
+            <Link href="/train#weak" className="small-text">已记进薄弱点 →</Link>
           )}
         </div>
       )}

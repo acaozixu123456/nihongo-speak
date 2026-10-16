@@ -2,29 +2,20 @@
 
 import Link from "next/link";
 import { useProgress, weakList, weakness } from "@/lib/client/progress";
-import Nav from "./Nav";
 
-// Grammar points and expressions the AI coach keeps seeing the learner get wrong.
-export default function Weak() {
+// Grammar points and expressions the AI coach keeps seeing the learner get wrong; each one opens a drill.
+export function WeakList() {
   const p = useProgress();
   const list = weakList(p);
   const fixed = Object.values(p.weak).filter((w) => w.miss > 0 && weakness(w) <= 0).length;
   return (
-    <main>
-      <header className="page-mast">
-        <span className="icon" aria-hidden>📕</span>
-        <div>
-          <h1>弱点の書</h1>
-          <p className="muted">薄弱点 · AI 从你每次开口里找出来的</p>
-        </div>
-      </header>
+    <>
       {list.length === 0 ? (
         <div className="card">
           <p style={{ marginTop: 0 }}>{Object.keys(p.weak).length ? "现在没有明显的薄弱点 🎉" : "还没有记录。"}</p>
-          <p className="muted">
-            在瞬间说和复习里每说一句，AI 会看这句考的是哪个语法或说法、你用对了没有。同一个点错得多，就会出现在这里，可以针对它专门练。
+          <p className="muted" style={{ marginBottom: 0 }}>
+            每次开口 AI 都会看这句考的是哪个语法或说法、你用对了没有。同一个点错得多，就会出现在这里，可以针对它专门练。
           </p>
-          <Link href="/quick">去练瞬间说 →</Link>
         </div>
       ) : (
         <div className="card">
@@ -51,7 +42,6 @@ export default function Weak() {
         </div>
       )}
       {fixed > 0 && <p className="muted" style={{ textAlign: "center" }}>已经练好 {fixed} 个曾经的薄弱点。</p>}
-      <Nav on="bag" />
-    </main>
+    </>
   );
 }

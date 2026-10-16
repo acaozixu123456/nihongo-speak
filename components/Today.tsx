@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   dayKey,
+  diaryToday,
   dueCards,
   level,
   nextStep,
@@ -18,54 +19,53 @@ import {
   type Step,
 } from "@/lib/client/progress";
 import { formatDuration, totals } from "@/lib/client/metrics";
-import { BUILDINGS, STATION_LEVEL, buildingOf, buildingStars, jobTitle, timeOfDay, type BuildingId } from "@/lib/client/game";
+import { buildingStars, jobTitle, timeOfDay } from "@/lib/client/game";
 import Nav from "./Nav";
 
 const STEP_LABEL: Record<Step, string> = { listen: "偷听", shadow: "模仿说话", talk: "对话" };
 const WEEKDAY_JA = ["日", "月", "火", "水", "木", "金", "土"];
 
-type Place = BuildingId | "quick" | "review" | "home" | "station";
+// The town has four places, one per tab: the company (scenarios), the station (commute podcast),
+// the dojo (today's training) and home (diary, growth, saved expressions).
+type Place = "company" | "station" | "dojo" | "home";
 
 // Where each building stands on the map: left in % of the width, top in px from the top of the grass.
 const SPOTS: Record<Place, { left: number; top: number }> = {
-  work: { left: 18, top: 24 },
-  custom: { left: 82, top: 24 },
+  company: { left: 18, top: 24 },
   station: { left: 82, top: 112 },
-  life: { left: 18, top: 232 },
-  review: { left: 82, top: 232 },
-  quick: { left: 20, top: 392 },
+  dojo: { left: 20, top: 392 },
   home: { left: 78, top: 392 },
 };
 
 type Talk = { place: Place; who: string; line: string; sub: string; href: string };
 
-// The townsperson who calls the learner over: the first unfinished quest, else the dojo.
+// The townsperson who calls the learner over: today's training first, then the diary, then a scenario.
 function callout(p: Progress): Talk {
-  const q = quests(p).find((x) => !x.done);
+  const due = dueCards(p).length;
+  const top = weakList(p)[0];
+  if (due) {
+    return { place: "dojo", who: "師範", line: "覚えた言葉、もう一度声に出してみよう。", sub: `去道場 · 今日训练 · 先复习 ${due} 句`, href: "/train" };
+  }
+  if (top && top.last !== dayKey()) {
+    return { place: "dojo", who: "師範", line: `「${top.tag}」、まだ迷っているな。`, sub: "去道場 · 今日训练 · 弱点强化", href: "/train" };
+  }
+  if (!diaryToday(p)) {
+    return { place: "home", who: "自分", line: "今日はどんな一日だった？", sub: `回自宅 · 一分钟口语日记 · +${XP.diary} EXP`, href: "/diary" };
+  }
+  const q = quests(p).find((x) => x.key === "scene" && !x.done);
   const next = nextStep(p);
-  if (q?.key === "scene") {
-    if (!next) {
-      return { place: "custom", who: "店長", line: "新しい場面、入荷しましたよ！", sub: "AI 写一个新场景 · 进コンビニ", href: "/new" };
-    }
+  if (q && next) {
     const s = next.scenario;
-    const b = buildingOf(s, p);
     const first = s.lines[0];
     return {
-      place: b,
+      place: "company",
       who: first?.speaker ?? s.title,
       line: first?.ja ?? s.talk.opening.ja,
-      sub: `${BUILDINGS[b].name}里有人在等你 · ${s.icon} ${s.titleZh} · ${STEP_LABEL[next.step]} · 今日 +${SCENE_QUEST_XP} EXP`,
+      sub: `${s.icon} ${s.titleZh} · ${STEP_LABEL[next.step]} · 今日 +${SCENE_QUEST_XP} EXP`,
       href: `/s/${s.id}?step=${next.step}`,
     };
   }
-  if (q?.key === "diary") {
-    return { place: "home", who: "自分", line: "今日はどんな一日だった？", sub: `回自宅 · 一分钟口语日记 · +${XP.diary} EXP`, href: "/diary" };
-  }
-  if (q?.key === "review") {
-    const due = dueCards(p).length;
-    return { place: "review", who: "神主", line: "覚えた言葉、もう一度声に出してみましょう。", sub: `去神社 · 复习 ${due} 句`, href: "/review" };
-  }
-  return { place: "quick", who: "師範", line: "今日の任務は全部終わったな。もう一本、瞬間説はどうだ？", sub: "去道場 · 瞬间说 · 3 秒内开口", href: "/quick" };
+  return { place: "dojo", who: "師範", line: "今日の任務は全部終わったな。もう一本、瞬間説はどうだ？", sub: "去道場 · 瞬间说 · 3 秒内开口", href: "/quick" };
 }
 
 function Building({
@@ -141,10 +141,12 @@ export default function Today() {
   const today = dayKey();
   const t = totals(p, today, today);
   const next = nextStep(p);
-  const diaryDone = qs.find((q) => q.key === "diary")?.done;
-  const stationOpen = lv.n >= STATION_LEVEL;
+  const diaryDone = diaryToday(p);
   const work = buildingStars(p, "work");
   const life = buildingStars(p, "life");
+  const mine = buildingStars(p, "custom");
+  const topWeak = weakList(p)[0];
+  const trainLeft = (due ? 1 : 0) + (topWeak && topWeak.last !== today ? 1 : 0) + (t.quickSpoke >= 5 ? 0 : 1);
   const hero = SPOTS[talk.place];
   const hhmm = `${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
 
@@ -159,7 +161,7 @@ export default function Today() {
         </div>
 
         <div className="hud win" style={{ position: "absolute", left: 10, right: 10, margin: 0 }}>
-          <Link href="/stats" className="avatar" aria-label="成长">🧑‍💼</Link>
+          <Link href="/me" className="avatar" aria-label="我">🧑‍💼</Link>
           <div className="row">
             <span>Lv.{lv.n} {jobTitle(lv.n)}</span>
             <span>🔥{days} 🛡️{p.freezes}</span>
@@ -196,49 +198,27 @@ export default function Today() {
             <span key={i} className="deco" style={{ left: `${l}%`, top }} aria-hidden>{e}</span>
           ))}
 
+          <span className="deco" style={{ left: "18%", top: 232, fontSize: 40 }} aria-hidden>🏘️</span>
+          <span className="deco" style={{ left: "82%", top: 250, fontSize: 34 }} aria-hidden>⛩️</span>
+
           <Building
-            place="work"
+            place="company"
             icon="🏢"
             name="会社"
-            pg={`★${work.got}/${work.of}`}
-            mark={talk.place === "work" ? "❗" : undefined}
-            href="/b/work"
+            pg={`★${work.got + life.got + mine.got}/${work.of + life.of + mine.of}`}
+            mark={talk.place === "company" ? "❗" : undefined}
+            href="/scenes"
           />
+          <Building place="station" icon="🚉" name="駅" pg="通勤播客" mark="📻" href="/podcast" small />
           <Building
-            place="custom"
-            icon="🏪"
-            name="コンビニ"
-            pg={p.custom.length ? `${p.custom.length} 个新场景` : "新クエスト"}
-            mark={talk.place === "custom" ? "📋" : undefined}
-            href="/b/custom"
-          />
-          <Building
-            place="station"
-            icon="🚉"
-            name={stationOpen ? "駅" : `駅 Lv${STATION_LEVEL}`}
-            pg={stationOpen ? "问路·坐车" : undefined}
-            href={`/new?cat=life&topic=${encodeURIComponent("在车站问路、坐车换乘")}`}
-            lock={!stationOpen}
-            small
-          />
-          <Building
-            place="life"
-            icon="🏘️"
-            name="まち"
-            pg={`★${life.got}/${life.of}`}
-            mark={talk.place === "life" ? "❗" : undefined}
-            href="/b/life"
-          />
-          <Building place="review" icon="⛩️" name="神社" pg={due ? `复习 ${due}` : "参拜完了"} mark={due ? "🃏" : undefined} href="/review" />
-          <Building
-            place="quick"
+            place="dojo"
             icon="🥋"
             name="道場"
-            pg={weak ? `弱点 ${weak}` : "瞬间说"}
-            mark={talk.place === "quick" ? "⚡" : undefined}
-            href="/quick"
+            pg={trainLeft ? `今日训练 ${trainLeft}` : "今日 ✓"}
+            mark={talk.place === "dojo" ? "⚡" : undefined}
+            href="/train"
           />
-          <Building place="home" icon="🏠" name="自宅" pg={diaryDone ? "日记 ✓" : "口语日记"} mark={diaryDone ? undefined : "💬"} href="/diary" />
+          <Building place="home" icon="🏠" name="自宅" pg={diaryDone ? "日记 ✓" : "口语日记"} mark={diaryDone ? undefined : "💬"} href="/me" />
 
           <span className="hero" style={{ left: `${hero.left < 50 ? hero.left + 18 : hero.left - 18}%`, top: hero.top + 18 }} aria-hidden>
             🧑‍💼
@@ -275,7 +255,7 @@ export default function Today() {
             </div>
           </div>
         )}
-        {!next && <p className="small-text" style={{ marginBottom: 0 }}>所有场景都通关了，去コンビニ让 AI 进新货吧。</p>}
+        {!next && <p className="small-text" style={{ marginBottom: 0 }}>所有场景都通关了，去会社点「📸 重来一次」，把你今天遇到的情况变成新场景。</p>}
       </div>
       <Nav on="town" />
     </main>

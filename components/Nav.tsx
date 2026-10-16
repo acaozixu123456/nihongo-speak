@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { dueCards, quests, useProgress } from "@/lib/client/progress";
+import { diaryToday, dueCards, useProgress } from "@/lib/client/progress";
 
 const TABS = [
   { key: "town", href: "/", label: "小镇", icon: "🗺️" },
-  { key: "quests", href: "/quests", label: "任务", icon: "📜" },
-  { key: "bag", href: "/bag", label: "背包", icon: "🎒" },
-  { key: "stats", href: "/stats", label: "成长", icon: "🏆" },
+  { key: "train", href: "/train", label: "训练", icon: "🥋" },
+  { key: "scenes", href: "/scenes", label: "场景", icon: "🏢" },
+  { key: "me", href: "/me", label: "我", icon: "🏠" },
 ] as const;
 
 export type NavKey = (typeof TABS)[number]["key"];
@@ -15,8 +15,8 @@ export type NavKey = (typeof TABS)[number]["key"];
 export default function Nav({ on }: { on: NavKey }) {
   const p = useProgress();
   const badges: Partial<Record<NavKey, number>> = {
-    quests: quests(p).filter((q) => !q.done).length,
-    bag: dueCards(p).length,
+    train: dueCards(p).length,
+    me: diaryToday(p) ? 0 : 1,
   };
   return (
     <nav className="nav">

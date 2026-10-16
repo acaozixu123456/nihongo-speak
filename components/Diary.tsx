@@ -236,7 +236,7 @@ export default function Diary() {
 
   return (
     <main>
-      <Link href="/" className="back">← 小镇</Link>
+      <Link href="/me" className="back">← 我</Link>
       <header className="page-mast">
         <span className="icon" aria-hidden>🏠</span>
         <div>
@@ -321,7 +321,7 @@ export default function Diary() {
           })}
         </>
       )}
-      <Nav on="town" />
+      <Nav on="me" />
     </main>
   );
 }
