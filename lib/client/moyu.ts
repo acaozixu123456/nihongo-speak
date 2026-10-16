@@ -1,6 +1,8 @@
 "use client";
 
 import type { Podcast as Episode } from "@/lib/claude";
+import { listenIntro, NARRATION, ZH_VOICE } from "@/content/narration";
+import { ttsUrl } from "./player";
 import {
   allScenarios,
   dayKey,
@@ -33,7 +35,7 @@ export type Clip = {
   parts: Part[];
 };
 
-const ZH = "zh-CN-XiaoxiaoNeural";
+const ZH = ZH_VOICE;
 const JA = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-NanamiNeural";
 // Time to say the sentence in your head before the answer.
 export const THINK_MS = 4000;
@@ -64,7 +66,7 @@ function quickClips(p: Progress, n: number, used: Set<string>): Clip[] {
         parts: [zh(i.zh, THINK_MS), { voice: i.voice, text: i.ja, pauseMs: 900 }, { voice: i.voice, text: i.ja, pauseMs: 1500 }],
       };
     }),
-    "心里瞬间说。听到中文，先在心里说日语。",
+    NARRATION.quick,
   );
 }
 
@@ -81,7 +83,7 @@ function reviewClips(p: Progress, n: number, used: Set<string>): Clip[] {
         parts: [{ voice: c.voice, text: c.ja, pauseMs: 700 }, zh(c.zh, 700), { voice: c.voice, text: c.ja, pauseMs: 1500 }],
       };
     }),
-    "复习今天到期的收藏。",
+    NARRATION.review,
   );
 }
 
@@ -98,9 +100,9 @@ function fixClips(p: Progress, r: number): Clip[] {
         sub: `${w.tag} · ${w.zh}`,
         line: { ja: e.better, zh: w.zh, voice: JA },
         parts: [
-          zh("你当时说的是："),
+          zh(NARRATION.said),
           { voice: "ja-JP-NanamiNeural", text: e.said, pauseMs: 800 },
-          zh("更自然的说法是："),
+          zh(NARRATION.better),
           { voice: JA, text: e.better, pauseMs: 900 },
           { voice: JA, text: e.better, pauseMs: 900 },
           zh(w.zh, 1500),
@@ -120,7 +122,7 @@ function listenClips(p: Progress, r: number): Clip[] {
     block: "listen",
     show: s.titleZh,
     sub: "先听一遍整段",
-    parts: [zh(`偷听：${s.titleZh}。先听一遍整段。`, 600), ...s.lines.map((l) => ({ voice: l.voice, text: l.ja, pauseMs: 500 })), { voice: ZH, pauseMs: 1000 }],
+    parts: [zh(listenIntro(s.titleZh), 600), ...s.lines.map((l) => ({ voice: l.voice, text: l.ja, pauseMs: 500 })), { voice: ZH, pauseMs: 1000 }],
   };
   const lines: Clip[] = s.lines.map((l) => ({
     block: "listen",
@@ -129,7 +131,7 @@ function listenClips(p: Progress, r: number): Clip[] {
     line: { ja: l.ja, reading: l.kana, zh: l.zh, voice: l.voice },
     parts: [{ voice: l.voice, text: l.ja, pauseMs: 600 }, zh(l.zh, 1200)],
   }));
-  return [whole, ...withIntro(lines, "再一句一句听。")];
+  return [whole, ...withIntro(lines, NARRATION.lines)];
 }
 
 // The day's podcast, cut where the Chinese narration starts each new point.
@@ -199,41 +201,55 @@ export async function makeEpisode(p: Progress): Promise<Episode> {
 
 // ---- Audio ----
 
+// Each part is played from its own recording (pre-made ones ship with the site, see ttsUrl), so a
+// sentence is only synthesized once however many clips it turns up in.
 const CACHE = "nihongo-speak-moyu";
-const MAX_CACHED = 400;
-
-async function clipKey(parts: Part[]) {
-  const hash = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(JSON.stringify(parts)));
-  return `/moyu-clip/${[...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("")}`;
-}
+const MAX_CACHED = 600;
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function fetchClip(parts: Part[]): Promise<ArrayBuffer> {
-  const key = await clipKey(parts);
+async function fetchAudio(url: string): Promise<ArrayBuffer> {
   let cache: Cache | null = null;
   try {
     cache = await caches.open(CACHE);
-    const hit = await cache.match(key);
+    const hit = await cache.match(url);
     if (hit) return hit.arrayBuffer();
   } catch {}
   for (let attempt = 0; ; attempt++) {
     try {
-      const res = await fetch("/api/moyu", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ parts }),
-      });
+      const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const buf = await res.arrayBuffer();
-      if (cache) await cache.put(key, new Response(buf, { headers: { "Content-Type": "audio/mpeg" } })).catch(() => {});
+      if (cache) await cache.put(url, new Response(buf, { headers: { "Content-Type": "audio/mpeg" } })).catch(() => {});
       return buf;
     } catch (e) {
-      // The free speech resource allows only a few requests a minute; back off and try again.
       if (attempt >= 2) throw e;
       await wait(attempt ? 6000 : 2500);
     }
   }
+}
+
+// A silent frame in Azure's format (MPEG-2 layer III, 24 kHz, 48 kbit/s, mono): a header and an
+// all-zero body, which decodes to 24 ms of silence and doesn't lean on the frames before it.
+const QUIET = new Uint8Array(144);
+QUIET.set([0xff, 0xf3, 0x64, 0xc4]);
+const QUIET_SEC = 576 / 24000;
+
+const pause = (ms: number): Frames => {
+  const n = Math.round(ms / 1000 / QUIET_SEC);
+  return { chunks: new Array(n).fill(QUIET), sec: n * QUIET_SEC };
+};
+
+async function clipAudio(parts: Part[]): Promise<Frames> {
+  const out: Frames = { chunks: [], sec: 0 };
+  for (const p of parts) {
+    for (const a of [p.text ? mp3Frames(await fetchAudio(ttsUrl(p.text, p.voice))) : null, p.pauseMs ? pause(p.pauseMs) : null]) {
+      if (!a) continue;
+      out.chunks.push(...a.chunks);
+      out.sec += a.sec;
+    }
+  }
+  return out;
 }
 
 // Keeps the phone's cache from growing without end: drop the oldest half when it gets big.
@@ -254,7 +270,9 @@ const BITRATE = {
 };
 const RATES: Record<number, number[]> = { 3: [44100, 48000, 32000], 2: [22050, 24000, 16000], 0: [11025, 12000, 8000] };
 
-export function mp3Frames(buf: ArrayBuffer): { chunks: Uint8Array[]; sec: number } {
+type Frames = { chunks: Uint8Array[]; sec: number };
+
+export function mp3Frames(buf: ArrayBuffer): Frames {
   const b = new Uint8Array(buf);
   let i = 0;
   if (b[0] === 0x49 && b[1] === 0x44 && b[2] === 0x33) {
@@ -262,7 +280,6 @@ export function mp3Frames(buf: ArrayBuffer): { chunks: Uint8Array[]; sec: number
   }
   const chunks: Uint8Array[] = [];
   let sec = 0;
-  let start = i;
   while (i + 4 <= b.length) {
     const ver = (b[i + 1] >> 3) & 3;
     const layer = (b[i + 1] >> 1) & 3;
@@ -275,15 +292,12 @@ export function mp3Frames(buf: ArrayBuffer): { chunks: Uint8Array[]; sec: number
     const mono = b[i + 3] >> 6 === 3;
     const side = ver === 3 ? (mono ? 17 : 32) : mono ? 9 : 17;
     const tag = String.fromCharCode(...b.subarray(i + 4 + side, i + 8 + side));
-    if (tag === "Xing" || tag === "Info") {
-      if (i > start) chunks.push(b.subarray(start, i));
-      start = i + size;
-    } else {
+    if (tag !== "Xing" && tag !== "Info" && i + size <= b.length) {
+      chunks.push(b.subarray(i, i + size));
       sec += (ver === 3 ? 1152 : 576) / rate;
     }
     i += size;
   }
-  if (i > start) chunks.push(b.subarray(start, Math.min(i, b.length)));
   // Not an MP3 we can read frame by frame: use it whole and estimate from Azure's 48 kbit/s.
   if (!sec) return { chunks: [b], sec: b.length / 6000 };
   return { chunks, sec };
@@ -293,19 +307,19 @@ export type Prepared = { clips: Clip[]; url: string; starts: number[]; total: nu
 
 // Fetch every clip (a few at a time), drop any that fail, and join the rest into one MP3.
 export async function prepare(clips: Clip[]): Promise<Prepared> {
-  const out: ({ chunks: Uint8Array[]; sec: number } | null)[] = new Array(clips.length).fill(null);
+  const out: (Frames | null)[] = new Array(clips.length).fill(null);
   let next = 0;
   const worker = async () => {
     while (next < clips.length) {
       const i = next++;
       try {
-        out[i] = mp3Frames(await fetchClip(clips[i].parts));
+        out[i] = await clipAudio(clips[i].parts);
       } catch (e) {
         console.warn(e);
       }
     }
   };
-  await Promise.all([worker(), worker(), worker()]);
+  await Promise.all([worker(), worker(), worker(), worker()]);
   const kept = clips.map((c, i) => ({ c, a: out[i] })).filter((x) => x.a);
   if (!kept.length) throw new Error("音频生成失败，检查一下网络");
   const starts: number[] = [];

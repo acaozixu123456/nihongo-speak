@@ -25,17 +25,19 @@ export type Scenario = {
   };
 };
 
-// Azure voices, tried in order (see lib/azure.ts). The HD voices sound the most
-// like real conversation; the standard voices after "|" are the free fallback.
-const KACHO = "ja-JP-Masaru:DragonHDLatestNeural|ja-JP-NanamiNeural@chat";
-const SATO = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-MayuNeural";
-const SUZUKI = "ja-JP-DaichiNeural";
-const KANRI = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-NanamiNeural@customerservice";
-const SENPAI = "ja-JP-Masaru:DragonHDLatestNeural|ja-JP-KeitaNeural";
-const BUCHO = "ja-JP-NaokiNeural";
-const UKETSUKE = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-NanamiNeural@customerservice";
+import { lifeScenes } from "./scenes-life";
+import { workScenes } from "./scenes-work";
+import { HD_MAN, HD_MAN_CALM, HD_WOMAN, HD_WOMAN_POLITE, MAN_2, MAN_3 } from "./voices";
 
-export const scenarios: Scenario[] = [
+const KACHO = HD_MAN_CALM;
+const SATO = HD_WOMAN;
+const SUZUKI = MAN_2;
+const KANRI = HD_WOMAN_POLITE;
+const SENPAI = HD_MAN;
+const BUCHO = MAN_3;
+const UKETSUKE = HD_WOMAN_POLITE;
+
+const firstScenes: Scenario[] = [
   {
     id: "asakai",
     title: "朝会での進捗報告",
@@ -539,6 +541,9 @@ export const scenarios: Scenario[] = [
     },
   },
 ];
+
+// The first six, then a wider set of everyday work and life scenes.
+export const scenarios: Scenario[] = [...firstScenes, ...workScenes, ...lifeScenes];
 
 export function getScenario(id: string) {
   return scenarios.find((s) => s.id === id);
