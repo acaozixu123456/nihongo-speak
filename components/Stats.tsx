@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   mastered,
+  resetProgress,
   stepsDone,
   allScenarios,
   useProgress,
@@ -154,6 +155,20 @@ export default function Stats() {
           </span>
         </div>
         <p className="small-text" style={{ marginBottom: 0 }}>进度会自动备份到云端，清除浏览器数据后也能恢复。</p>
+      </div>
+      <div className="card">
+        <div className="row spread">
+          <span>清空练习记录</span>
+          <button
+            className="small"
+            onClick={() => {
+              if (confirm("清空所有练习记录？日记、收藏、薄弱点、自己的场景和统计都会删除，其他设备也会一起清空，不能恢复。")) resetProgress();
+            }}
+          >
+            清空
+          </button>
+        </div>
+        <p className="small-text" style={{ marginBottom: 0 }}>从零开始。手机和电脑上的记录会一起清空。</p>
       </div>
       <Nav on="me" />
     </main>

@@ -89,6 +89,8 @@ export type Progress = {
   freezeAwardDay?: string;
   bonusDays: string[]; // days the all-quests bonus was paid
   updatedAt: number;
+  // Bumped when the learner clears everything; an older copy (another device, the server) is then dropped, not merged.
+  epoch: number;
 };
 
 export const EMPTY: Progress = {
@@ -106,6 +108,7 @@ export const EMPTY: Progress = {
   frozen: [],
   bonusDays: [],
   updatedAt: 0,
+  epoch: 0,
 };
 
 export function normalize(raw: Partial<Progress> | null | undefined): Progress {
@@ -154,6 +157,7 @@ function mergeStats(a: DayStats = {}, b: DayStats = {}): DayStats {
 
 // Combine two copies of progress (this phone and the server) without losing practice.
 export function merge(a: Progress, b: Progress): Progress {
+  if (a.epoch !== b.epoch) return a.epoch > b.epoch ? a : b;
   const newer = a.updatedAt >= b.updatedAt ? a : b;
   const days: Record<string, number> = { ...a.days };
   for (const [k, v] of Object.entries(b.days)) days[k] = max(days[k], v);
@@ -208,5 +212,6 @@ export function merge(a: Progress, b: Progress): Progress {
     freezeAwardDay: newer.freezeAwardDay,
     bonusDays: [...new Set([...a.bonusDays, ...b.bonusDays])],
     updatedAt: Math.max(a.updatedAt, b.updatedAt),
+    epoch: a.epoch,
   };
 }
