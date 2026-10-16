@@ -23,7 +23,7 @@ const parse: typeof client.messages.parse = ((params, options) =>
 
 export type Turn = { role: "user" | "assistant"; text: string };
 
-function roleplaySystem(s: Talk) {
+export function roleplaySystem(s: Talk) {
   return `あなたは日本語の会話練習の相手です。学習者は日本に住んで働いている中国人で、日本語レベルはJLPT N4〜N3です。
 
 場面：${s.talk.setup}
