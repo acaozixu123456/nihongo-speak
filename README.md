@@ -11,7 +11,7 @@
 ## 部署到 Vercel
 1. 在 Vercel 用 GitHub 登录，Import 这个仓库（框架会自动识别为 Next.js）。
 2. 在 Settings → Environment Variables 填上面 4 个变量。
-3. 部署完成后，用 iPhone Safari 打开网址，输入密码，点「分享 → 添加到主屏幕」。
+3. 部署完成后，用 iPhone Safari 打开网址，点「分享 → 添加到主屏幕」。
 
 ## 本地开发
 ```bash
