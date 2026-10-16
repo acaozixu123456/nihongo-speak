@@ -163,7 +163,11 @@ const GeneratedSchema = z.object({
 
 export type Generated = z.infer<typeof GeneratedSchema>;
 
-export async function generateScenario(topic: string, category: "work" | "life") {
+export type Photo = { mediaType: "image/jpeg" | "image/png" | "image/webp"; data: string };
+
+// `topic` is either a situation to practise or what happened when the learner couldn't get the words out;
+// `photo` is a picture from their day (a sign, a menu, an email) to build the scene around.
+export async function generateScenario(topic: string, category: "work" | "life", photo?: Photo) {
   const res = await client.messages.parse({
     model: MODEL,
     max_tokens: 16000,
@@ -172,8 +176,18 @@ export async function generateScenario(topic: string, category: "work" | "life")
 - 会話は実際の日本の${category === "work" ? "職場" : "生活"}で本当に聞くような自然な話し方にする。教科書的すぎない。
 - 語彙と文法は N3 程度。ただし実際によく使う表現（縮約形、あいづち、クッション言葉）は入れる。
 - 学習者が演じる人物のセリフも入れて、学習者がそのまま使える言い方の手本にする。
-- ロールプレイは会話の続きではなく、同じ場面をもう一度、学習者が自分の言葉で話す練習にする。`,
-    messages: [{ role: "user", content: `場面：${topic}` }],
+- ロールプレイは会話の続きではなく、同じ場面をもう一度、学習者が自分の言葉で話す練習にする。
+- 学習者が「実際にあったこと」「言えなかったこと」を書いてきたら、その場面をできるだけ忠実に再現し、学習者が言えなかったことを言えるようにするセリフを必ず入れる。
+- 写真があれば、写真に写っているもの（看板、メニュー、書類、メール、画面など）の内容を読み取り、それについて学習者が実際に話す場面にする。`,
+    messages: [
+      {
+        role: "user",
+        content: [
+          ...(photo ? [{ type: "image" as const, source: { type: "base64" as const, media_type: photo.mediaType, data: photo.data } }] : []),
+          { type: "text" as const, text: `${photo ? "学習者が撮った写真です。\n" : ""}場面：${topic || "（写真の状況で）"}` },
+        ],
+      },
+    ],
     output_config: { effort: "medium", format: zodOutputFormat(GeneratedSchema) },
   });
   checkStop(res.stop_reason);
