@@ -98,10 +98,10 @@ type AzureNBest = {
   Words?: AzureWord[];
 };
 
+type AzureResult = { RecognitionStatus: string; DisplayText?: string; NBest?: AzureNBest[] };
+
 // Short-audio REST API: 16kHz mono PCM WAV, up to about 60 seconds.
-// With referenceText it also runs pronunciation assessment against that sentence.
-export async function recognize(wav: ArrayBuffer, referenceText?: string): Promise<RecognitionResult> {
-  const { key, region } = config();
+async function stt(wav: ArrayBuffer, { key, region }: { key: string; region: string }, referenceText?: string) {
   const headers: Record<string, string> = {
     "Ocp-Apim-Subscription-Key": key,
     "Content-Type": "audio/wav; codecs=audio/pcm; samplerate=16000",
@@ -113,8 +113,7 @@ export async function recognize(wav: ArrayBuffer, referenceText?: string): Promi
       GradingSystem: "HundredMark",
       Granularity: "Word",
       Dimension: "Comprehensive",
-      // Without this Azure force-aligns the audio to the reference and echoes the reference back as
-      // the transcript, so a different answer looked word-perfect and only the score (often near 0) hinted at it.
+      // Mark words said beyond or missing from the reference instead of forcing the audio onto it.
       EnableMiscue: true,
     };
     headers["Pronunciation-Assessment"] = Buffer.from(JSON.stringify(params)).toString("base64");
@@ -122,12 +121,32 @@ export async function recognize(wav: ArrayBuffer, referenceText?: string): Promi
   const url = `https://${region}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=ja-JP&format=detailed`;
   const res = await fetch(url, { method: "POST", headers, body: wav });
   if (!res.ok) throw new Error(`Azure STT ${res.status}: ${await res.text()}`);
-  const data = (await res.json()) as { RecognitionStatus: string; DisplayText?: string; NBest?: AzureNBest[] };
-  if (data.RecognitionStatus !== "Success") return { text: "" };
+  return (await res.json()) as AzureResult;
+}
+
+const displayOf = (d: AzureResult) => (d.RecognitionStatus === "Success" ? (d.NBest?.[0]?.Display ?? d.DisplayText ?? "") : "");
+
+// With referenceText it also scores pronunciation against that sentence. The transcript then comes from a
+// separate plain recognition: an assessment run reports the reference's words, not what was actually said,
+// so a different answer used to look word-perfect. The plain run goes to the second (paid) resource when
+// there is one, so the free resource isn't hit twice at once.
+export async function recognize(wav: ArrayBuffer, referenceText?: string): Promise<RecognitionResult> {
+  if (!referenceText) return { text: displayOf(await stt(wav, config())) };
+
+  const [plain, assessed] = await Promise.allSettled([stt(wav, hdConfig() ?? config()), stt(wav, config(), referenceText)]);
+  if (assessed.status === "rejected" && plain.status === "rejected") throw assessed.reason;
+  const heard = plain.status === "fulfilled" ? displayOf(plain.value) : null;
+  if (assessed.status === "rejected") {
+    console.warn(assessed.reason);
+    return { text: heard ?? "" };
+  }
+  const data = assessed.value;
+  if (plain.status === "rejected") console.warn(plain.reason);
+  const text = heard ?? displayOf(data);
+  if (data.RecognitionStatus !== "Success") return { text };
 
   const best = data.NBest?.[0];
-  const text = best?.Display ?? data.DisplayText ?? "";
-  if (!referenceText || !best) return { text };
+  if (!best) return { text };
 
   // Depending on API version the scores sit on the NBest item or under PronunciationAssessment.
   const pa = best.PronunciationAssessment ?? best;
@@ -138,11 +157,14 @@ export async function recognize(wav: ArrayBuffer, referenceText?: string): Promi
       accuracy: Math.round(pa.AccuracyScore ?? 0),
       fluency: Math.round(pa.FluencyScore ?? 0),
       completeness: Math.round(pa.CompletenessScore ?? 0),
-      words: (best.Words ?? []).map((w) => ({
-        word: w.Word,
-        accuracy: Math.round(w.PronunciationAssessment?.AccuracyScore ?? w.AccuracyScore ?? 0),
-        errorType: w.PronunciationAssessment?.ErrorType ?? w.ErrorType ?? "None",
-      })),
+      words: (best.Words ?? [])
+        // Words the learner added aren't in the reference sentence the screen shows.
+        .filter((w) => (w.PronunciationAssessment?.ErrorType ?? w.ErrorType) !== "Insertion")
+        .map((w) => ({
+          word: w.Word,
+          accuracy: Math.round(w.PronunciationAssessment?.AccuracyScore ?? w.AccuracyScore ?? 0),
+          errorType: w.PronunciationAssessment?.ErrorType ?? w.ErrorType ?? "None",
+        })),
     },
   };
 }
