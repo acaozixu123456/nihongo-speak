@@ -7,12 +7,11 @@
 |---|---|---|
 | 对话、提示、点评 | Claude API（Sonnet 5.5） | `ANTHROPIC_API_KEY` |
 | 语音识别、发音评估、日语 TTS | Azure Speech（免费层 F0，区域 Japan East） | `AZURE_SPEECH_KEY`、`AZURE_SPEECH_REGION` |
-| 登录密码 | — | `APP_PASSWORD` |
 
 ## 部署到 Vercel
 1. 在 Vercel 用 GitHub 登录，Import 这个仓库（框架会自动识别为 Next.js）。
 2. 在 Settings → Environment Variables 填上面 4 个变量。
-3. 部署完成后，用 iPhone Safari 打开网址，输入密码，点「分享 → 添加到主屏幕」。
+3. 部署完成后，用 iPhone Safari 打开网址，点「分享 → 添加到主屏幕」。
 
 ## 本地开发
 ```bash
