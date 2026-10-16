@@ -1,17 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { calls, type Call as CallDef } from "@/content/calls";
 import type { Feedback, Turn } from "@/lib/claude";
 import { play, stop, ttsUrl, unlock } from "@/lib/client/player";
+import { liveReply, stopLive, unlockLive } from "@/lib/client/live";
 import { transcribe } from "@/lib/client/recorder";
 import { recordFeedback, recordSpeech, recordTalkTurn, wavSeconds } from "@/lib/client/progress";
 import FeedbackCard from "./FeedbackCard";
 import HoldButton from "./HoldButton";
 import Nav from "./Nav";
 
-type Message = Turn & { zh?: string };
+// audio: Gemini Live's own recording of the line, for 再听一遍.
+type Message = Turn & { zh?: string; audio?: string };
 type Phase = "ready" | "live" | "ended";
 
 async function post<T>(url: string, body: unknown): Promise<T> {
@@ -68,13 +70,21 @@ export default function Call({ call }: { call: CallDef }) {
   const [now, setNow] = useState(0);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [error, setError] = useState("");
+  // Replies come from Gemini Live until it fails once in a call; then the old chain takes over.
+  const liveOn = useRef(true);
 
   useEffect(() => {
     if (phase !== "live") return;
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, [phase]);
-  useEffect(() => () => stop(), []);
+  useEffect(
+    () => () => {
+      stop();
+      stopLive();
+    },
+    [],
+  );
 
   const history = (list: Message[]): Turn[] => list.map(({ role, text }) => ({ role, text }));
   const last = [...messages].reverse().find((m) => m.role === "assistant");
@@ -93,6 +103,8 @@ export default function Call({ call }: { call: CallDef }) {
 
   function pickUp() {
     unlock();
+    unlockLive();
+    liveOn.current = true;
     const first: Message = { role: "assistant", text: talk.opening.ja, zh: talk.opening.zh };
     setMessages([first]);
     setPhase("live");
@@ -108,8 +120,10 @@ export default function Call({ call }: { call: CallDef }) {
 
   async function onRecorded(wav: Blob) {
     setError("");
-    setBusy("stt");
     stop();
+    stopLive();
+    if (liveOn.current && (await replyLive(wav))) return;
+    setBusy("stt");
     try {
       const { text } = await transcribe(wav);
       if (!text) {
@@ -132,8 +146,38 @@ export default function Call({ call }: { call: CallDef }) {
     }
   }
 
+  // Gemini Live hears the recording and answers in its own voice in one step. False when it
+  // failed, so the caller falls back to speech recognition + Claude + TTS.
+  async function replyLive(wav: Blob) {
+    setBusy("ai");
+    try {
+      const r = await liveReply({ scenarioId, talk, history: history(messages) }, wav, () => {
+        setBusy("");
+        setSpeaking(true);
+      });
+      recordSpeech(wavSeconds(wav));
+      recordTalkTurn();
+      setMessages([
+        ...messages,
+        { role: "user", text: r.heard || "（聞き取れませんでした）" },
+        { role: "assistant", text: r.said, audio: URL.createObjectURL(r.audio) },
+      ]);
+      await r.played.catch(() => setError("音频播放失败"));
+      setSpeaking(false);
+      return true;
+    } catch (e) {
+      console.warn("Gemini Live failed, falling back", e);
+      // A refused request (no key, credit used up) won't get better in this call; a missed reply might.
+      if (e instanceof Error && e.message.startsWith("live ")) liveOn.current = false;
+      setBusy("");
+      setSpeaking(false);
+      return false;
+    }
+  }
+
   async function hangUp() {
     stop();
+    stopLive();
     setEndedAt(Date.now());
     setPhase("ended");
     if (!said) return;
@@ -190,7 +234,12 @@ export default function Call({ call }: { call: CallDef }) {
                 if (!last) return;
                 unlock();
                 setReplays((n) => n + 1);
-                say(last.text);
+                if (last.audio) {
+                  setSpeaking(true);
+                  play(last.audio, 1)
+                    .catch(() => setError("音频播放失败"))
+                    .finally(() => setSpeaking(false));
+                } else say(last.text);
               }}
               disabled={!last || !!busy}
             >

@@ -46,6 +46,13 @@ async function token(a: Account) {
   return access_token;
 }
 
+// For lib/live.ts, which opens its own WebSocket to Vertex AI.
+export async function vertexAccess() {
+  const a = account();
+  if (!a) throw new Error("VERTEX_SERVICE_ACCOUNT is not set");
+  return { project: a.project_id, token: await token(a) };
+}
+
 // The TTS models only run in the "global" location.
 export async function synthesizeVertex(text: string, voice: string, timeoutMs = 15000, model = FLASH) {
   const a = account();
