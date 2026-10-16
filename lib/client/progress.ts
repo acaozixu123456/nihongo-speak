@@ -73,6 +73,11 @@ function write(next: Progress) {
   save({ ...next, updatedAt: Date.now() });
 }
 
+// Wipes all practice on this device and, through the next sync, on the server and every other device.
+export function resetProgress() {
+  write({ ...EMPTY, goal: read().goal, epoch: read().epoch + 1 });
+}
+
 export function useProgress(): Progress {
   return useSyncExternalStore(
     (l) => {
