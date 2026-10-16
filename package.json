@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.134.0",
+    "@breezystack/lamejs": "^1.2.7",
     "@vercel/blob": "^2.8.2",
     "next": "^16.4.1",
     "react": "^19.3.1",
