@@ -2,26 +2,35 @@
 // and plays fixed content without Azure (for example after the Azure trial ends). Content that is
 // written on the fly (AI replies, feedback, the daily podcast) is still synthesized on demand.
 //
-//   npx tsx scripts/bake-voices.ts [site] [--redo-ja]     (default https://nihongo-speak.vercel.app)
+//   npx tsx scripts/bake-voices.ts [site] [--redo-ja] [--max=80] [--lite]     (default https://nihongo-speak.vercel.app)
 //
-// Japanese sentences are recorded with Gemini TTS straight from here when GEMINI_API_KEY is set
-// (--redo-ja records the existing Japanese files again); everything else, and Japanese without
-// the key, goes through the site. Each sentence is requested from the site's /api/tts with only the first voice of its list, so
+// Japanese sentences are recorded with Gemini TTS straight from here when GEMINI_API_KEY is set;
+// everything else, and Japanese without the key, goes through the site. --redo-ja re-records the
+// existing Japanese files that scripts/gemini-recorded.txt doesn't list yet. Gemini allows 100
+// requests a day, so --max caps how many this run uses (the app needs some too) and a run stops
+// asking Gemini once the day's quota is gone; run it again the next day to continue, or use --lite
+// (Gemini Flash-Lite TTS, which has a quota of its own).
+//
+// The site is asked with only the first voice of a list, so
 // an HD voice that fails is an error here instead of a quiet fallback to the standard voice.
 // Files already recorded are kept; files no longer used are removed. Then lib/voice-library.ts
 // is rewritten so the app knows which sentences have a recording.
-import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { calls } from "../content/calls";
 import { listenIntro, NARRATION, ZH_VOICE } from "../content/narration";
 import { scenarios } from "../content/scenarios";
-import { geminiConfigured, geminiVoice, synthesizeGemini } from "../lib/gemini-tts";
+import { FLASH, FLASH_LITE, geminiConfigured, geminiVoice, synthesizeGemini } from "../lib/gemini-tts";
 import { voiceKey } from "../lib/voice-key";
 
 const args = process.argv.slice(2);
 const site = args.find((a) => !a.startsWith("--")) ?? "https://nihongo-speak.vercel.app";
 const redoJa = args.includes("--redo-ja");
+const model = args.includes("--lite") ? FLASH_LITE : FLASH;
+const maxGemini = Number(args.find((a) => a.startsWith("--max="))?.slice(6) ?? Infinity);
 const dir = join(__dirname, "..", "public", "voice");
+const geminiLog = join(__dirname, "gemini-recorded.txt");
+const recordedWithGemini = new Set(existsSync(geminiLog) ? readFileSync(geminiLog, "utf8").split("\n").filter(Boolean) : []);
 
 const items = new Map<string, { text: string; voice: string }>();
 const add = (text: string, voice: string) => items.set(voiceKey(text, voice), { text, voice });
@@ -39,16 +48,30 @@ for (const line of Object.values(NARRATION)) add(line, ZH_VOICE);
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Gemini TTS allows 10 requests a minute on the first paid tier, so its requests are spaced out.
+let nextGemini = 0;
+let geminiQuotaGone = false;
+let geminiUsed = 0;
+async function geminiTurn() {
+  const at = Math.max(Date.now(), nextGemini);
+  nextGemini = at + 6500;
+  await wait(at - Date.now());
+}
+
 async function record(text: string, voice: string) {
   const gemini = geminiConfigured() ? geminiVoice(voice) : null;
   if (gemini) {
     for (let attempt = 1; ; attempt++) {
+      await geminiTurn();
       try {
-        return await synthesizeGemini(text, gemini, 60000);
+        return await synthesizeGemini(text, gemini, 60000, model);
       } catch (e) {
-        // Rate limits clear within a minute; anything still failing after that is reported.
+        // The daily quota won't come back today; anything else gets a few spaced-out tries.
+        if (String(e).includes("(daily quota)")) {
+          geminiQuotaGone = true;
+          throw e;
+        }
         if (attempt >= 6) throw e;
-        await wait(attempt * 10000);
       }
     }
   }
@@ -64,16 +87,21 @@ async function record(text: string, voice: string) {
 
 async function main() {
   mkdirSync(dir, { recursive: true });
-  const redo = (voice: string) => redoJa && geminiConfigured() && geminiVoice(voice) !== null;
-  const todo = [...items].filter(([key, { voice }]) => redo(voice) || !existsSync(join(dir, `${key}.mp3`)));
+  const useGemini = (voice: string) => geminiConfigured() && geminiVoice(voice) !== null;
+  const redo = (key: string, voice: string) => redoJa && useGemini(voice) && !recordedWithGemini.has(key);
+  const todo = [...items].filter(([key, { voice }]) => redo(key, voice) || !existsSync(join(dir, `${key}.mp3`)));
   console.log(`${items.size} sentences, ${todo.length} to record`);
   let done = 0;
   let failed = 0;
   const worker = async () => {
     for (let next = todo.shift(); next; next = todo.shift()) {
       const [key, { text, voice }] = next;
+      const gemini = useGemini(voice);
+      if (gemini && (geminiQuotaGone || geminiUsed >= maxGemini)) continue;
+      if (gemini) geminiUsed++;
       try {
         writeFileSync(join(dir, `${key}.mp3`), await record(text, voice));
+        if (gemini) appendFileSync(geminiLog, `${key}\n`);
         if (++done % 25 === 0) console.log(`${done} recorded`);
       } catch (e) {
         failed++;
