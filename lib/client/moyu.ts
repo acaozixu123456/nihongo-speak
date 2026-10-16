@@ -1,6 +1,7 @@
 "use client";
 
 import type { Podcast as Episode } from "@/lib/claude";
+import type { Radio } from "@/lib/radio";
 import { listenIntro, NARRATION, ZH_VOICE } from "@/content/narration";
 import { ttsUrl } from "./player";
 import {
@@ -17,8 +18,9 @@ import {
 // Each round is about ten minutes of short clips. Every clip is synthesized once, cached on the
 // phone, and the round's clips are joined into one MP3 so playback carries on with the screen locked.
 
-export type Block = "listen" | "quick" | "review" | "fix" | "podcast";
+export type Block = "radio" | "listen" | "quick" | "review" | "fix" | "podcast";
 export const BLOCK_LABEL: Record<Block, string> = {
+  radio: "趣味电台",
   listen: "偷听",
   quick: "心里瞬间说",
   review: "复习收藏",
@@ -155,10 +157,42 @@ function podcastClips(ep: Episode): Clip[] {
   return withIntro(clips.filter((c) => c.parts.length), `今天的播客：${ep.title_zh}。`);
 }
 
-// Round 0 is short so playback starts quickly; later rounds add a scene to overhear and, once, the podcast.
-export function buildRound(p: Progress, r: number, used: Set<string>, episode: Episode | null): Clip[] {
+// The two hosts of 趣味电台 (lib/radio.ts): Aoi and Keita map to bright Gemini voices and fall back
+// to Azure's free ones.
+const HOST = { A: "ja-JP-AoiNeural", B: "ja-JP-KeitaNeural" } as const;
+
+// The hook in Chinese, the chat straight through in Japanese (each line its own clip, so "再听"
+// lands on it), then three phrases to keep and a question to think about.
+function radioClips(ep: Radio): Clip[] {
+  const talk: Clip[] = ep.lines.map((l, i) => ({
+    block: "radio",
+    show: l.ja,
+    sub: `${l.who === "A" ? "ハル" : "ケン"} · ${l.zh}`,
+    line: { ja: l.ja, zh: l.zh, voice: HOST[l.who] },
+    parts: [...(i ? [] : [zh(`趣味电台：${ep.title_zh}`, 500), zh(ep.hook_zh, 900)]), { voice: HOST[l.who], text: l.ja, pauseMs: 350 }],
+  }));
+  const keep: Clip[] = ep.phrases.map((ph, i) => ({
+    block: "radio",
+    show: ph.ja,
+    sub: ph.zh,
+    line: { ja: ph.ja, zh: ph.zh, voice: HOST.A },
+    parts: [
+      ...(i ? [] : [zh(NARRATION.radioKeep, 600)]),
+      { voice: HOST.A, text: ph.ja, pauseMs: 700 },
+      zh(ph.zh, 700),
+      { voice: HOST.A, text: ph.ja, pauseMs: 1500 },
+    ],
+  }));
+  const quiz: Clip = { block: "radio", show: ep.title_zh, sub: ep.quiz_zh, parts: [zh(ep.quiz_zh, 2500)] };
+  return [...talk, ...keep, quiz];
+}
+
+// Round 0 is short so playback starts quickly; later rounds open with a 趣味电台 episode when one is
+// ready, then add a scene to overhear and, once, the podcast.
+export function buildRound(p: Progress, r: number, used: Set<string>, episode: Episode | null, radio: Radio | null = null): Clip[] {
   if (r === 0) return [...quickClips(p, 5, used), ...reviewClips(p, 3, used), ...fixClips(p, 0)];
   return [
+    ...(radio ? radioClips(radio) : []),
     ...listenClips(p, r - 1),
     ...quickClips(p, 6, used),
     ...reviewClips(p, 4, used),
@@ -197,6 +231,28 @@ export async function makeEpisode(p: Progress): Promise<Episode> {
     localStorage.setItem(EPISODE_KEY, JSON.stringify({ ...data, day: dayKey() }));
   } catch {}
   return data as Episode;
+}
+
+// ---- 趣味电台 script, a new one each round ----
+
+const RADIO_SEEN_KEY = "nihongo-speak:radio-seen";
+
+export async function makeRadio(): Promise<Radio> {
+  let seen: string[] = [];
+  try {
+    seen = JSON.parse(localStorage.getItem(RADIO_SEEN_KEY) ?? "[]");
+  } catch {}
+  const res = await fetch("/api/podcast", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ kind: "radio", avoid: seen.slice(-30) }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "生成失败");
+  try {
+    localStorage.setItem(RADIO_SEEN_KEY, JSON.stringify([...seen, data.title_zh].slice(-30)));
+  } catch {}
+  return data as Radio;
 }
 
 // ---- Audio ----

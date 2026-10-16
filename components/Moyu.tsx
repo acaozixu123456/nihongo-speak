@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { Podcast as Episode } from "@/lib/claude";
-import { BLOCK_LABEL, buildRound, makeEpisode, prepare, pruneCache, todayEpisode, type Clip, type Prepared } from "@/lib/client/moyu";
+import { BLOCK_LABEL, buildRound, makeEpisode, makeRadio, prepare, pruneCache, todayEpisode, type Clip, type Prepared } from "@/lib/client/moyu";
+import type { Radio } from "@/lib/radio";
 import { SILENCE } from "@/lib/client/player";
 import { recordMoyu, recordStuck, todayStats, useProgress, type Progress } from "@/lib/client/progress";
 import { setAudioSession } from "@/lib/client/recorder";
@@ -33,6 +34,8 @@ export default function Moyu() {
     idx: -1,
     episode: null as Episode | null,
     podcastQueued: false,
+    radio: null as Radio | null,
+    radioAsk: null as Promise<unknown> | null,
     tick: 0,
     pendingSec: 0,
     rate: 1,
@@ -74,12 +77,26 @@ export default function Moyu() {
     s.pendingSec = 0;
   }
 
-  function nextRound(): Promise<Prepared> {
+  async function nextRound(): Promise<Prepared> {
     const r = s.round++;
     // The podcast joins the first round built after its script is ready, once per session.
     const ep = s.episode && !s.podcastQueued ? s.episode : null;
     if (ep) s.podcastQueued = true;
-    return prepare(buildRound(pRef.current, r, s.used, ep));
+    // Every round after the first opens with a new 趣味电台 episode; wait a little if it's still being written.
+    if (r > 0 && !s.radio && s.radioAsk) await Promise.race([s.radioAsk, new Promise((ok) => setTimeout(ok, 30000))]);
+    const radio = r > 0 ? s.radio : null;
+    if (radio) {
+      s.radio = null;
+      askRadio();
+    }
+    return prepare(buildRound(pRef.current, r, s.used, ep, radio));
+  }
+
+  function askRadio() {
+    if (s.radioAsk) return;
+    s.radioAsk = makeRadio()
+      .then((ep) => (s.radio = ep), console.warn)
+      .finally(() => (s.radioAsk = null));
   }
 
   function load(prep: Prepared) {
@@ -108,6 +125,7 @@ export default function Moyu() {
     setupMediaSession();
     s.episode = todayEpisode();
     if (!s.episode) makeEpisode(pRef.current).then((ep) => (s.episode = ep), console.warn);
+    askRadio();
     try {
       load(await (s.next ?? nextRound()));
     } catch (e) {
@@ -227,7 +245,7 @@ export default function Moyu() {
           </>
         ) : (
           <p className="moyu-sub">
-            轮着放：心里瞬间说、复习收藏、错句对比、偷听场景对话、今天的播客。每轮约 10 分钟，放完自动换新内容。
+            轮着放：趣味电台、心里瞬间说、复习收藏、错句对比、偷听场景对话、今天的播客。每轮约 10 分钟，放完自动换新内容。
           </p>
         )}
         {phase === "loading" && <p className="moyu-sub">正在准备下一段…</p>}

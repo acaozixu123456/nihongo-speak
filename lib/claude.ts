@@ -513,3 +513,8 @@ ${a.cards.map((c) => `- ${c.ja}（${c.zh}）`).join("\n") || "（なし）"}
 練習している場面：${a.scenes.join("、") || "（なし）"}`,
   );
 }
+
+// 趣味电台 (lib/radio.ts) when Gemini isn't available.
+export function makeRadioWithClaude<S extends z.ZodType>(schema: S, system: string, content: string) {
+  return haikuFirst(schema, system, content);
+}
