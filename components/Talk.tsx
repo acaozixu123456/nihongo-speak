@@ -18,6 +18,7 @@ import {
 } from "@/lib/client/progress";
 import { npc } from "@/lib/client/game";
 import HoldButton from "./HoldButton";
+import TurnNote from "./TurnNote";
 
 type Message = Turn & { zh?: string };
 
@@ -216,7 +217,15 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
             </div>
           </div>
         ) : (
-          <div key={i} className="bubble me">{m.text}</div>
+          <div key={i}>
+            <div className="bubble me">{m.text}</div>
+            <TurnNote
+              scenarioId={scenario.id}
+              talk={talk}
+              history={history(messages.slice(0, i + 1))}
+              voice={talk.aiVoice}
+            />
+          </div>
         ),
       )}
 

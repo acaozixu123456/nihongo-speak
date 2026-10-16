@@ -8,6 +8,7 @@ import { hasCard, recordShadow, recordSpeech, shadowTarget, toggleCard, useProgr
 import { confetti } from "@/lib/client/fx";
 import { GRADES, grade, type Grade } from "@/lib/client/game";
 import HoldButton from "./HoldButton";
+import ShadowCoach from "./ShadowCoach";
 import { RatePicker } from "./Listen";
 
 type Attempt = { wavUrl: string; result: SttResult };
@@ -194,6 +195,7 @@ export default function Shadow({ scenario, active, onNext }: Props) {
             </>
           ) : null}
           <p className="muted" style={{ marginBottom: 0 }}>识别结果：{attempt.result.text}</p>
+          <ShadowCoach ja={line.ja} kana={line.kana} result={attempt.result} />
           <div className="tally">
             {GRADES.map((g) => (
               <div key={g} className={`gr-${g}`}>
