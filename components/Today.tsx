@@ -21,6 +21,7 @@ import {
 import { formatDuration, totals } from "@/lib/client/metrics";
 import { buildingStars, jobTitle, timeOfDay } from "@/lib/client/game";
 import Nav from "./Nav";
+import { useHydrated } from "@/lib/client/hydrated";
 
 const STEP_LABEL: Record<Step, string> = { listen: "偷听", shadow: "模仿说话", talk: "对话" };
 const WEEKDAY_JA = ["日", "月", "火", "水", "木", "金", "土"];
@@ -105,7 +106,10 @@ function Building({
 }
 
 function Week({ p }: { p: Progress }) {
+  const hydrated = useHydrated();
   const today = new Date();
+  // Days are the phone's days; the server would draw the wrong week before 9:00 in Japan.
+  if (!hydrated) return <div className="week" style={{ minHeight: 52 }} />;
   return (
     <div className="week">
       {Array.from({ length: 7 }, (_, i) => {
@@ -136,8 +140,10 @@ export default function Today() {
   const due = dueCards(p).length;
   const weak = weakList(p).length;
   const talk = callout(p);
+  // The clock is the phone's: the server renders in another time zone, so it waits for the browser.
+  const hydrated = useHydrated();
   const now = new Date();
-  const sky = timeOfDay(now);
+  const sky = hydrated ? timeOfDay(now) : { key: "day", label: "" };
   const today = dayKey();
   const t = totals(p, today, today);
   const next = nextStep(p);
@@ -155,7 +161,7 @@ export default function Today() {
       <div className={`map ${sky.key}`}>
         <div className={`sky ${sky.key}`}>
           <span className="clock">
-            {sky.label} {hhmm} · {now.getMonth() + 1}月{now.getDate()}日({WEEKDAY_JA[now.getDay()]})
+            {hydrated && `${sky.label} ${hhmm} · ${now.getMonth() + 1}月${now.getDate()}日(${WEEKDAY_JA[now.getDay()]})`}
           </span>
           <span className="weather" aria-hidden>{sky.key === "night" ? "🌙 ✨" : sky.key === "evening" ? "🌇" : "☁️ 🌤️"}</span>
         </div>
