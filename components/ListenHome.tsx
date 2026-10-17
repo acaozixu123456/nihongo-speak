@@ -15,7 +15,7 @@ export const shortDate = (day: string) => {
   return `${m}月${d}日`;
 };
 
-// 听: one card to press (the unheard episode, or make a new one), then 一直听 and the back catalogue as quiet rows.
+// 听: one card to press (the unheard episode, else 練習 that's due, else the last episode again), then 一直听 and the back catalogue as quiet rows.
 export default function ListenHome() {
   const p = useProgress();
   const hydrated = useHydrated();
@@ -46,7 +46,7 @@ export default function ListenHome() {
   }
 
   const unheard = latest && !latest.heard ? latest : null;
-  const past = unheard ? eps.slice(1) : eps;
+  const past = unheard || (latest && !due) ? eps.slice(1) : eps;
 
   return (
     <main className="page">
@@ -56,21 +56,30 @@ export default function ListenHome() {
       </h1>
 
       {unheard ? (
-        <EpisodeCard ep={unheard} />
+        <EpisodeCard ep={unheard} kicker="趣味电台 · 新的一期" go="▶ 收听" />
+      ) : due > 0 ? (
+        <Link href="/practice" className="today">
+          <span className="kicker">練習</span>
+          <span className="today-title">
+            <span className="ja-serif">{due} 個</span>
+          </span>
+          <span className="today-go">始める</span>
+        </Link>
+      ) : latest ? (
+        <EpisodeCard ep={latest} kicker="趣味电台 · もう一度" go="▶ もう一度聴く" />
       ) : (
         <button className="today today-btn" onClick={() => fresh()} disabled={busy}>
           <span className="kicker">趣味电台</span>
           <span className="today-title">
-            <span className="ja-serif">{latest ? "新しい回" : "はじめての回"}</span>
+            <span className="ja-serif">はじめての回</span>
           </span>
-          <span className="today-zh">两人聊一个日本冷知识，约 5 分钟</span>
-          <span className="today-go">{busy ? "AI 正在写这一期…" : "生成新的一期"}</span>
+          <span className="today-go">{busy ? "AI 正在写这一期…" : "生成"}</span>
         </button>
       )}
       {error && <p className="error">{error}</p>}
 
       <div className="rows">
-        {due > 0 && (
+        {due > 0 && unheard && (
           <Link href="/practice" className="entry">
             <span className="entry-text ja-serif">練習</span>
             <span className="entry-count">{due}</span>
@@ -81,31 +90,26 @@ export default function ListenHome() {
           <span className="entry-text ja-serif">流す</span>
           <span className="chev" aria-hidden>›</span>
         </Link>
-        {unheard && (
-          <button className="entry" onClick={() => fresh()} disabled={busy}>
-            <span className="entry-text">{busy ? "AI 正在写这一期…" : "生成新的一期"}</span>
-            <span className="chev" aria-hidden>›</span>
-          </button>
-        )}
-        {wishing ? (
+        {/* A new episode costs money and a minute of waiting, so it takes two taps: open the row, then 生成 (blank = any topic). */}
+        {latest && (wishing ? (
           <form
             className="entry wish"
             onSubmit={(e) => {
               e.preventDefault();
-              if (wish.trim()) fresh(wish.trim());
+              fresh(wish.trim() || undefined);
             }}
           >
-            <input autoFocus value={wish} maxLength={100} onChange={(e) => setWish(e.target.value)} placeholder="想听什么？如：日本电车为啥这么准时" />
-            <button type="submit" className="small" disabled={busy || !wish.trim()}>
+            <input autoFocus value={wish} maxLength={100} onChange={(e) => setWish(e.target.value)} placeholder="想听什么？留空就随便聊" />
+            <button type="submit" className="small" disabled={busy}>
               {busy ? "写着呢…" : "生成"}
             </button>
           </form>
         ) : (
           <button className="entry" onClick={() => setWishing(true)} disabled={busy}>
-            <span className="entry-text ja-serif">リクエスト</span>
+            <span className="entry-text ja-serif">新しい回</span>
             <span className="chev" aria-hidden>›</span>
           </button>
-        )}
+        ))}
       </div>
 
       {past.length > 0 && (
@@ -130,12 +134,12 @@ export default function ListenHome() {
   );
 }
 
-function EpisodeCard({ ep }: { ep: RadioEpisode }) {
+function EpisodeCard({ ep, kicker, go }: { ep: RadioEpisode; kicker: string; go: string }) {
   return (
     <Link href={`/ep/${ep.id}`} className="today">
-      <span className="kicker">趣味电台 · 新的一期</span>
+      <span className="kicker">{kicker}</span>
       <span className="ep-title">{ep.title_zh}</span>
-      <span className="today-go">▶ 收听</span>
+      <span className="today-go">{go}</span>
     </Link>
   );
 }
