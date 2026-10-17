@@ -29,7 +29,7 @@ const GameSchema = z.object({
         explain_zh: z.string().describe("答えたあとに見せる一言解説（中国語、1文、なぜそうなるか・使い方のコツ）"),
       }),
     )
-    .describe("各項目2問ずつ"),
+    .describe("各項目ちょうど2問"),
 });
 
 export type Game = z.infer<typeof GameSchema>;
@@ -41,7 +41,7 @@ const SYSTEM = `${COACH}
 - レベル0〜1（初めて・まだ不安定）：meaning・listen・reading（単語）で意味と読みを確認し、もう1問は pick。
 - レベル2〜3：fill・order・judge・dictate のどれかで、新しい場面の中で使わせる。
 - レベル4〜5：say（自分で言う）と dictate か listen。
-全体で、できるだけ多くの種類の形式を混ぜる。
+全体で、できるだけ多くの種類の形式を混ぜる。order・dictate・say の answer は1文だけ（15〜30字）。
 同じ項目の2問は必ず違う形式にする（意味 → 使う、のように角度を変える）。
 - fill・order・say の文は元の文のコピーではなく、学習者の日常や職場（日本在住、IT系）で実際に使う新しい場面の短い文（N3程度）にする。
 - 間違いの選択肢は、ありがちな勘違い（似た語、似た文型、助詞違い、似た意味の中国語）にする。明らかに無関係なものは出さない。
@@ -52,7 +52,8 @@ ${items.map((x) => `- [${x.kind}・レベル${x.level}] ${x.ja}${x.note ? `（${
 
 const MODEL = "gemini-3.8-flash";
 
-async function withGemini(content: string): Promise<Game> {
+// Thinking is kept low: these are short, well-specified exercises, and a round should be ready in seconds.
+async function withGemini(content: string, think = true): Promise<Game> {
   const { project, token } = await vertexAccess();
   const { $schema, ...schema } = z.toJSONSchema(GameSchema) as Record<string, unknown>;
   void $schema;
@@ -64,11 +65,17 @@ async function withGemini(content: string): Promise<Game> {
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: SYSTEM }] },
         contents: [{ role: "user", parts: [{ text: content }] }],
-        generationConfig: { responseMimeType: "application/json", responseJsonSchema: schema, temperature: 0.9 },
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseJsonSchema: schema,
+          temperature: 0.9,
+          ...(think ? { thinkingConfig: { thinkingLevel: "low" } } : {}),
+        },
       }),
-      signal: AbortSignal.timeout(25000),
+      signal: AbortSignal.timeout(22000),
     },
   );
+  if (res.status === 400 && think) return withGemini(content, false);
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
   type Reply = { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[] };
   const reply = (await res.json()) as Reply;
@@ -79,29 +86,36 @@ async function withGemini(content: string): Promise<Game> {
   return GameSchema.parse(JSON.parse(text));
 }
 
-async function batch(topic: string | undefined, items: GameItem[]): Promise<Game["questions"]> {
+type Batch = { questions: Game["questions"]; by: string };
+
+async function batch(topic: string | undefined, items: GameItem[]): Promise<Batch> {
   const content = prompt(topic, items);
+  const t = Date.now();
+  // The model sometimes copies an item with its note; point each question back at the item itself.
+  const fix = (qs: Game["questions"]) =>
+    qs.map((q) => ({ ...q, about: items.find((x) => q.about === x.ja || q.about.startsWith(x.ja) || q.about.includes(x.ja))?.ja ?? q.about }));
   if (vertexConfigured()) {
     try {
-      return (await withGemini(content)).questions;
+      return { questions: fix((await withGemini(content)).questions), by: `gemini ${Date.now() - t}ms` };
     } catch (e) {
       console.warn("game: Gemini failed, using Claude", e);
     }
   }
-  return (await makeRadioWithClaude(GameSchema, SYSTEM, content)).questions;
+  return { questions: fix((await makeRadioWithClaude(GameSchema, SYSTEM, content)).questions), by: `claude ${Date.now() - t}ms` };
 }
 
-const BATCH = 3;
+const BATCH = 2;
 // Easy kinds first, as in a lesson.
 const RANK = { meaning: 0, listen: 0, reading: 0, pick: 1, judge: 2, fill: 2, order: 3, dictate: 3, say: 4 } as const;
 
-export async function makeGame(a: { topic?: string; items: GameItem[] }): Promise<Game> {
+// by: which model wrote each batch and how long it took, for checking speed from outside.
+export async function makeGame(a: { topic?: string; items: GameItem[] }): Promise<Game & { by: string[] }> {
   const groups: GameItem[][] = [];
   for (let i = 0; i < a.items.length; i += BATCH) groups.push(a.items.slice(i, i + BATCH));
   const done = await Promise.allSettled(groups.map((g) => batch(a.topic, g)));
-  const questions = done.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
+  const questions = done.flatMap((r) => (r.status === "fulfilled" ? r.value.questions : []));
   if (!questions.length) throw new Error((done.find((r) => r.status === "rejected") as PromiseRejectedResult)?.reason?.message ?? "出题失败");
   // Within each kind, spread one item's questions apart.
   const shuffled = questions.map((q) => ({ q, r: Math.random() })).sort((x, y) => RANK[x.q.kind] - RANK[y.q.kind] || x.r - y.r);
-  return { questions: shuffled.map((x) => x.q) };
+  return { questions: shuffled.map((x) => x.q), by: done.map((r) => (r.status === "fulfilled" ? r.value.by : "failed")) };
 }
