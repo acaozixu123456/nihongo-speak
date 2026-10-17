@@ -46,9 +46,10 @@ export function ttsUrl(text: string, voice: string) {
   // v=2 skips anything the browser kept from before fallback voices were marked no-store.
   // yomi=1: text with no kana used to be read in Chinese (the server now says its reading instead),
   // so it gets a new address instead of the copy the phone and the CDN kept. yomi=2: that reading
-  // often didn't come back, so many such words were still kept read in Chinese.
+  // often didn't come back, so many such words were still kept read in Chinese. yomi=3: a wrong
+  // reading (木炭 as たんざん) could be kept too.
   const kanjiOnly = voice.startsWith("ja-JP") && !/[\u3040-\u30ff]/.test(text);
-  return `/api/tts?${new URLSearchParams({ text, voice, v: "2", ...(kanjiOnly ? { yomi: "2" } : {}) })}`;
+  return `/api/tts?${new URLSearchParams({ text, voice, v: "2", ...(kanjiOnly ? { yomi: "3" } : {}) })}`;
 }
 
 // Every recording played here (made on demand, or pre-recorded under /voice) is also kept: in memory as a ready blob for instant replays, and in the
