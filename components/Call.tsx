@@ -31,7 +31,7 @@ export function CallList() {
       <Link href="/me" className="back">← 我</Link>
       <header className="page-mast">
         <div>
-          <h1>打电话</h1>
+          <h1>電話</h1>
           <p className="muted">只有声音，默认不显示文字。听不清就说「もう一度お願いします」。</p>
         </div>
       </header>

@@ -19,7 +19,7 @@ export default function Bag() {
       <Link href="/me" className="back">← 我</Link>
       <header className="page-mast">
         <div>
-          <h1>收藏的表达</h1>
+          <h1>フレーズ帳</h1>
           <p className="muted">
             {p.cards.length} 句{due.length ? ` · ${due.length} 句今天该复习` : ""}
           </p>

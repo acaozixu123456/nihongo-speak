@@ -1227,10 +1227,27 @@ body.in-route .back { display: none; }
 .route-meta { font-size: 14px; color: var(--muted); }
 .route-end { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; padding: 12px 22px calc(env(safe-area-inset-bottom) + 18px); background: linear-gradient(transparent, var(--bg) 30%); max-width: 560px; margin: 0 auto; }
 .route-end .btn { width: 100%; }
-.me-stats { display: flex; gap: 30px; margin: -8px 0 10px; text-decoration: none; color: var(--text); }
-.me-stats b { display: block; font-family: var(--serif); font-size: 34px; font-weight: 500; line-height: 1.2; }
-.me-stats b.accent { color: var(--accent); }
-.me-stats small { font-size: 12px; color: var(--muted); }
+/* 我: one record card, then the places as tiles with a faint kanji mark. */
+.me-card { display: block; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 20px 18px; margin: -6px 0 14px; text-decoration: none; color: var(--text); box-shadow: var(--shadow); }
+a.me-card:active, a.tile:active { transform: scale(0.985); }
+.me-nums { display: flex; align-items: flex-end; gap: 30px; }
+.me-nums .chev { margin-left: auto; align-self: center; }
+.me-nums b { display: block; font-family: var(--serif); font-size: 38px; font-weight: 500; line-height: 1.1; }
+.me-nums b.accent { color: var(--accent); }
+.me-nums small { font-size: 12px; color: var(--muted); }
+.me-days { display: grid; grid-template-columns: repeat(21, 1fr); gap: 4px; margin-top: 16px; }
+.me-days i { aspect-ratio: 1; border-radius: 3px; background: var(--soft); }
+.me-days i.now { outline: 1px solid var(--faint); outline-offset: 1px; }
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tile { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; min-height: 118px; padding: 16px 16px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 18px; text-decoration: none; color: var(--text); transition: transform 0.15s; }
+.tile.wide { grid-column: 1 / -1; min-height: 104px; }
+.tile-mark { position: absolute; top: -14px; right: -6px; font-family: var(--serif); font-size: 92px; line-height: 1; color: var(--text); opacity: 0.06; pointer-events: none; }
+.tile-name { font-size: 21px; font-weight: 600; letter-spacing: 0.04em; }
+.tile-sub { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; padding-right: 40px; }
+.tile-n { position: absolute; top: 14px; left: 16px; font-size: 13px; color: var(--muted); }
+.tile.hot { border-color: var(--accent); }
+.tile.hot .tile-n { color: var(--accent); }
+.tile.hot .tile-mark { color: var(--accent); opacity: 0.1; }
 .entry-n { color: var(--muted); font-size: 13px; }
 /* 点评: the one thing to fix next time */
 .focus-one { font-size: 17px; font-weight: 600; line-height: 1.6; margin: 6px 0 14px; }

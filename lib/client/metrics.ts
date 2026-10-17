@@ -1,4 +1,4 @@
-import { addDays, dayKey, type DiaryEntry, type Progress } from "@/lib/progress-model";
+import { addDays, dayKey, type Progress } from "@/lib/progress-model";
 
 // Numbers for "how much did I actually practise, and am I getting better".
 
@@ -74,14 +74,4 @@ export function formatDuration(sec: number) {
   if (m === 0) return `${s} 秒`;
   if (m < 60) return `${m} 分 ${s} 秒`;
   return `${Math.floor(m / 60)} 小时 ${m % 60} 分`;
-}
-
-// Diary: how fast and how accurately the learner speaks unprompted.
-export function diaryMetrics(d: DiaryEntry) {
-  const chars = d.text.replace(/[\s、。！？!?,.]/g, "").length;
-  return {
-    perMin: d.sec > 5 ? Math.round((chars / d.sec) * 60) : null,
-    errorsPer100: chars ? Math.round((d.corrections.length / chars) * 1000) / 10 : 0,
-    chars,
-  };
 }

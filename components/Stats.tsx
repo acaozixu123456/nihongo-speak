@@ -9,7 +9,7 @@ import {
   useProgress,
   useSyncState,
 } from "@/lib/client/progress";
-import { allTime, diaryMetrics, formatDuration, lastDays, weeks } from "@/lib/client/metrics";
+import { allTime, formatDuration, lastDays, weeks } from "@/lib/client/metrics";
 import { Bars, Line } from "./Charts";
 import Reminders from "./Reminders";
 
@@ -24,7 +24,7 @@ export default function Stats() {
   const lastWeek = ws[6];
   const days30 = lastDays(30);
   const finished = allScenarios(p).filter((s) => Object.values(stepsDone(p, s)).every(Boolean)).length;
-  const diaries = [...p.diary].reverse().slice(-12);
+  const retells = (p.retells ?? []).slice(-14);
 
   const compare = (a: number | null, b: number | null, unit = "") =>
     a === null || b === null || a === b ? null : (
@@ -40,7 +40,7 @@ export default function Stats() {
       <Link href="/me" className="back">← 我</Link>
       <header className="page-mast">
         <div>
-          <h1>成长记录</h1>
+          <h1>記録</h1>
           <p className="muted">开口时长、反应速度、发音的变化</p>
         </div>
       </header>
@@ -67,8 +67,8 @@ export default function Stats() {
           <span>三步全部完成的场景</span>
         </div>
         <div className="kpi">
-          <b>{p.diary.length} 篇</b>
-          <span>口语日记</span>
+          <b>{(p.retells ?? []).length} 回</b>
+          <span>三回話す</span>
         </div>
       </div>
 
@@ -131,13 +131,13 @@ export default function Stats() {
         />
       </div>
 
-      <h2>口语日记：每分钟能说多少字</h2>
+      <h2>三回話す：第一遍每分钟能说多少字</h2>
       <div className="card">
         <Line
           unit="字/分"
-          data={diaries.map((d) => ({ label: md(d.date), tick: md(d.date), value: diaryMetrics(d).perMin }))}
+          data={retells.map((r) => ({ label: md(r.date), tick: md(r.date), value: r.cpm[0] ?? 0 }))}
         />
-        <div className="small-text">不看稿、自己组织语言时的语速。越说越快、需要改的地方越来越少，就是真的进步了。</div>
+        <div className="small-text">每天换新话题、第一遍的语速。越说越快、需要改的地方越来越少，就是真的进步了。</div>
       </div>
 
       <h2>设置</h2>

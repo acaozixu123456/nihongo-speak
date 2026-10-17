@@ -649,14 +649,6 @@ export function reviewCard(id: string, remembered: boolean) {
   write(gainXp(noted, XP.review, "review"));
 }
 
-// ---- Diary ----
-
-export function addDiary(entry: DiaryEntry) {
-  write(gainXp({ ...read(), diary: [entry, ...read().diary] }, XP.diary, "diary"));
-}
-
-export const diaryToday = (p: Progress) => p.diary.some((d) => d.date === dayKey());
-
 // ---- 趣味电台 episodes ----
 
 // The two hosts: Aoi and Keita map to bright Gemini voices and fall back to Azure's free ones.
@@ -752,7 +744,6 @@ export function quests(p: Progress): Quest[] {
       label: "场景练习",
       detail: sceneXp >= SCENE_QUEST_XP ? "完成" : `${sceneXp} / ${SCENE_QUEST_XP} XP`,
     },
-    { key: "diary", done: diaryToday(p), label: "一分钟口语日记", detail: diaryToday(p) ? "完成" : "说说今天" },
     {
       key: "review",
       // With nothing due, there is nothing to review and the quest is free.

@@ -39,7 +39,7 @@ export default function Episodes() {
   return (
     <main className="page">
       <Link href="/me" className="back">← 我</Link>
-      <h1 className="display">往期</h1>
+      <h1 className="display">ラジオ</h1>
       <div className="rows">
         {/* A new episode costs money and a minute of waiting, so it takes two taps: open the row, then 生成 (blank = any topic). */}
         {wishing ? (

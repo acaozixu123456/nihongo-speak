@@ -11,7 +11,7 @@ import { finished, minutes, oneFix, plan, quietPref, setQuiet, startRoute, useRo
 const WEEKDAY_JA = ["日", "月", "火", "水", "木", "金", "土"];
 
 // 今日: the only thing on the first screen is today's route and one button. Everything to pick
-// by hand (past episodes, scenes, calls, diary…) lives behind 我.
+// by hand (radio, scenes, calls…) lives behind 我.
 export default function Home() {
   const p = useProgress();
   const hydrated = useHydrated();
