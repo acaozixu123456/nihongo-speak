@@ -146,66 +146,83 @@ ${avoid.length ? `最近扱ったテーマ（重ならないように）：${avo
 // Same model family as the voices: Gemini 3.8 Flash, global location.
 const MODEL = "gemini-3.8-flash";
 
-async function withGemini(avoid: string[], wish: string | undefined, letter: Letter | undefined, timeoutMs: number): Promise<Radio> {
+// Lines written so far, from the JSON as it streams in (only show lines have a "gap").
+const linesIn = (text: string) => text.match(/"gap"\s*:/g)?.length ?? 0;
+
+// Streams the show from Gemini so the phone can watch it being written (onLines), and so a request
+// that has stopped moving is noticed: one that sends nothing for a while is dropped.
+async function withGemini(avoid: string[], wish: string | undefined, letter: Letter | undefined, onLines: (n: number) => void): Promise<Radio> {
   const { project, token } = await vertexAccess();
   const { $schema, ...schema } = z.toJSONSchema(RadioSchema) as Record<string, unknown>;
   void $schema;
-  const res = await fetch(
-    `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/${MODEL}:generateContent`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM }] },
-        contents: [{ role: "user", parts: [{ text: prompt(avoid, wish, letter) }] }],
-        // Little thinking: the show is long, and with full thinking it sometimes ran past a minute.
-        generationConfig: { responseMimeType: "application/json", responseJsonSchema: schema, temperature: 1, thinkingConfig: { thinkingLevel: "low" } },
-      }),
-      signal: AbortSignal.timeout(timeoutMs),
-    },
-  );
-  if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  type Reply = { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[] };
-  const reply = (await res.json()) as Reply;
-  const text = (reply.candidates?.[0]?.content?.parts ?? [])
-    .filter((p) => !p.thought && p.text)
-    .map((p) => p.text)
-    .join("");
-  return RadioSchema.parse(JSON.parse(text));
+  const stop = new AbortController();
+  // Nothing at all for 30s (thinking comes first), or a pause of 20s once writing has begun.
+  let quiet = setTimeout(() => stop.abort(new Error("Gemini 没有响应")), 30000);
+  const moved = () => {
+    clearTimeout(quiet);
+    quiet = setTimeout(() => stop.abort(new Error("Gemini 写到一半停住了")), 20000);
+  };
+  try {
+    const res = await fetch(
+      `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/${MODEL}:streamGenerateContent?alt=sse`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: SYSTEM }] },
+          contents: [{ role: "user", parts: [{ text: prompt(avoid, wish, letter) }] }],
+          // Little thinking: the show is long, and with full thinking it sometimes ran past a minute.
+          generationConfig: { responseMimeType: "application/json", responseJsonSchema: schema, temperature: 1, thinkingConfig: { thinkingLevel: "low" } },
+        }),
+        signal: stop.signal,
+      },
+    );
+    if (!res.ok || !res.body) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    type Chunk = { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[] };
+    const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+    let text = "";
+    let pending = "";
+    let shown = 0;
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      moved();
+      pending += value;
+      const events = pending.split("\n");
+      pending = events.pop() ?? "";
+      for (const ev of events) {
+        if (!ev.startsWith("data:")) continue;
+        const chunk = JSON.parse(ev.slice(5)) as Chunk;
+        for (const p of chunk.candidates?.[0]?.content?.parts ?? []) if (!p.thought && p.text) text += p.text;
+      }
+      const n = linesIn(text);
+      if (n !== shown) onLines((shown = n));
+    }
+    return RadioSchema.parse(JSON.parse(text));
+  } finally {
+    clearTimeout(quiet);
+  }
 }
 
-// Now and then a Gemini request just hangs (a show usually takes 20-30s): if the first hasn't
-// answered in 30s, a second one starts alongside it, and whichever finishes first wins. Both end by
-// 60s, leaving Claude the rest of the route's two minutes.
-function hedged<T>(run: (timeoutMs: number) => Promise<T>): Promise<T> {
-  const t0 = Date.now();
-  const left = () => 60000 - (Date.now() - t0);
-  return new Promise((ok, fail) => {
-    let started = 1;
-    let failed = 0;
-    const lose = (e: unknown) => ++failed === started && fail(e);
-    const again = () => {
-      clearTimeout(second);
-      if (started === 2 || left() < 15000) return;
-      started = 2;
-      run(left()).then(ok, lose);
-    };
-    const second = setTimeout(again, 30000);
-    // A quick error (not a hang) starts the second one right away.
-    run(left()).then(ok, (e) => {
-      again();
-      lose(e);
-    });
-  });
-}
+export type Making = { stage: "write"; lines: number } | { stage: "retry" } | { stage: "claude" };
 
-export async function makeRadio(avoid: string[], wish?: string, letter?: Letter): Promise<Radio & { by: "gemini" | "claude" }> {
+// Gemini, and once more if it stalls or fails; then Claude, which takes longer and shows no lines.
+export async function makeRadio(
+  avoid: string[],
+  wish?: string,
+  letter?: Letter,
+  onProgress: (m: Making) => void = () => {},
+): Promise<Radio & { by: "gemini" | "claude" }> {
   if (vertexConfigured()) {
-    try {
-      return { ...(await hedged((ms) => withGemini(avoid, wish, letter, ms))), letter, by: "gemini" };
-    } catch (e) {
-      console.warn("radio: Gemini failed, using Claude", e);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        if (attempt) onProgress({ stage: "retry" });
+        return { ...(await withGemini(avoid, wish, letter, (lines) => onProgress({ stage: "write", lines }))), letter, by: "gemini" };
+      } catch (e) {
+        console.warn("radio: Gemini failed", e);
+      }
     }
   }
+  onProgress({ stage: "claude" });
   return { ...(await makeRadioWithClaude(RadioSchema, SYSTEM, prompt(avoid, wish, letter))), letter, by: "claude" };
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { makeRadio } from "@/lib/client/moyu";
+import { makeRadio, makingText, SHOW_LINES, useRadioMaking } from "@/lib/client/moyu";
 import { useProgress } from "@/lib/client/progress";
 import { useHydrated } from "@/lib/client/hydrated";
 
@@ -22,6 +22,7 @@ export default function Episodes() {
   const [wishing, setWishing] = useState(false);
   const [wish, setWish] = useState("");
   const eps = hydrated ? p.episodes : [];
+  const making = useRadioMaking();
 
   async function fresh(topic?: string) {
     setBusy(true);
@@ -54,7 +55,16 @@ export default function Episodes() {
               {busy ? "写着呢…" : "生成"}
             </button>
           </form>
-        ) : (
+        ) : null}
+        {wishing && busy && making ? (
+          <div className="making">
+            <div className="making-text">{makingText(making)}</div>
+            <div className={`track making ${making.stage === "claude" ? "slow" : ""}`}>
+              <div style={{ width: `${making.stage === "write" ? Math.min(95, 5 + (making.lines / SHOW_LINES) * 90) : making.stage === "start" ? 4 : 50}%` }} />
+            </div>
+          </div>
+        ) : null}
+        {wishing ? null : (
           <button className="entry" onClick={() => setWishing(true)}>
             <span className="entry-text ja-serif">リクエスト</span>
             <span className="chev" aria-hidden>›</span>
