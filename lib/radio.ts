@@ -146,7 +146,7 @@ ${avoid.length ? `最近扱ったテーマ（重ならないように）：${avo
 // Same model family as the voices: Gemini 3.8 Flash, global location.
 const MODEL = "gemini-3.8-flash";
 
-async function withGemini(avoid: string[], wish?: string, letter?: Letter): Promise<Radio> {
+async function withGemini(avoid: string[], wish: string | undefined, letter: Letter | undefined, timeoutMs: number): Promise<Radio> {
   const { project, token } = await vertexAccess();
   const { $schema, ...schema } = z.toJSONSchema(RadioSchema) as Record<string, unknown>;
   void $schema;
@@ -161,7 +161,7 @@ async function withGemini(avoid: string[], wish?: string, letter?: Letter): Prom
         // Little thinking: the show is long, and with full thinking it sometimes ran past a minute.
         generationConfig: { responseMimeType: "application/json", responseJsonSchema: schema, temperature: 1, thinkingConfig: { thinkingLevel: "low" } },
       }),
-      signal: AbortSignal.timeout(70000),
+      signal: AbortSignal.timeout(timeoutMs),
     },
   );
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
@@ -174,10 +174,35 @@ async function withGemini(avoid: string[], wish?: string, letter?: Letter): Prom
   return RadioSchema.parse(JSON.parse(text));
 }
 
+// Now and then a Gemini request just hangs (a show usually takes 20-30s): if the first hasn't
+// answered in 30s, a second one starts alongside it, and whichever finishes first wins. Both end by
+// 60s, leaving Claude the rest of the route's two minutes.
+function hedged<T>(run: (timeoutMs: number) => Promise<T>): Promise<T> {
+  const t0 = Date.now();
+  const left = () => 60000 - (Date.now() - t0);
+  return new Promise((ok, fail) => {
+    let started = 1;
+    let failed = 0;
+    const lose = (e: unknown) => ++failed === started && fail(e);
+    const again = () => {
+      clearTimeout(second);
+      if (started === 2 || left() < 15000) return;
+      started = 2;
+      run(left()).then(ok, lose);
+    };
+    const second = setTimeout(again, 30000);
+    // A quick error (not a hang) starts the second one right away.
+    run(left()).then(ok, (e) => {
+      again();
+      lose(e);
+    });
+  });
+}
+
 export async function makeRadio(avoid: string[], wish?: string, letter?: Letter): Promise<Radio & { by: "gemini" | "claude" }> {
   if (vertexConfigured()) {
     try {
-      return { ...(await withGemini(avoid, wish, letter)), letter, by: "gemini" };
+      return { ...(await hedged((ms) => withGemini(avoid, wish, letter, ms))), letter, by: "gemini" };
     } catch (e) {
       console.warn("radio: Gemini failed, using Claude", e);
     }
