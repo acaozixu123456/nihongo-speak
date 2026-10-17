@@ -1,5 +1,5 @@
-import Today from "@/components/Today";
+import ListenHome from "@/components/ListenHome";
 
 export default function Home() {
-  return <Today />;
+  return <ListenHome />;
 }

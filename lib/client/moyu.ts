@@ -9,7 +9,10 @@ import {
   dayKey,
   dueCards,
   quickRound,
+  RADIO_VOICE,
+  saveEpisode,
   weakList,
+  type RadioEpisode,
   type Progress,
   type StuckLine,
 } from "./progress";
@@ -157,19 +160,19 @@ function podcastClips(ep: Episode): Clip[] {
   return withIntro(clips.filter((c) => c.parts.length), `今天的播客：${ep.title_zh}。`);
 }
 
-// The two hosts of 趣味电台 (lib/radio.ts): Aoi and Keita map to bright Gemini voices and fall back
-// to Azure's free ones.
-const HOST = { A: "ja-JP-AoiNeural", B: "ja-JP-KeitaNeural" } as const;
+const HOST = RADIO_VOICE;
 
 // The hook in Chinese, the chat straight through in Japanese (each line its own clip, so "再听"
 // lands on it), then three phrases to keep and a question to think about.
-function radioClips(ep: Radio): Clip[] {
-  const talk: Clip[] = ep.lines.map((l, i) => ({
+export function radioClips(ep: Radio): Clip[] {
+  // Stage directions like （笑） would be read out loud.
+  const say = (ja: string) => ja.replace(/[（(][^）)]*[）)]/g, "").replace(/〜/g, "").trim();
+  const talk: Clip[] = ep.lines.filter((l) => say(l.ja)).map((l, i) => ({
     block: "radio",
     show: l.ja,
     sub: `${l.who === "A" ? "ハル" : "ケン"} · ${l.zh}`,
     line: { ja: l.ja, zh: l.zh, voice: HOST[l.who] },
-    parts: [...(i ? [] : [zh(`趣味电台：${ep.title_zh}`, 500), zh(ep.hook_zh, 900)]), { voice: HOST[l.who], text: l.ja, pauseMs: 350 }],
+    parts: [...(i ? [] : [zh(`趣味电台：${ep.title_zh}`, 500), zh(ep.hook_zh, 900)]), { voice: HOST[l.who], text: say(l.ja), pauseMs: 350 }],
   }));
   const keep: Clip[] = ep.phrases.map((ph, i) => ({
     block: "radio",
@@ -178,9 +181,9 @@ function radioClips(ep: Radio): Clip[] {
     line: { ja: ph.ja, zh: ph.zh, voice: HOST.A },
     parts: [
       ...(i ? [] : [zh(NARRATION.radioKeep, 600)]),
-      { voice: HOST.A, text: ph.ja, pauseMs: 700 },
+      { voice: HOST.A, text: say(ph.ja), pauseMs: 700 },
       zh(ph.zh, 700),
-      { voice: HOST.A, text: ph.ja, pauseMs: 1500 },
+      { voice: HOST.A, text: say(ph.ja), pauseMs: 1500 },
     ],
   }));
   const quiz: Clip = { block: "radio", show: ep.title_zh, sub: ep.quiz_zh, parts: [zh(ep.quiz_zh, 2500)] };
@@ -237,7 +240,8 @@ export async function makeEpisode(p: Progress): Promise<Episode> {
 
 const RADIO_SEEN_KEY = "nihongo-speak:radio-seen";
 
-export async function makeRadio(): Promise<Radio> {
+// The new episode is saved with its notes (see saveEpisode), so it can be looked back on in 听.
+export async function makeRadio(): Promise<RadioEpisode> {
   let seen: string[] = [];
   try {
     seen = JSON.parse(localStorage.getItem(RADIO_SEEN_KEY) ?? "[]");
@@ -252,7 +256,7 @@ export async function makeRadio(): Promise<Radio> {
   try {
     localStorage.setItem(RADIO_SEEN_KEY, JSON.stringify([...seen, data.title_zh].slice(-30)));
   } catch {}
-  return data as Radio;
+  return saveEpisode(data as Radio);
 }
 
 // ---- Audio ----

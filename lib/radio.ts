@@ -22,27 +22,49 @@ export const RadioSchema = z.object({
     )
     .describe("18〜26行の掛け合い"),
   phrases: z
-    .array(z.object({ ja: z.string().describe("会話に出てきた、そのまま日常や職場で使える表現（日本語、20字以内）"), zh: z.string() }))
-    .describe("3個"),
+    .array(z.object({ ja: z.string().describe("会話に出てきた、そのまま日常や職場で使える表現（日本語、20字以内、「〜」を使わない完全な文）"), zh: z.string() }))
+    .describe("重点句、3〜4個"),
+  words: z
+    .array(
+      z.object({
+        ja: z.string().describe("会話に出てきた単語（表記どおり）"),
+        kana: z.string().describe("読み（ひらがな）"),
+        zh: z.string().describe("中国語の意味（短く）"),
+      }),
+    )
+    .describe("N3学習者が覚えておくべき単語、6〜8個。会話に実際に出たものだけ。誰でも知っている基本語は除く"),
+  grammar: z
+    .array(
+      z.object({
+        pattern: z.string().describe("文型（例：「〜わけじゃない」）"),
+        zh: z.string().describe("意味と使い方（中国語、1〜2文）"),
+        ja: z.string().describe("会話の中で実際に使われた文（そのまま）"),
+      }),
+    )
+    .describe("会話に出てきたN4〜N2の文法・言い回し、2〜3個"),
   quiz_zh: z.string().describe("最後に中国語のナレーターが出す、今日の話に関する一問（答えは言わない、1文）"),
 });
 
 export type Radio = z.infer<typeof RadioSchema>;
 
-// Picked at random so the episodes don't all drift to the same kind of trivia.
+// Picked at random so the episodes don't all drift to the same kind of trivia. All about Japan:
+// the learner lives and works there.
 const TOPICS = [
   "日本の日常にある「なぜ？」（コンビニ、電車、自販機、ゴミ出しなど）",
   "日本語の言葉の意外な語源",
   "日本の会社・職場の不思議な習慣",
-  "食べ物の意外な歴史（ラーメン、カレー、寿司、お菓子など）",
-  "日本の地理・地名の冷知識",
-  "動物や体の不思議な科学",
-  "歴史上の人物の意外なエピソード",
+  "日本の食べ物の意外な歴史（ラーメン、カレー、寿司、お菓子など）",
+  "日本の地理・地名・都道府県の冷知識",
+  "日本の動物・自然の不思議（奈良の鹿、温泉に入るサルなど）",
+  "日本の歴史上の人物の意外なエピソード",
   "数字で見る日本の驚きの事実",
   "日本のお祭り・年中行事の由来",
-  "身近な発明品の意外な誕生秘話",
+  "日本生まれの発明品の誕生秘話（インスタントラーメン、カラオケ、絵文字など）",
   "日本と中国で同じ漢字なのに意味が違う言葉",
-  "世界の変わった法律やルール",
+  "日本の鉄道・駅の驚きの話",
+  "日本の家・住まい・マナーの不思議",
+  "日本の方言と県民性",
+  "日本のアニメ・ゲーム・キャラクター業界の裏話",
 ];
 
 const SYSTEM = `あなたは日本語学習者向けポッドキャストの放送作家です。聞き手は日本で働く中国人で、日本語レベルはJLPT N4〜N3。通勤中や仕事中にイヤホンで聞き、画面は見ません。
@@ -50,7 +72,7 @@ const SYSTEM = `あなたは日本語学習者向けポッドキャストの放�
 
 構成：
 - 2人のパーソナリティ、ハル（A、女性、好奇心旺盛で反応が大きい）とケン（B、男性、物知りだけど少しおとぼけ）の掛け合い。
-- テーマはひとつの意外な事実・冷知識。最初に「えっ、本当？」と思う問いを出し、すぐには答えを言わず、ヒントや脱線を挟んで、後半で答えを明かす。
+- テーマは日本に関するひとつの意外な事実・冷知識。日本で暮らしていると「あ、あれか！」と思える身近なものが一番いい。最初に「えっ、本当？」と思う問いを出し、すぐには答えを言わず、ヒントや脱線を挟んで、後半で答えを明かす。
 - 「へえ〜！」「マジで？」「いやいや」のような自然なリアクション、軽いボケとツッコミ、ちょっとした笑いを入れる。最後に記憶に残るひとことでまとめる。
 - 事実は確かなものだけ。諸説ある話は「諸説あるけど」と言う。数字や年号を作らない。
 
@@ -58,8 +80,12 @@ const SYSTEM = `あなたは日本語学習者向けポッドキャストの放�
 - 語彙・文法はN3程度。難しい言葉が出たら、会話の中でもう一人が言い換える（「つまり〜ってこと？」）。
 - 1行は短く（40字以内）。話し言葉で自然に。縮約形（〜ちゃう、〜てる）はそのまま使ってよい。
 - 漢字は普通に使う（読み上げ用なので、ふりがなは不要）。
+- 全部そのまま読み上げるので、（笑）のようなト書き・記号・絵文字は書かない。笑いはセリフで表す（「あはは」など）。
 
-phrases には会話に実際に出てきた表現から、職場や日常でそのまま使えるものを選ぶ。`;
+最後に、この回の学習ノートも作る（聞き終わったあとの復習用）：
+- phrases（重点句）：会話に実際に出てきた表現から、職場や日常でそのまま使えるもの。「〜」で省略せず、そのまま言える短い文にする。
+- words：覚える価値のある単語。読みと中国語訳をつける。
+- grammar：会話で使われた文型と、その実際の文。`;
 
 function prompt(avoid: string[]) {
   const topic = TOPICS[Math.floor(Math.random() * TOPICS.length)];
@@ -84,7 +110,7 @@ async function withGemini(avoid: string[]): Promise<Radio> {
         contents: [{ role: "user", parts: [{ text: prompt(avoid) }] }],
         generationConfig: { responseMimeType: "application/json", responseJsonSchema: schema, temperature: 1 },
       }),
-      signal: AbortSignal.timeout(45000),
+      signal: AbortSignal.timeout(50000),
     },
   );
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);

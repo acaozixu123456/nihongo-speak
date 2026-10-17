@@ -28,7 +28,7 @@ const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec 
 export function CallList() {
   return (
     <main>
-      <Link href="/" className="back">← 今天</Link>
+      <Link href="/speak" className="back">← 说</Link>
       <header className="page-mast">
         <div>
           <h1>打电话</h1>
@@ -49,7 +49,7 @@ export function CallList() {
           </Link>
         ))}
       </div>
-      <Nav on="today" />
+      <Nav on="speak" />
     </main>
   );
 }

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { play, ttsUrl, unlock } from "@/lib/client/player";
 import { transcribe } from "@/lib/client/recorder";
-import { dueCards, findScenario, recordSpeech, reviewCard, useProgress, wavSeconds, type Card } from "@/lib/client/progress";
+import { dueCards, findEpisode, findScenario, recordSpeech, reviewCard, useProgress, wavSeconds, type Card } from "@/lib/client/progress";
 import AiJudge, { type Verdict } from "./AiJudge";
 import HoldButton from "./HoldButton";
 import { useCoach } from "@/lib/client/coach";
@@ -97,7 +97,7 @@ export default function Review() {
   if (p.cards.length === 0) {
     return (
       <main>
-        <Link href="/" className="back">← 今天</Link>
+        <Link href="/speak" className="back">← 说</Link>
         <header className="page-mast">
           <div>
             <h1>复习</h1>
@@ -111,7 +111,7 @@ export default function Review() {
           </p>
           <Link href="/scenes">去练习 →</Link>
         </div>
-        <Nav on="today" />
+        <Nav on="speak" />
       </main>
     );
   }
@@ -119,7 +119,7 @@ export default function Review() {
   if (!queue) {
     return (
       <main>
-        <Link href="/" className="back">← 今天</Link>
+        <Link href="/speak" className="back">← 说</Link>
         <header className="page-mast">
           <div>
             <h1>复习</h1>
@@ -142,7 +142,7 @@ export default function Review() {
             </>
           )}
         </div>
-        <Nav on="today" />
+        <Nav on="speak" />
       </main>
     );
   }
@@ -150,7 +150,7 @@ export default function Review() {
   if (!card) {
     return (
       <main>
-        <Link href="/" className="back">← 今天</Link>
+        <Link href="/speak" className="back">← 说</Link>
         <header className="page-mast">
           <div>
             <h1>复习</h1>
@@ -165,14 +165,15 @@ export default function Review() {
               <Link href="/weak">看 AI 找出的薄弱点 →</Link>
             </p>
           )}
-          <Link href="/" className="btn primary next-cta" style={{ display: "block" }}>回到今日训练 →</Link>
+          <Link href="/speak" className="btn primary next-cta" style={{ display: "block" }}>回到今日训练 →</Link>
         </div>
-        <Nav on="today" />
+        <Nav on="speak" />
       </main>
     );
   }
 
   const scenario = findScenario(p, card.scenarioId);
+  const fromRadio = card.scenarioId.startsWith("radio:") ? findEpisode(p, card.scenarioId.slice(6)) : undefined;
 
   return (
     <main>
@@ -188,6 +189,7 @@ export default function Review() {
 
       <div className="card flash">
         {scenario && <div className="muted">{scenario.titleZh}</div>}
+        {fromRadio && <div className="muted">趣味电台 · {fromRadio.title_zh}</div>}
         {ask && ask.ja !== card.ja && (
           <div className="small-text y">换了个新句子 · 同样考「{ask.pattern}」</div>
         )}

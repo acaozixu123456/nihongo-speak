@@ -367,11 +367,11 @@ function knownLine(known?: string[]) {
 }
 
 // Short coaching calls; one retry so the learner still gets feedback after a hiccup.
-async function haikuFirst<S extends z.ZodType>(schema: S, system: string, content: string): Promise<z.infer<S>> {
+async function haikuFirst<S extends z.ZodType>(schema: S, system: string, content: string, maxTokens = 3000): Promise<z.infer<S>> {
   const run = async () => {
     const res = await parse({
       model: MODEL,
-      max_tokens: 3000,
+      max_tokens: maxTokens,
       system,
       messages: [{ role: "user", content }],
       output_config: { format: zodOutputFormat(schema) },
@@ -516,5 +516,5 @@ ${a.cards.map((c) => `- ${c.ja}（${c.zh}）`).join("\n") || "（なし）"}
 
 // 趣味电台 (lib/radio.ts) when Gemini isn't available.
 export function makeRadioWithClaude<S extends z.ZodType>(schema: S, system: string, content: string) {
-  return haikuFirst(schema, system, content);
+  return haikuFirst(schema, system, content, 5000);
 }

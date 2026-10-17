@@ -15,6 +15,7 @@ export default function Scenes({ tab: initial }: { tab?: BuildingId }) {
 
   return (
     <main>
+      <Link href="/speak" className="back">← 说</Link>
       <header className="page-mast">
         <div>
           <h1>场景</h1>
@@ -36,7 +37,7 @@ export default function Scenes({ tab: initial }: { tab?: BuildingId }) {
         ))}
       </div>
       <Floors key={tab} id={tab} />
-      <Nav on="scenes" />
+      <Nav on="speak" />
     </main>
   );
 }
