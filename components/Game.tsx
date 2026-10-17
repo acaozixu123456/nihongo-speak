@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { Game as GameData } from "@/lib/game";
+import { confetti, sfx } from "@/lib/client/fx";
 import { play, preload, ttsUrl, unlock } from "@/lib/client/player";
 import {
   dueSkills,
@@ -18,13 +19,16 @@ import {
   type RadioEpisode,
   type SkillItem,
 } from "@/lib/client/progress";
-import { transcribe } from "@/lib/client/recorder";
+import { setAudioSession, transcribe } from "@/lib/client/recorder";
 import { useHydrated } from "@/lib/client/hydrated";
 import { Star } from "./FeedbackCard";
 import HoldButton from "./HoldButton";
 import Nav from "./Nav";
 
-type Q = GameData["questions"][number] & { choices: string[]; pool: string[] };
+type AiQ = GameData["questions"][number];
+// match (连连看) is put together on the phone from the round's short items; the rest come from AI.
+type Kind = AiQ["kind"] | "match";
+type Q = Omit<AiQ, "kind"> & { kind: Kind; choices: string[]; pool: string[]; pairs?: { ja: string; zh: string }[] };
 
 const VOICE = RADIO_VOICE.A;
 const shuffle = <T,>(xs: T[]) => {
@@ -53,33 +57,88 @@ function closeness(said: string, want: string) {
   return prev[b.length] / Math.max(a.length, b.length);
 }
 
-// Japanese a question plays: the sentence itself, or the answer once it's Japanese.
-const spoken = (q: Q) => (q.kind === "meaning" || q.kind === "listen" ? q.ja : q.kind === "fill" ? q.ja.replace(/＿+|_+/, q.answer) : q.answer);
+const HEARD: Kind[] = ["meaning", "listen", "reading", "judge", "dictate"];
+const CHOICE: Kind[] = ["meaning", "listen", "reading", "pick", "fill"];
+const TILES: Kind[] = ["order", "dictate"];
+const NATURAL = "自然";
+const ODD = "不自然";
 
-function prepare(g: GameData): Q[] {
-  return g.questions
+// Japanese a question plays once answered: the sentence itself, or the answer once it's Japanese.
+function spoken(q: Q) {
+  if (q.kind === "judge") return q.answer === ODD && q.options[0] ? q.options[0] : q.ja;
+  if (q.kind === "meaning" || q.kind === "listen" || q.kind === "reading") return q.ja;
+  if (q.kind === "fill") return q.ja.replace(/＿+|_+/, q.answer);
+  return q.answer;
+}
+
+function prepare(g: GameData, items: SkillItem[]): Q[] {
+  const qs = g.questions
     .filter((q) => q.answer.trim())
-    .map((q) => {
-      const tiles = q.kind === "order" && bare(q.tiles.join("")) === bare(q.answer) && q.tiles.length > 1 ? q.tiles : null;
-      if (q.kind === "order" && !tiles) return null;
-      if (["meaning", "listen", "pick", "fill"].includes(q.kind) && q.options.filter((o) => o !== q.answer).length < 2) return null;
+    .map((q): Q | null => {
+      const tiles = TILES.includes(q.kind) && bare(q.tiles.join("")) === bare(q.answer) && q.tiles.length > 1 ? q.tiles : null;
+      if (TILES.includes(q.kind) && !tiles) return null;
+      if (CHOICE.includes(q.kind) && q.options.filter((o) => o !== q.answer).length < 2) return null;
+      if (q.kind === "judge" && ![NATURAL, ODD].includes(q.answer)) return null;
       return {
         ...q,
-        choices: shuffle([q.answer, ...q.options.filter((o) => o && o !== q.answer).slice(0, 3)]),
+        choices: q.kind === "judge" ? [NATURAL, ODD] : shuffle([q.answer, ...q.options.filter((o) => o && o !== q.answer).slice(0, 3)]),
         pool: tiles ? shuffle([...tiles, ...q.options.filter((o) => o && !tiles.includes(o)).slice(0, 2)]) : [],
       };
     })
     .filter((q): q is Q => q !== null);
+  // One 连连看 a little way in, when there are enough short items to pair up.
+  const short = shuffle(items.filter((x) => x.ja.length <= 10 && x.zh.length <= 14)).slice(0, 5);
+  if (short.length >= 3) {
+    const match: Q = {
+      kind: "match",
+      about: "",
+      ja: "",
+      zh: "",
+      answer: "",
+      options: [],
+      tiles: [],
+      explain_zh: "",
+      choices: [],
+      pool: [],
+      pairs: short.map((x) => ({ ja: x.ja, zh: x.zh })),
+    };
+    qs.splice(Math.min(3, qs.length), 0, match);
+  }
+  return qs;
 }
 
-const PROMPT: Record<Q["kind"], string> = {
+const PROMPT: Record<Kind, string> = {
   meaning: "这句是什么意思？",
   listen: "听一听，是什么意思？",
+  reading: "怎么读？",
   pick: "用日语怎么说？",
+  judge: "这句日语说得自然吗？",
   fill: "空里填什么？",
   order: "排成日语句子",
+  dictate: "听写：把听到的排出来",
   say: "用日语说出来",
+  match: "连连看：日语和意思配对",
 };
+
+// Each finished set is kept so it can be practised again (再练这一套), one per episode and one for 練習.
+type SavedSet = { items: SkillItem[]; data: GameData };
+const SET_KEY = (id: string) => `nihongo-speak:game:${id}`;
+function saveSet(id: string, set: SavedSet) {
+  try {
+    localStorage.setItem(SET_KEY(id), JSON.stringify(set));
+  } catch {}
+}
+function savedSet(id: string): SavedSet | null {
+  try {
+    return JSON.parse(localStorage.getItem(SET_KEY(id)) ?? "null");
+  } catch {
+    return null;
+  }
+}
+export const hasSavedSet = (id: string) => savedSet(id) !== null;
+
+// The stamp at the end, by how much was right the first time.
+const STAMP = (rate: number) => (rate === 1 ? "満点" : rate >= 0.8 ? "合格" : rate >= 0.5 ? "まあまあ" : "もう一回");
 
 type Result = { q: Q; ok: boolean };
 
@@ -112,7 +171,15 @@ export default function Game({ id }: { id: string }) {
   const daily = id === "today";
   const ep = hydrated && !daily ? findEpisode(p, id) : undefined;
   const items = useRef<SkillItem[]>([]);
+  const set = useRef<GameData | null>(null);
   const saved = useRef(-1);
+  // replay: this round is the set from last time again.
+  const [replay, setReplay] = useState(false);
+  const [combo, setCombo] = useState(0);
+  const [best, setBest] = useState(0);
+  const [cheer, setCheer] = useState<{ n: number; key: number } | null>(null);
+  const [startedAt, setStartedAt] = useState(0);
+  const [endedAt, setEndedAt] = useState(0);
   const [queue, setQueue] = useState<Q[] | null>(null);
   const [total, setTotal] = useState(0);
   const [results, setResults] = useState<Result[]>([]);
@@ -126,29 +193,57 @@ export default function Game({ id }: { id: string }) {
     setQueue(null);
     setResults([]);
     setError("");
+    setCombo(0);
+    setBest(0);
+    setCheer(null);
+    // Opened with ?again (from the episode page), or 再练这一套: the last set, shuffled anew.
+    const again = replay || (round === 0 && new URLSearchParams(location.search).has("again"));
+    const old = again ? savedSet(id) : null;
+    const start = (qs: Q[]) => {
+      setQueue(qs);
+      setTotal(qs.length);
+      setStartedAt(Date.now());
+      preload(qs.map((q) => ttsUrl(spoken(q), VOICE)).concat(qs.flatMap((q) => (q.pairs ?? []).map((x) => ttsUrl(x.ja, VOICE)))));
+    };
+    if (old) {
+      setReplay(true);
+      items.current = old.items;
+      set.current = old.data;
+      return start(prepare(old.data, old.items));
+    }
     items.current = roundItems(p, ep ?? null);
     if (!items.current.length) return setQueue([]);
     load(items.current, p, ep?.title_zh)
-      .then((qs) => {
-        setQueue(qs);
-        setTotal(qs.length);
-        preload(qs.map((q) => ttsUrl(spoken(q), VOICE)));
+      .then((data) => {
+        set.current = data;
+        const qs = prepare(data, items.current);
+        if (!qs.length) throw new Error("这次没出好题，再试一次");
+        start(qs);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "AI 出错了"));
-  }, [hydrated, daily, ep, p, round]);
+  }, [hydrated, daily, ep, p, round, replay, id]);
 
   // Reschedule every item once the round is over, by how it went the first time through.
   useEffect(() => {
     if (!queue || queue.length || !total || saved.current === round) return;
     saved.current = round;
+    setEndedAt(Date.now());
+    if (set.current) saveSet(id, { items: items.current, data: set.current });
     const byKey = new Map(items.current.map((x) => [skillKey(x.ja), x]));
     recordSkills(
       results
         .slice(0, total)
         .map((r) => ({ item: byKey.get(skillKey(r.q.about))!, ok: r.ok }))
         .filter((r) => r.item),
+      replay,
     );
-  }, [queue, total, results, round]);
+    const rate = results.slice(0, total).filter((r) => r.ok).length / total;
+    setTimeout(() => sfx("stamp"), 350);
+    setTimeout(() => {
+      sfx("win");
+      if (rate >= 0.5) confetti(rate === 1 ? 120 : 60);
+    }, 650);
+  }, [queue, total, results, round, replay, id]);
 
   if (!hydrated) return <main className="page" />;
   if (!daily && !ep) {
@@ -207,14 +302,28 @@ export default function Game({ id }: { id: string }) {
   }
   if (!queue.length) {
     const right = firstTry.filter((r) => r.ok).length;
-    const missed = [...new Map(firstTry.filter((r) => !r.ok).map((r) => [r.q.about, r.q])).values()];
+    const missed = [...new Map(firstTry.filter((r) => !r.ok && r.q.about).map((r) => [r.q.about, r.q])).values()];
+    const secs = Math.max(1, Math.round((endedAt - startedAt) / 1000));
     return (
       <main className="page">
         {back}
-        <h1 className="ep-head">练完了</h1>
-        <p className="game-score">
-          一次答对 <b>{right}</b> / {total}
-        </p>
+        <div className="game-end">
+          <div className={`hanko ${right === total ? "full" : ""}`}>{STAMP(right / total)}</div>
+          <div className="game-stats">
+            <div>
+              <b>{Math.round((right / total) * 100)}%</b>
+              <span>一次答对</span>
+            </div>
+            <div>
+              <b>{best}</b>
+              <span>最高连对</span>
+            </div>
+            <div>
+              <b>{secs >= 60 ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}` : `${secs}秒`}</b>
+              <span>用时</span>
+            </div>
+          </div>
+        </div>
         {missed.length > 0 && (
           <>
             <p className="note-head">这些明天会再练，也可以收藏进复习卡片：</p>
@@ -229,8 +338,11 @@ export default function Game({ id }: { id: string }) {
             ))}
           </>
         )}
-        <button className="btn primary game-next" onClick={() => setRound((r) => r + 1)}>
-          再来一轮
+        <button className="btn primary game-next" onClick={() => (setReplay(false), setRound((r) => r + 1))}>
+          换一套新题
+        </button>
+        <button className="btn game-again" onClick={() => (setReplay(true), setRound((r) => r + 1))}>
+          再练这一套
         </button>
       </main>
     );
@@ -241,14 +353,35 @@ export default function Game({ id }: { id: string }) {
     <main className="page game">
       <div className="game-top">
         {back}
-        <div className="game-bar">
+        <div className={`game-bar ${combo >= 3 ? "hot" : ""}`}>
           <div style={{ width: `${(Math.min(done, total) / total) * 100}%` }} />
         </div>
+        <span className={`game-combo ${combo >= 2 ? "on" : ""}`} key={combo}>
+          {combo >= 2 ? `${combo} 连对` : ""}
+        </span>
       </div>
+      {cheer && (
+        <div className="game-cheer" key={cheer.key}>
+          {cheer.n} 连对！
+        </div>
+      )}
       <Question
         key={`${round}-${done}`}
         q={q}
         again={done >= total}
+        onAnswer={(ok) => {
+          if (!ok) return setCombo(0);
+          const n = combo + 1;
+          setCombo(n);
+          setBest((b) => Math.max(b, n));
+          if ([3, 5, 8, 12, 16].includes(n)) {
+            setTimeout(() => sfx("combo"), 450);
+            const key = Date.now();
+            setCheer({ n, key });
+            setTimeout(() => setCheer((c) => (c?.key === key ? null : c)), 1400);
+            confetti(30);
+          }
+        }}
         onDone={(ok) => {
           setResults((r) => [...r, { q, ok }]);
           // A miss comes back once, after everything else.
@@ -299,10 +432,7 @@ async function load(items: SkillItem[], p: Progress, topic?: string) {
   const body = request(items, p, topic);
   const ready = early.get(body);
   early.delete(body);
-  const data = await (ready?.catch(() => fetchGame(body)) ?? fetchGame(body));
-  const qs = prepare(data);
-  if (!qs.length) throw new Error("这次没出好题，再试一次");
-  return qs;
+  return ready?.catch(() => fetchGame(body)) ?? fetchGame(body);
 }
 
 function say(ja: string) {
@@ -310,7 +440,7 @@ function say(ja: string) {
   play(ttsUrl(ja, VOICE)).catch(() => {});
 }
 
-function Question({ q, again, onDone }: { q: Q; again: boolean; onDone: (ok: boolean) => void }) {
+function Question({ q, again, onAnswer, onDone }: { q: Q; again: boolean; onAnswer: (ok: boolean) => void; onDone: (ok: boolean) => void }) {
   const [chosen, setChosen] = useState<string | null>(null);
   const [built, setBuilt] = useState<number[]>([]);
   const [heard, setHeard] = useState<string | null>(null);
@@ -320,16 +450,22 @@ function Question({ q, again, onDone }: { q: Q; again: boolean; onDone: (ok: boo
 
   // Questions you hear start by playing.
   useEffect(() => {
-    if (q.kind === "listen" || q.kind === "meaning") say(q.ja);
+    if (HEARD.includes(q.kind) && q.kind !== "reading") say(q.ja);
   }, [q]);
 
-  const choice = ["meaning", "listen", "pick", "fill"].includes(q.kind);
-  const answerText = q.kind === "order" ? built.map((i) => q.pool[i]).join("") : "";
+  const choice = CHOICE.includes(q.kind) || q.kind === "judge";
+  const answerText = TILES.includes(q.kind) ? built.map((i) => q.pool[i]).join("") : "";
+
+  function decide(ok: boolean, sayAfter = true) {
+    setVerdict(ok);
+    sfx(ok ? "right" : "wrong");
+    if (!ok) navigator.vibrate?.(120);
+    onAnswer(ok);
+    if (sayAfter) setTimeout(() => say(spoken(q)), 550);
+  }
 
   function check() {
-    const ok = choice ? chosen === q.answer : bare(answerText) === bare(q.answer);
-    setVerdict(ok);
-    say(spoken(q));
+    decide(choice ? chosen === q.answer : bare(answerText) === bare(q.answer));
   }
 
   async function onRecorded(wav: Blob) {
@@ -340,9 +476,7 @@ function Question({ q, again, onDone }: { q: Q; again: boolean; onDone: (ok: boo
       recordSpeech(wavSeconds(wav));
       setHeard(text || "");
       if (!text) return setError("没听清，再说一次");
-      const ok = closeness(text, q.answer) >= 0.7;
-      setVerdict(ok);
-      say(q.answer);
+      decide(closeness(text, q.answer) >= 0.7);
     } catch (e) {
       setError(e instanceof Error ? e.message : "识别失败");
     } finally {
@@ -350,64 +484,83 @@ function Question({ q, again, onDone }: { q: Q; again: boolean; onDone: (ok: boo
     }
   }
 
+  const tap = () => {
+    setAudioSession("playback");
+    sfx("tap");
+  };
   const fillParts = q.kind === "fill" ? q.ja.split(/＿+|_+/) : [];
 
   return (
-    <>
-      <div className="kicker game-kind">{again ? "再来一次 · " : ""}{PROMPT[q.kind]}</div>
-      <div className="game-q">
-        {q.kind === "listen" ? (
-          <button className="game-ear" onClick={() => say(q.ja)} aria-label="再听一遍">
-            ▶
-          </button>
-        ) : q.kind === "meaning" ? (
-          <div className="ja game-big" onClick={() => say(q.ja)}>
-            {q.ja}
-          </div>
-        ) : q.kind === "fill" ? (
-          <>
-            <div className="ja game-big">
-              {fillParts[0]}
-              <span className={`game-blank ${chosen ? "on" : ""}`}>{chosen ?? "　　"}</span>
-              {fillParts.slice(1).join("")}
-            </div>
-            <div className="zh">{q.zh}</div>
-          </>
-        ) : (
-          <div className="game-big">{q.zh}</div>
-        )}
+    <div className={`game-card ${verdict === false ? "shake" : ""}`}>
+      <div className="kicker game-kind">
+        {again ? "再来一次 · " : ""}
+        {PROMPT[q.kind]}
       </div>
+      {verdict !== null && <div className={`game-mark ${verdict ? "ok" : "no"}`}>{verdict ? "◯" : "✕"}</div>}
+
+      {q.kind === "match" ? (
+        <Match pairs={q.pairs!} onDone={(ok) => decide(ok, false)} />
+      ) : (
+        <div className="game-q">
+          {q.kind === "listen" || q.kind === "dictate" ? (
+            <button className="game-ear" onClick={() => say(q.ja)} aria-label="再听一遍">
+              ▶
+            </button>
+          ) : q.kind === "meaning" || q.kind === "judge" ? (
+            <>
+              <div className="ja game-big" onClick={() => say(q.ja)}>
+                {q.ja}
+              </div>
+              {q.kind === "judge" && verdict !== null && <div className="zh">{q.zh}</div>}
+            </>
+          ) : q.kind === "reading" ? (
+            <div className="ja game-huge">{q.ja}</div>
+          ) : q.kind === "fill" ? (
+            <>
+              <div className="ja game-big">
+                {fillParts[0]}
+                <span className={`game-blank ${chosen ? "on" : ""}`}>{chosen ?? "\u3000\u3000"}</span>
+                {fillParts.slice(1).join("")}
+              </div>
+              <div className="zh">{q.zh}</div>
+            </>
+          ) : (
+            <div className="game-big">{q.zh}</div>
+          )}
+        </div>
+      )}
 
       {choice && (
-        <div className="game-choices">
+        <div className={`game-choices ${q.kind === "judge" ? "two" : ""}`}>
           {q.choices.map((c) => (
             <button
               key={c}
               disabled={verdict !== null}
               className={`game-choice ${chosen === c ? "sel" : ""} ${verdict !== null && c === q.answer ? "right" : ""} ${verdict === false && chosen === c ? "wrong" : ""}`}
               onClick={() => {
+                tap();
                 setChosen(c);
                 if (q.kind === "pick") say(c);
               }}
             >
-              {c}
+              {q.kind === "judge" ? (c === NATURAL ? "◯ 自然" : "✕ 不自然") : c}
             </button>
           ))}
         </div>
       )}
 
-      {q.kind === "order" && (
+      {TILES.includes(q.kind) && (
         <>
           <div className="game-line">
             {built.map((i, n) => (
-              <button key={n} className="tile" disabled={verdict !== null} onClick={() => setBuilt(built.filter((_, k) => k !== n))}>
+              <button key={n} className="tile pop" disabled={verdict !== null} onClick={() => (tap(), setBuilt(built.filter((_, k) => k !== n)))}>
                 {q.pool[i]}
               </button>
             ))}
           </div>
           <div className="game-pool">
             {q.pool.map((t, i) => (
-              <button key={i} className="tile" disabled={verdict !== null || built.includes(i)} onClick={() => setBuilt([...built, i])}>
+              <button key={i} className="tile" disabled={verdict !== null || built.includes(i)} onClick={() => (tap(), setBuilt([...built, i]))}>
                 {t}
               </button>
             ))}
@@ -419,32 +572,99 @@ function Question({ q, again, onDone }: { q: Q; again: boolean; onDone: (ok: boo
         <div className="game-say">
           {heard !== null && heard && <p className="muted">听到：{heard}</p>}
           <HoldButton label={busy ? "识别中…" : "点一下说话"} disabled={busy} onRecorded={onRecorded} onError={setError} />
-          <button className="small ghost" onClick={() => (setVerdict(false), say(q.answer))}>
+          <button className="small ghost" onClick={() => decide(false)}>
             不会，看答案
           </button>
         </div>
       )}
       {error && <p className="error">{error}</p>}
 
-      {verdict !== null ? (
-        <div className={`game-verdict ${verdict ? "ok" : "no"}`}>
-          <b>{verdict ? "答对了" : "正确答案"}</b>
-          <div className="ja" onClick={() => say(spoken(q))}>
-            {q.kind === "meaning" || q.kind === "listen" ? `${q.ja} = ${q.answer}` : spoken(q)}
-          </div>
+      {verdict === null && q.kind !== "say" && q.kind !== "match" && (
+        <button className="btn primary game-next" disabled={choice ? !chosen : !built.length} onClick={check}>
+          检查
+        </button>
+      )}
+
+      {verdict !== null && (
+        <div className={`game-sheet ${verdict ? "ok" : "no"}`}>
+          <b>{verdict ? PRAISE[Math.floor(Math.random() * PRAISE.length)] : "正确答案"}</b>
+          {q.kind !== "match" && (
+            <div className="ja" onClick={() => say(spoken(q))}>
+              {q.kind === "meaning" || q.kind === "listen" ? `${q.ja} = ${q.answer}` : q.kind === "reading" ? `${q.ja}（${q.answer}）` : spoken(q)}
+            </div>
+          )}
           {q.kind === "say" && heard && !verdict && <div className="muted">你说的：{heard}</div>}
-          <p>{q.explain_zh}</p>
-          <button className={`btn ${verdict ? "primary" : ""} game-next`} onClick={() => onDone(verdict)}>
+          {q.explain_zh && <p>{q.explain_zh}</p>}
+          <button className={`btn ${verdict ? "primary" : "dark"} game-next`} onClick={() => onDone(verdict)}>
             继续
           </button>
         </div>
-      ) : (
-        q.kind !== "say" && (
-          <button className="btn primary game-next" disabled={choice ? !chosen : !built.length} onClick={check}>
-            检查
-          </button>
-        )
       )}
-    </>
+    </div>
+  );
+}
+
+const PRAISE = ["正解！", "すごい！", "いいね！", "完璧！", "その通り！"];
+
+// 连连看: tap a Japanese card, then its meaning. More than one wrong pair counts as a miss.
+function Match({ pairs, onDone }: { pairs: { ja: string; zh: string }[]; onDone: (ok: boolean) => void }) {
+  const [left] = useState(() => shuffle(pairs.map((p) => p.ja)));
+  const [right] = useState(() => shuffle(pairs.map((p) => p.zh)));
+  const [pick, setPick] = useState<string | null>(null);
+  const [done, setDone] = useState<string[]>([]);
+  const [bad, setBad] = useState<string[]>([]);
+  const misses = useRef(0);
+
+  function tapZh(zh: string) {
+    if (!pick) return;
+    const pair = pairs.find((p) => p.ja === pick)!;
+    if (pair.zh === zh) {
+      sfx("pair");
+      const next = [...done, pick];
+      setDone(next);
+      setPick(null);
+      if (next.length === pairs.length) setTimeout(() => onDone(misses.current <= 1), 300);
+    } else {
+      sfx("wrong");
+      misses.current++;
+      setBad([pick, zh]);
+      setTimeout(() => setBad([]), 450);
+      setPick(null);
+    }
+  }
+
+  const doneZh = done.map((ja) => pairs.find((p) => p.ja === ja)!.zh);
+  return (
+    <div className="match">
+      <div>
+        {left.map((ja) => (
+          <button
+            key={ja}
+            className={`match-card ${pick === ja ? "sel" : ""} ${done.includes(ja) ? "gone" : ""} ${bad.includes(ja) ? "bad" : ""}`}
+            disabled={done.includes(ja)}
+            onClick={() => {
+              setAudioSession("playback");
+              sfx("tap");
+              setPick(ja);
+              say(ja);
+            }}
+          >
+            {ja}
+          </button>
+        ))}
+      </div>
+      <div>
+        {right.map((zh) => (
+          <button
+            key={zh}
+            className={`match-card zh-card ${doneZh.includes(zh) ? "gone" : ""} ${bad.includes(zh) ? "bad" : ""}`}
+            disabled={doneZh.includes(zh)}
+            onClick={() => tapZh(zh)}
+          >
+            {zh}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

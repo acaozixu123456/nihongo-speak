@@ -14,18 +14,18 @@ const GameSchema = z.object({
     .array(
       z.object({
         kind: z
-          .enum(["meaning", "listen", "pick", "fill", "order", "say"])
+          .enum(["meaning", "listen", "reading", "pick", "judge", "fill", "order", "dictate", "say"])
           .describe(
-            "meaning: 日本語を見て中国語の意味を選ぶ。listen: 音声だけ聞いて中国語の意味を選ぶ。pick: 中国語を見て日本語を選ぶ。fill: 新しい場面の日本語の文の空欄（＿＿）に入るものを選ぶ。order: 中国語を見て日本語のパーツを並べる。say: 中国語を見て日本語を声に出して言う",
+            "meaning: 日本語を見て中国語の意味を選ぶ。listen: 音声だけ聞いて中国語の意味を選ぶ。pick: 中国語を見て日本語を選ぶ。fill: 新しい場面の日本語の文の空欄（＿＿）に入るものを選ぶ。order: 中国語を見て日本語のパーツを並べる。say: 中国語を見て日本語を声に出して言う。reading: 単語（漢字）を見て正しい読みを選ぶ（word の項目だけ）。judge: 項目を使った日本語の文が自然か不自然かを判断する（半分くらいは、ありがちな誤用の文にする）。dictate: 音声だけ聞いて、聞こえた文をパーツで並べる",
           ),
         about: z.string().describe("この問題で練習する項目。与えられた項目の ja をそのまま一字一句コピーする"),
-        ja: z.string().describe("meaning/listen: 出題する日本語。fill: ＿＿ を1つ含む、新しい日常・職場の場面の文。それ以外は空文字"),
-        zh: z.string().describe("pick/order/say: 出題する中国語。fill: 文全体の中国語訳。meaning/listen: 空文字"),
-        answer: z.string().describe("正解。meaning/listen は中国語、pick/fill は日本語、order/say は完成した日本語の文"),
+        ja: z.string().describe("meaning/listen/reading/judge/dictate: 出題する日本語（reading は単語そのもの、dictate は読み上げる文で answer と同じ）。fill: ＿＿ を1つ含む、新しい日常・職場の場面の文。それ以外は空文字"),
+        zh: z.string().describe("pick/order/say: 出題する中国語。fill/judge/dictate: 文の中国語訳（judge で不自然な文なら、言いたかった意味）。meaning/listen/reading: 空文字"),
+        answer: z.string().describe("正解。meaning/listen は中国語、pick/fill は日本語、order/say/dictate は完成した日本語の文、reading はひらがな、judge は「自然」か「不自然」"),
         options: z
           .array(z.string())
-          .describe("meaning/listen/pick/fill: もっともらしいが間違いの選択肢3個（正解と同じ言語・同じくらいの長さ）。order: 紛らわしい余分なパーツ1〜2個。say: 空"),
-        tiles: z.array(z.string()).describe("order のみ：answer を順番どおり3〜6個のパーツに分けたもの（つなげると answer と完全に一致）。それ以外は空"),
+          .describe("meaning/listen/pick/fill: もっともらしいが間違いの選択肢3個（正解と同じ言語・同じくらいの長さ）。reading: 長音・促音・濁点などを変えた紛らわしい読み3個。judge: 不自然な文なら [正しい言い方の日本語文] を1個、自然な文なら空。order/dictate: 紛らわしい余分なパーツ1〜2個。say: 空"),
+        tiles: z.array(z.string()).describe("order/dictate のみ：answer を順番どおり3〜6個のパーツに分けたもの（つなげると answer と完全に一致）。それ以外は空"),
         explain_zh: z.string().describe("答えたあとに見せる一言解説（中国語、1文、なぜそうなるか・使い方のコツ）"),
       }),
     )
@@ -38,9 +38,10 @@ export type GameItem = { ja: string; zh: string; kind: string; note?: string; le
 
 const SYSTEM = `${COACH}
 学習者がポッドキャストで出会った単語・重点句・文法・質問した部分を、ゲーム形式で練習して、意味を本当に理解し、自分で使えるようにします。項目ごとのレベル（0〜5）で問題形式を選ぶ：
-- レベル0〜1（初めて・まだ不安定）：meaning か listen で意味を確認し、もう1問は pick。
-- レベル2〜3：fill か order で、新しい場面の中で使わせる。
-- レベル4〜5：say（自分で言う）と listen。
+- レベル0〜1（初めて・まだ不安定）：meaning・listen・reading（単語）で意味と読みを確認し、もう1問は pick。
+- レベル2〜3：fill・order・judge・dictate のどれかで、新しい場面の中で使わせる。
+- レベル4〜5：say（自分で言う）と dictate か listen。
+全体で、できるだけ多くの種類の形式を混ぜる。
 同じ項目の2問は必ず違う形式にする（意味 → 使う、のように角度を変える）。
 - fill・order・say の文は元の文のコピーではなく、学習者の日常や職場（日本在住、IT系）で実際に使う新しい場面の短い文（N3程度）にする。
 - 間違いの選択肢は、ありがちな勘違い（似た語、似た文型、助詞違い、似た意味の中国語）にする。明らかに無関係なものは出さない。
@@ -92,7 +93,7 @@ async function batch(topic: string | undefined, items: GameItem[]): Promise<Game
 
 const BATCH = 3;
 // Easy kinds first, as in a lesson.
-const RANK = { meaning: 0, listen: 0, pick: 1, fill: 2, order: 3, say: 4 } as const;
+const RANK = { meaning: 0, listen: 0, reading: 0, pick: 1, judge: 2, fill: 2, order: 3, dictate: 3, say: 4 } as const;
 
 export async function makeGame(a: { topic?: string; items: GameItem[] }): Promise<Game> {
   const groups: GameItem[][] = [];

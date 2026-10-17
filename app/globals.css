@@ -963,6 +963,60 @@ button.entry { width: 100%; background: none; border: 0; border-bottom: 1px soli
 .game-wait .spin { border-color: var(--line); border-top-color: var(--accent); }
 .entry-count { color: var(--accent); font-size: 14px; }
 
+/* 练一练: feedback and fun */
+.page.game { padding-bottom: 300px; }
+.game-redo { display: block; text-align: center; margin-top: 10px; font-size: 13px; color: var(--muted); }
+.game-top { position: relative; }
+.game-bar.hot div { background: linear-gradient(90deg, var(--accent), #f0a33a, var(--accent)); background-size: 200% 100%; animation: shine 1.2s linear infinite; }
+@keyframes shine { to { background-position: -200% 0; } }
+.game-combo { flex: none; min-width: 52px; text-align: right; font-size: 13px; font-weight: 600; color: var(--accent); }
+.game-combo.on { animation: bump 0.35s; }
+.game-cheer { position: fixed; left: 0; right: 0; top: 34%; z-index: 30; text-align: center; font-family: var(--serif); font-size: 44px; font-weight: 700; color: var(--accent); pointer-events: none; text-shadow: 0 3px 0 var(--bg), 0 6px 18px rgba(0,0,0,0.15); animation: cheer 1.3s ease-out forwards; }
+@keyframes cheer { 0% { transform: scale(0.4); opacity: 0; } 20% { transform: scale(1.15); opacity: 1; } 35% { transform: scale(1); } 80% { opacity: 1; } 100% { transform: translateY(-40px); opacity: 0; } }
+.game-card { position: relative; }
+.game-card.shake .game-q, .game-card.shake .game-choices, .game-card.shake .game-line { animation: shake 0.4s; }
+@keyframes shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
+.game-mark { position: fixed; left: 0; right: 0; top: 26%; z-index: 25; text-align: center; font-size: 150px; line-height: 1; font-weight: 700; pointer-events: none; animation: mark 0.9s ease-out forwards; }
+.game-mark.ok { color: var(--accent); }
+.game-mark.no { color: var(--muted); }
+@keyframes mark { 0% { transform: scale(2.2) rotate(-12deg); opacity: 0; } 25% { transform: scale(1) rotate(0); opacity: 0.85; } 65% { opacity: 0.85; } 100% { transform: scale(1.1); opacity: 0; } }
+.game-huge { font-size: 46px; text-align: center; padding: 10px 0; font-family: var(--serif); }
+.game-choice { box-shadow: 0 3px 0 var(--line); transition: transform 0.08s, box-shadow 0.08s; }
+.game-choice:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 0 0 var(--line); }
+.game-choice.right { background: color-mix(in srgb, var(--good) 12%, var(--card)); animation: bump 0.35s; }
+.game-choices.two { grid-template-columns: 1fr 1fr; }
+.game-choices.two .game-choice { text-align: center; padding: 20px 10px; font-size: 18px; }
+.tile.pop { animation: bump 0.2s; }
+.game-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; padding: 18px 20px calc(env(safe-area-inset-bottom) + 18px); border-radius: 22px 22px 0 0; background: var(--card); box-shadow: 0 -8px 30px rgba(0,0,0,0.12); animation: sheet-up 0.28s cubic-bezier(.2,.9,.3,1.2); max-width: 640px; margin: 0 auto; }
+.game-sheet.ok { background: color-mix(in srgb, var(--good) 14%, var(--card)); }
+.game-sheet.no { background: color-mix(in srgb, var(--bad) 12%, var(--card)); }
+.game-sheet b { display: block; font-size: 20px; margin-bottom: 6px; }
+.game-sheet.ok b { color: var(--good); }
+.game-sheet.no b { color: var(--bad); }
+.game-sheet .ja { font-size: 17px; }
+.game-sheet p { margin: 8px 0 0; font-size: 14px; color: var(--muted); }
+.game-sheet .game-next { margin-top: 14px; }
+@keyframes sheet-up { from { transform: translateY(100%); } }
+.btn.dark { background: var(--text); border-color: var(--text); color: var(--bg); font-weight: 500; }
+.match { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
+.match > div { display: grid; gap: 10px; align-content: start; }
+.match-card { border-radius: 14px; padding: 14px 10px; font-size: 16px; min-height: 58px; box-shadow: 0 3px 0 var(--line); transition: opacity 0.3s, transform 0.15s; }
+.match-card.zh-card { font-size: 14px; }
+.match-card.sel { border-color: var(--accent); color: var(--accent); box-shadow: 0 3px 0 var(--accent); }
+.match-card.gone { opacity: 0.18; transform: scale(0.94); }
+.match-card.bad { border-color: var(--bad); animation: shake 0.4s; }
+.game-end { text-align: center; padding: 18px 0 10px; }
+.hanko { display: inline-flex; align-items: center; justify-content: center; width: 150px; height: 150px; border-radius: 50%; border: 6px solid var(--accent); color: var(--accent); font-family: var(--serif); font-size: 34px; font-weight: 700; letter-spacing: 0.04em; transform: rotate(-12deg); animation: stamp 0.5s cubic-bezier(.3,1.6,.5,1) 0.25s both; box-shadow: inset 0 0 0 3px var(--bg), inset 0 0 0 5px var(--accent); }
+.hanko.full { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+@keyframes stamp { 0% { transform: scale(3) rotate(-30deg); opacity: 0; } 60% { transform: scale(0.92) rotate(-10deg); opacity: 1; } 100% { transform: scale(1) rotate(-12deg); opacity: 1; } }
+.game-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 26px 0 8px; animation: rise 0.4s 0.7s both; }
+.game-stats b { display: block; font-size: 26px; color: var(--text); }
+.game-stats span { font-size: 12px; color: var(--muted); }
+.game-again { display: block; width: 100%; margin-top: 10px; padding: 13px; font-size: 15px; }
+.confetti { position: fixed; inset: 0; pointer-events: none; z-index: 60; overflow: hidden; }
+.confetti i { position: absolute; top: -12px; width: 8px; height: 14px; border-radius: 2px; animation: fall linear forwards; }
+@keyframes fall { to { transform: translateY(105vh) rotate(720deg); } }
+
 /* ---- 今日 ---- */
 .top-r { display: flex; align-items: center; gap: 8px; }
 .top-today {
@@ -1093,9 +1147,6 @@ button.entry { width: 100%; background: none; border: 0; border-bottom: 1px soli
 .rl-end-t { font-size: 32px; font-weight: 700; margin: 8px 0 36px; }
 .rl-again { padding: 14px 34px; border-radius: 999px; border: 0; background: var(--fg); color: var(--bgc); font-size: 16px; font-weight: 600; }
 
-.confetti { position: fixed; inset: 0; z-index: 60; pointer-events: none; overflow: hidden; }
-.confetti i { position: absolute; top: -12px; width: 8px; height: 14px; border-radius: 2px; animation: confetti-fall linear forwards; }
-@keyframes confetti-fall { to { top: 105%; transform: translateX(40px) rotate(720deg); } }
 @media (prefers-reduced-motion: reduce) {
   .rl-card, .rl-ja, .rl-stage::before, .rl-along, .rl-end { animation: none; }
 }

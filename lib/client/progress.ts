@@ -725,7 +725,8 @@ export const dueSkillCount = (p: Progress) => dueSkills(p, 999).length;
 
 // After a round: an item answered right every time moves up a level and comes back later; a miss
 // drops it a level and brings it back tomorrow.
-export function recordSkills(results: { item: SkillItem; ok: boolean }[]) {
+// replay: the same set again, which is practice but no proof of memory, so it can only bring items back sooner.
+export function recordSkills(results: { item: SkillItem; ok: boolean }[], replay = false) {
   const p = read();
   const skills = { ...p.skills };
   const byKey = new Map<string, { item: SkillItem; ok: boolean }>();
@@ -736,6 +737,7 @@ export function recordSkills(results: { item: SkillItem; ok: boolean }[]) {
   }
   for (const [k, { item, ok }] of byKey) {
     const o = skills[k];
+    if (replay && ok) continue;
     const level = o ? (ok ? Math.min(o.level + 1, SKILL_DAYS.length - 1) : Math.max(o.level - 1, 0)) : ok ? 1 : 0;
     skills[k] = {
       ...item,

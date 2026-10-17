@@ -9,7 +9,7 @@ import { findEpisode, markHeard, RADIO_VOICE, saveAsked, useProgress } from "@/l
 import { setAudioSession } from "@/lib/client/recorder";
 import { useHydrated } from "@/lib/client/hydrated";
 import Earworm from "./Earworm";
-import { prefetchGame } from "./Game";
+import { hasSavedSet, prefetchGame } from "./Game";
 import { Star } from "./FeedbackCard";
 import { shortDate } from "./ListenHome";
 import Nav from "./Nav";
@@ -339,6 +339,11 @@ export default function Episode({ id }: { id: string }) {
       <Link href={`/ep/${ep.id}/game`} className="btn game-go">
         练一练<small>{ep.asked?.length ? ` · 含你问过 AI 的 ${ep.asked.length} 处` : " · 单词、句子、语法"}</small>
       </Link>
+      {hasSavedSet(ep.id) && (
+        <Link href={`/ep/${ep.id}/game?again`} className="game-redo">
+          再练上次那套
+        </Link>
+      )}
 
       <div ref={notes}>
       <div className="seg">
