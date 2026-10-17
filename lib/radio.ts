@@ -158,9 +158,10 @@ async function withGemini(avoid: string[], wish?: string, letter?: Letter): Prom
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: SYSTEM }] },
         contents: [{ role: "user", parts: [{ text: prompt(avoid, wish, letter) }] }],
-        generationConfig: { responseMimeType: "application/json", responseJsonSchema: schema, temperature: 1 },
+        // Little thinking: the show is long, and with full thinking it sometimes ran past a minute.
+        generationConfig: { responseMimeType: "application/json", responseJsonSchema: schema, temperature: 1, thinkingConfig: { thinkingLevel: "low" } },
       }),
-      signal: AbortSignal.timeout(50000),
+      signal: AbortSignal.timeout(70000),
     },
   );
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
