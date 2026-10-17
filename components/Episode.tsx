@@ -9,6 +9,7 @@ import { findEpisode, markHeard, RADIO_VOICE, saveAsked, useProgress } from "@/l
 import { setAudioSession } from "@/lib/client/recorder";
 import { useHydrated } from "@/lib/client/hydrated";
 import Earworm from "./Earworm";
+import { prefetchGame } from "./Game";
 import { Star } from "./FeedbackCard";
 import { shortDate } from "./ListenHome";
 import Nav from "./Nav";
@@ -105,6 +106,14 @@ export default function Episode({ id }: { id: string }) {
       tab === "phrases" ? ep.phrases.map((x) => x.ja) : tab === "words" ? (ep.words ?? []).map((x) => x.ja) : (ep.grammar ?? []).map((x) => x.ja);
     preload(lines.map((ja) => ttsUrl(ja, RADIO_VOICE.A)));
   }, [ep, tab]);
+
+  // 练一练 takes a while to write, so it starts as soon as the page opens.
+  const epId = ep?.id;
+  useEffect(() => {
+    if (epId) prefetchGame(p, findEpisode(p, epId)!);
+    // Once per episode: later changes (a new 问 AI) are picked up by the round itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [epId]);
 
   // The example in an AI answer, ready for when it's tapped.
   const example = ask?.answer?.example.ja;
