@@ -39,7 +39,12 @@ export type DayStats = {
   xp?: Partial<Record<XpKind, number>>;
   moyuSec?: number; // seconds listened in 摸鱼模式
   stuck?: StuckLine[]; // sentences replayed in 摸鱼模式, to say out loud later
+  learned?: Learned[]; // what was practised this day (练一练, review, 瞬间说, shadowing), for 今日
 };
+
+// One thing practised on a day, for the 今日 recap. miss: got it wrong at least once that day.
+export type LearnedSrc = "radio" | "game" | "review" | "quick" | "scene" | "weak" | "diary" | "stuck";
+export type Learned = { ja: string; kana?: string; zh: string; src: LearnedSrc; miss?: boolean; voice?: string };
 
 export type StuckLine = { ja: string; reading?: string; zh: string; voice: string };
 

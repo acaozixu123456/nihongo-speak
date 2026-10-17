@@ -19,7 +19,7 @@ type Job = {
 };
 
 const DOING: Record<string, string> = {
-  lyrics: "正在把这一期的单词写成歌词",
+  lyrics: "正在把单词写成歌词",
   song: "正在作曲、演唱",
   draw: "正在给每句歌词画插图",
 };
@@ -48,7 +48,8 @@ async function local(url: string) {
 
 type Media = { song: string; scenes: string[] };
 
-export default function Earworm({ ep }: { ep: RadioEpisode }) {
+// kicker: the small line over the title before the singing starts.
+export default function Earworm({ ep, kicker = "趣味电台 · 洗脑歌" }: { ep: RadioEpisode; kicker?: string }) {
   const [job, setJob] = useState<Job | null | undefined>(undefined);
   const [error, setError] = useState("");
   const [media, setMedia] = useState<Media | null>(null);
@@ -131,7 +132,7 @@ export default function Earworm({ ep }: { ep: RadioEpisode }) {
       <div className="ew-card">
         <div className="ew-text">
           <div className="ew-title">洗脑歌</div>
-          <div className="muted">这一期没做成：{job.error}</div>
+          <div className="muted">没做成：{job.error}</div>
         </div>
       </div>
     );
@@ -184,6 +185,7 @@ export default function Earworm({ ep }: { ep: RadioEpisode }) {
           end={ready.end ?? 70}
           media={media}
           title={ep.title_zh}
+          kicker={kicker}
           onClose={() => {
             audio.current?.pause();
             setOpen(false);
@@ -194,9 +196,9 @@ export default function Earworm({ ep }: { ep: RadioEpisode }) {
   );
 }
 
-type StageProps = { audio: HTMLAudioElement; lines: Line[]; end: number; media: Media; title: string; onClose: () => void };
+type StageProps = { audio: HTMLAudioElement; lines: Line[]; end: number; media: Media; title: string; kicker: string; onClose: () => void };
 
-function Stage({ audio: a, lines, end, media, title, onClose }: StageProps) {
+function Stage({ audio: a, lines, end, media, title, kicker, onClose }: StageProps) {
   const [at, setAt] = useState(-1);
   const [pos, setPos] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -252,7 +254,7 @@ function Stage({ audio: a, lines, end, media, title, onClose }: StageProps) {
             </>
           ) : (
             <>
-              <div className="ew-kana">趣味电台 · 洗脑歌</div>
+              <div className="ew-kana">{kicker}</div>
               <div className="ew-name">{title}</div>
             </>
           )}

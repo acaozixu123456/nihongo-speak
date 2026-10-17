@@ -119,6 +119,12 @@ const WRITE = `あなたは日本語学習者向けの「洗脑歌」（一度�
 - 行ごとに、覚えるもの（kw）、読み、中国語の意味、映す場面を決める。
 - 場面は番組の話を面白く描いたマンガの1コマ。登場人物はハル（明るい女性）とケン（とぼけた男性）。文字や看板は描かせない。`;
 
+// The 今日 recap has no episode behind it: just what was learned that day, mistakes first.
+const DAY = `
+今回はラジオ番組ではなく、学習者が今日1日（または最近数日）で学んだもののまとめ（script は空）。
+- 話の筋は要らない。words・phrases・grammar をできるだけ多く歌詞に入れる。並びの先頭のもの（今日間違えたもの）ほど大事なので、サビで何度も繰り返す。
+- 場面は、その行の単語・文の意味がひと目でわかる面白い1コマ。ハルとケンが演じる。`;
+
 const STYLE =
   "Cute flat vector illustration, bold simple shapes, thick clean outlines, warm off-white paper background, palette of ink black, soft beige and a vivid vermilion red accent, playful and funny like a Japanese kids' educational TV show. Recurring characters: Haru, a cheerful young Japanese woman with a short bob and a red sweater; Ken, a goofy young man with messy hair and round glasses. Absolutely no text, letters or signs in the image. Vertical 9:16 composition with the main subject in the middle.";
 
@@ -135,7 +141,7 @@ async function writeLyrics(ep: Radio): Promise<Song> {
   const parts = await vertex(
     WRITER,
     {
-      systemInstruction: { parts: [{ text: WRITE }] },
+      systemInstruction: { parts: [{ text: ep.lines.length ? WRITE : WRITE + DAY }] },
       contents: [{ role: "user", parts: [{ text: JSON.stringify(brief) }] }],
       generationConfig: { responseMimeType: "application/json", responseJsonSchema: schema, temperature: 1 },
     },
