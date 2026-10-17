@@ -12,7 +12,8 @@ const text = (s: unknown, n: number): s is string => typeof s === "string" && s.
 // 三回話す: the one point to fix after the first telling, and the wrap-up after the third.
 export async function POST(request: Request) {
   const b = (await request.json()) as Body;
-  if (!text(b.topic, 200)) return NextResponse.json({ error: "缺少话题" }, { status: 400 });
+  // An episode topic is its title plus the start of its main corner (up to ~620 characters, see Retell.tsx epTopic).
+  if (!text(b.topic, 1000)) return NextResponse.json({ error: "缺少话题" }, { status: 400 });
   try {
     if (b.kind === "fix") {
       if (!text(b.said, 3000)) return NextResponse.json({ error: "没有听到内容" }, { status: 400 });
