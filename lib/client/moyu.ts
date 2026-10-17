@@ -1,7 +1,8 @@
 "use client";
 
 import type { Podcast as Episode } from "@/lib/claude";
-import type { Radio } from "@/lib/radio";
+import { useSyncExternalStore } from "react";
+import type { Making, Radio } from "@/lib/radio";
 import { listenIntro, NARRATION, ZH_VOICE } from "@/content/narration";
 import { AUDIO_CACHE, ttsUrl } from "./player";
 import {
@@ -281,23 +282,75 @@ export async function makeEpisode(p: Progress): Promise<Episode> {
 
 const RADIO_SEEN_KEY = "nihongo-speak:radio-seen";
 
+// How the episode being written is getting on, for the pages that wait on it (往期, the route bar).
+// Null when none is being written.
+export type RadioMaking = { stage: "start" } | Making;
+let making: RadioMaking | null = null;
+const makingListeners = new Set<() => void>();
+function setMaking(m: RadioMaking | null) {
+  making = m;
+  makingListeners.forEach((l) => l());
+}
+export function useRadioMaking() {
+  return useSyncExternalStore(
+    (l) => {
+      makingListeners.add(l);
+      return () => makingListeners.delete(l);
+    },
+    () => making,
+    () => null,
+  );
+}
+
+// A show is about 30-40 lines.
+export const SHOW_LINES = 35;
+export function makingText(m: RadioMaking) {
+  if (m.stage === "start") return "AI 在构思这一期";
+  if (m.stage === "write") return m.lines ? `正在写剧本：第 ${m.lines} 句` : "AI 在构思这一期";
+  if (m.stage === "retry") return "刚才那次卡住了，重新写";
+  return "换 Claude 来写，大约还要一分钟";
+}
+
 // The new episode is saved with its notes (see saveEpisode), so it can be looked back on in 听.
+// The server streams how far the script has got before the episode itself.
 export async function makeRadio(wish?: string): Promise<RadioEpisode> {
   let seen: string[] = [];
   try {
     seen = JSON.parse(localStorage.getItem(RADIO_SEEN_KEY) ?? "[]");
   } catch {}
-  const res = await fetch("/api/podcast", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ kind: "radio", avoid: seen.slice(-30), wish, letter: radioLetter() }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? "生成失败");
+  setMaking({ stage: "start" });
   try {
-    localStorage.setItem(RADIO_SEEN_KEY, JSON.stringify([...seen, data.title_zh].slice(-30)));
-  } catch {}
-  return saveEpisode(data as Radio);
+    const res = await fetch("/api/podcast", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ kind: "radio", avoid: seen.slice(-30), wish, letter: radioLetter() }),
+    });
+    if (!res.ok || !res.body) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "生成失败");
+    const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+    let pending = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      pending += value;
+      const lines = pending.split("\n");
+      pending = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const msg = JSON.parse(line) as { making?: Making; episode?: Radio; error?: string };
+        if (msg.making) setMaking(msg.making);
+        if (msg.error) throw new Error(msg.error);
+        if (msg.episode) {
+          try {
+            localStorage.setItem(RADIO_SEEN_KEY, JSON.stringify([...seen, msg.episode.title_zh].slice(-30)));
+          } catch {}
+          return saveEpisode(msg.episode);
+        }
+      }
+    }
+    throw new Error("生成中断了，请重试");
+  } finally {
+    setMaking(null);
+  }
 }
 
 // ---- Audio ----

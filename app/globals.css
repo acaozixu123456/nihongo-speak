@@ -1284,3 +1284,10 @@ body.in-route .back { display: none; }
   .radio-title { color: #f4e6d8; }
   .radio-waves i { background: #f1d5bf; }
 }
+
+/* A new 趣味电台 episode being written (往期) */
+.making { padding: 14px 2px 16px; border-top: 1px solid var(--line); }
+.making-text { font-size: 14px; color: var(--muted); margin-bottom: 10px; }
+.making .track div { transition: width 0.6s ease-out; }
+.making .track.slow div { animation: making-pulse 1.6s ease-in-out infinite; }
+@keyframes making-pulse { 50% { opacity: 0.35; } }

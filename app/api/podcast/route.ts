@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { makePodcast } from "@/lib/claude";
 import { makeRadio } from "@/lib/radio";
 
-// Gemini can take most of a minute on a whole show, and Claude then needs time of its own.
-export const maxDuration = 120;
+// Gemini can take most of a minute on a whole show, may be asked twice, and Claude then needs time of its own.
+export const maxDuration = 300;
 
 const str = (s: unknown, n: number): s is string => typeof s === "string" && s.length <= n;
 
@@ -40,7 +40,21 @@ export async function POST(request: Request) {
         l && str(l.said, 200) && str(l.better, 200) && l.said && l.better
           ? { said: l.said, better: l.better, where: str(l.where, 60) && l.where ? l.where : undefined }
           : undefined;
-      return NextResponse.json(await makeRadio(avoid, wish, letter));
+      // Streamed as lines of JSON: how far the script has got, then the episode (or the error).
+      const enc = new TextEncoder();
+      const stream = new ReadableStream({
+        async start(c) {
+          const send = (o: object) => c.enqueue(enc.encode(JSON.stringify(o) + "\n"));
+          try {
+            send({ episode: await makeRadio(avoid, wish, letter, (m) => send({ making: m })) });
+          } catch (e) {
+            console.error(e);
+            send({ error: e instanceof Error ? e.message : "生成失败" });
+          }
+          c.close();
+        },
+      });
+      return new Response(stream, { headers: { "Content-Type": "application/x-ndjson", "Cache-Control": "no-store" } });
     }
     return NextResponse.json({ error: "unknown kind" }, { status: 400 });
   } catch (e) {

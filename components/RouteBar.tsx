@@ -3,6 +3,7 @@
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { NEW_EP, NEXT, current, finished, nextHref, read, useRoute } from "@/lib/client/route";
+import { makingText, useRadioMaking } from "@/lib/client/moyu";
 
 const SEE_MS = 1800; // time to look at the result before the next stop is announced
 const COUNT = 3;
@@ -12,6 +13,7 @@ const COUNT = 3;
 // After the last stop nothing moves by itself (there may be feedback to read): one button ends the day.
 export default function RouteBar() {
   const r = useRoute();
+  const making = useRadioMaking();
   const router = useRouter();
   const here = usePathname();
   const [pending, setPending] = useState(false);
@@ -95,7 +97,7 @@ export default function RouteBar() {
           <span className="kicker">次は</span>
           <span className="display">{up.ja}</span>
           <span className="route-ring">{waiting ? <span className="spin" /> : count}</span>
-          <span className="route-meta">{waiting && up.href.startsWith(NEW_EP) ? "新しい回を作っています" : up.meta}</span>
+          <span className="route-meta">{waiting && up.href.startsWith(NEW_EP) ? (making ? makingText(making) : "新しい回を作っています") : up.meta}</span>
         </button>
       )}
     </>
