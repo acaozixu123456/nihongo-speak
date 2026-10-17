@@ -57,8 +57,8 @@ export default function Episodes() {
           </form>
         ) : null}
         {wishing && busy && making ? (
-          <div className="making">
-            <div className="making-text">{makingText(making)}</div>
+          <div className="ep-making">
+            <div className="ep-making-text">{makingText(making)}</div>
             <div className={`track making ${making.stage === "claude" ? "slow" : ""}`}>
               <div style={{ width: `${making.stage === "write" ? Math.min(95, 5 + (making.lines / SHOW_LINES) * 90) : making.stage === "start" ? 4 : 50}%` }} />
             </div>
