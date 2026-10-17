@@ -5,6 +5,24 @@ import { diaryToday, dueCards, streak, useProgress, weakList } from "@/lib/clien
 import { allTime, formatDuration } from "@/lib/client/metrics";
 import Nav from "./Nav";
 
+// "我" opens from either page's top-right button, so going back returns to whichever it was.
+function BackLink() {
+  return (
+    <a
+      href="/"
+      className="back"
+      onClick={(e) => {
+        if (history.length > 1) {
+          e.preventDefault();
+          history.back();
+        }
+      }}
+    >
+      ← 返回
+    </a>
+  );
+}
+
 // The learner's own corner: diary, weak points, saved expressions and growth.
 export default function Me() {
   const p = useProgress();
@@ -21,6 +39,7 @@ export default function Me() {
 
   return (
     <main>
+      <BackLink />
       <header className="page-mast">
         <div>
           <h1>我</h1>
