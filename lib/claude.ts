@@ -97,37 +97,43 @@ export async function hint(s: Talk, history: Turn[], wantZh?: string) {
   return res.parsed_output;
 }
 
+// After a conversation: one thing to fix next time, with the line that shows it, and one phrase to
+// keep. Not a list: the learner acts on one point, and that point goes into the weak points.
 const FeedbackSchema = z.object({
-  overall_zh: z.string().describe("全体の講評（中国語、2〜4文）。良かった点と一番直すべき点"),
-  corrections: z
-    .array(
-      z.object({
-        you_said: z.string().describe("学習者が実際に言った日本語"),
-        better: z.string().describe("その場面でより自然な言い方"),
-        why_zh: z.string().describe("なぜそう言うのか（中国語、短く）"),
-      }),
-    )
-    .describe("直す価値のある発言だけ。自然だったものは含めない"),
+  overall_zh: z.string().describe("一言の講評（中国語、1文）。まず言えた点を認める"),
+  focus_zh: z.string().describe("次に話すとき直すべき一番大事なこと、1つだけ（中国語、1〜2文）。何をどう言えばいいか具体的に"),
+  fix: z.object({
+    you_said: z.string().describe("focus_zh を一番よく表す、学習者が実際に言った日本語。該当がなければ空文字"),
+    better: z.string().describe("その場面でより自然な言い方。you_said が空なら空文字"),
+    why_zh: z.string().describe("なぜそう言うのか（中国語、短く）。空ならば空文字"),
+  }),
+  point: z.object({
+    tag: z.string().describe("focus_zh にあたる文法・表現の名前（日本語、短く）。例：「〜てもらえますか（依頼）」「敬語：いらっしゃいます」。文法・表現で言えないなら空文字"),
+    zh: z.string().describe("その文法・表現が何か（中国語、1文）。tag が空なら空文字"),
+  }),
   phrases: z
     .array(z.object({ ja: z.string(), reading: z.string(), zh: z.string() }))
-    .describe("この場面で覚えておくと役立つ表現を3〜5個"),
+    .describe("この場面で次も使える表現を1個だけ"),
+  memory_ja: z
+    .string()
+    .describe("相手が次の電話で話題にできる、学習者について分かったこと（日本語、1〜2文、学習者の予定・事情・好みなど）。特にないなら空文字"),
 });
 
-export async function feedback(s: Talk, history: Turn[]) {
+export async function feedback(s: Talk, history: Turn[], known?: string[]) {
   const transcript = history
     .map((t) => `${t.role === "user" ? "学習者" : "相手"}：${t.text}`)
     .join("\n");
   const res = await parse({
     model: MODEL,
-    max_tokens: 8000,
+    max_tokens: 4000,
     system: `あなたは日本在住の社会人向けの日本語コーチです。学習者は中国人、レベルはN4〜N3。
 場面：${s.talk.setup}
 学習者の役：${s.talk.userRole}
 
-会話の記録を見て、学習者の日本語を添削してください。
+会話の記録を見て、学習者が次に直すべきことを1つだけ選んでください。
 - 学習者の発言は音声認識の結果。認識ミスらしきものは指摘しない。
-- 文法の誤りだけでなく、敬語のレベル、日本の職場・生活での自然さ、より短く言える表現も見る。
-- 説明は中国語で、具体的に。`,
+- 一番効果が大きいもの（意味が通じなくなる誤り ＞ 敬語のレベル ＞ 不自然さ ＞ より短く言える）を1つ。他は書かない。
+- 説明は中国語で、具体的に。${knownLine(known)}`,
     messages: [{ role: "user", content: transcript }],
     output_config: { format: zodOutputFormat(FeedbackSchema) },
   });
@@ -207,13 +213,13 @@ export async function generateScenario(topic: string, category: "work" | "life",
 // ---- Speaking diary ----
 
 const DiarySchema = z.object({
-  comment_zh: z.string().describe("講評（中国語、1〜3文）。内容に一言反応してから、一番良かった点と一番直すべき点"),
+  comment_zh: z.string().describe("講評（中国語、2文）。内容に一言反応してから、一番直すべき点を1つだけ"),
   natural: z
     .array(z.object({ ja: z.string(), kana: z.string(), zh: z.string() }))
     .describe("学習者の話を、意味を変えずに自然な日本語に直したもの。1文ずつ。学習者のレベルで言える長さに"),
   corrections: z
     .array(z.object({ you_said: z.string(), better: z.string(), why_zh: z.string() }))
-    .describe("直す価値のある箇所だけ（最大5個）。認識ミスらしきものは含めない"),
+    .describe("直す価値のある箇所を大事な順に最大2個。認識ミスらしきものは含めない"),
 });
 
 export type DiaryFeedback = z.infer<typeof DiarySchema>;
@@ -245,10 +251,10 @@ const JudgeSchema = z.object({
   right_zh: z.string().describe("良かった点（中国語、短く）。なければ空文字"),
   fixes: z
     .array(z.object({ you_said: z.string(), better: z.string(), why_zh: z.string() }))
-    .describe("直すべき箇所だけ（最大3個）。音声認識の誤りらしきものは含めない。good なら空配列"),
+    .describe("直すべき箇所を一番大事なもの1個だけ。音声認識の誤りらしきものは含めない。good なら空配列"),
   others: z
     .array(z.object({ ja: z.string(), zh: z.string().describe("どんな時に使うか（中国語、短く）") }))
-    .describe("同じ意味の別の言い方を2個。丁寧さやくだけ具合が違うもの、より短いものなど"),
+    .describe("同じ意味の別の言い方を1個。丁寧さやくだけ具合が違うもの、より短いものなど"),
   points: z
     .array(
       z.object({

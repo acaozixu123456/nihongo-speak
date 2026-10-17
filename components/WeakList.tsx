@@ -40,7 +40,9 @@ export function WeakList() {
           </div>
         </>
       )}
-      {fixed > 0 && <p className="muted" style={{ textAlign: "center" }}>已经练好 {fixed} 个</p>}
+      <p className="muted" style={{ textAlign: "center" }}>
+        最常错的几个每天会混进练一练。{fixed > 0 ? `已经练好 ${fixed} 个。` : ""}
+      </p>
     </>
   );
 }

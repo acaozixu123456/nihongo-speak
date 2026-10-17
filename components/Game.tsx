@@ -12,7 +12,10 @@ import {
   RADIO_VOICE,
   recordSkills,
   recordSpeech,
+  recordWeakRound,
   skillKey,
+  WEAK_EP,
+  weakItems,
   useProgress,
   wavSeconds,
   type Progress,
@@ -144,13 +147,18 @@ type Result = { q: Q; ok: boolean };
 
 // What a round practises: an episode's own items (what was asked about first, then grammar, sentences,
 // words not yet solid) with a few older ones that are due again mixed in, or, for the daily round,
-// only what is due.
+// what is due plus the grammar the learner keeps getting wrong when speaking (the weak points), so
+// mistakes turn into tomorrow's questions by themselves.
 const EP_ITEMS = 8;
 const OLD_ITEMS = 3;
 const DAILY_ITEMS = 10;
+const WEAK_ITEMS = 3;
 function roundItems(p: Progress, ep: RadioEpisode | null): SkillItem[] {
-  if (!ep) return dueSkills(p, DAILY_ITEMS);
-  const order = { asked: 0, grammar: 1, phrase: 2, word: 3 };
+  if (!ep) {
+    const weak = weakItems(p, WEAK_ITEMS);
+    return [...weak, ...dueSkills(p, DAILY_ITEMS - weak.length)];
+  }
+  const order = { asked: 0, grammar: 1, phrase: 2, word: 3, weak: 1 };
   const own = episodeItems(ep)
     .filter((x) => (p.skills[skillKey(x.ja)]?.level ?? 0) < 4)
     .sort((a, b) => order[a.kind] - order[b.kind])
@@ -230,13 +238,16 @@ export default function Game({ id }: { id: string }) {
     setEndedAt(Date.now());
     if (set.current) saveSet(id, { items: items.current, data: set.current });
     const byKey = new Map(items.current.map((x) => [skillKey(x.ja), x]));
+    const scored = results
+      .slice(0, total)
+      .map((r) => ({ item: byKey.get(skillKey(r.q.about))!, ok: r.ok }))
+      .filter((r) => r.item);
     recordSkills(
-      results
-        .slice(0, total)
-        .map((r) => ({ item: byKey.get(skillKey(r.q.about))!, ok: r.ok }))
-        .filter((r) => r.item),
+      scored.filter((r) => r.item.kind !== "weak"),
       replay,
     );
+    // A weak point is scored per question, so one slip doesn't undo a round of right answers.
+    if (!replay) recordWeakRound(scored.filter((r) => r.item.kind === "weak").map((r) => ({ tag: r.item.ep.slice(WEAK_EP.length), ok: r.ok })));
     const rate = results.slice(0, total).filter((r) => r.ok).length / total;
     setTimeout(() => sfx("stamp"), 350);
     setTimeout(() => {
@@ -295,7 +306,7 @@ export default function Game({ id }: { id: string }) {
       <main className="page">
         {back}
         <h1 className="ep-head">今天没有要复习的</h1>
-        <p className="muted">听完一期、练一练之后，学过的内容会按记忆曲线回到这里。</p>
+        <p className="muted">听完一期、练一练之后，学过的内容会按记忆曲线回到这里；说话时常错的点也会混进来。</p>
         <Nav on="listen" />
       </main>
     );

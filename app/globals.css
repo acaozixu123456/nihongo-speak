@@ -1184,3 +1184,6 @@ button.entry { width: 100%; background: none; border: 0; border-bottom: 1px soli
 @media (prefers-reduced-motion: reduce) {
   .rl-card, .rl-ja, .rl-stage::before, .rl-stage::after, .rl-along, .rl-end, .rl-again-tag { animation: none; }
 }
+
+/* 点评: the one thing to fix next time */
+.focus-one { font-size: 17px; font-weight: 600; line-height: 1.6; margin: 6px 0 14px; }
