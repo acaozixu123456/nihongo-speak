@@ -365,6 +365,9 @@ export default function Episode({ id }: { id: string }) {
             <span>想一想</span>
             {ep.quiz_zh}
           </p>
+          <Link href={`/ep/${ep.id}/call`} className="btn call-ken">
+            打给ケン，用日语说你的答案
+          </Link>
         </>
       )}
 

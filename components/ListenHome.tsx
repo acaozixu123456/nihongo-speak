@@ -22,6 +22,9 @@ export default function ListenHome() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // 点播: the learner's own topic for the next episode, typed in a row that opens on tap.
+  const [wishing, setWishing] = useState(false);
+  const [wish, setWish] = useState("");
   const eps = hydrated ? p.episodes : [];
   const latest = eps[0];
   const minutes = Math.floor((todayStats(p).moyuSec ?? 0) / 60);
@@ -29,11 +32,11 @@ export default function ListenHome() {
   const d = new Date();
   const date = hydrated ? `${d.getMonth() + 1}月${d.getDate()}日（${WEEKDAY_JA[d.getDay()]}）${minutes ? ` · 今天听了 ${minutes} 分钟` : ""}` : "";
 
-  async function fresh() {
+  async function fresh(topic?: string) {
     setBusy(true);
     setError("");
     try {
-      const ep = await makeRadio();
+      const ep = await makeRadio(topic);
       router.push(`/ep/${ep.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "生成失败");
@@ -54,7 +57,7 @@ export default function ListenHome() {
       {unheard ? (
         <EpisodeCard ep={unheard} />
       ) : (
-        <button className="today today-btn" onClick={fresh} disabled={busy}>
+        <button className="today today-btn" onClick={() => fresh()} disabled={busy}>
           <span className="kicker">趣味电台</span>
           <span className="today-title">
             <span className="ja-serif">{latest ? "新しい回" : "はじめての回"}</span>
@@ -72,9 +75,30 @@ export default function ListenHome() {
           <span className="chev" aria-hidden>›</span>
         </Link>
         {unheard && (
-          <button className="entry" onClick={fresh} disabled={busy}>
+          <button className="entry" onClick={() => fresh()} disabled={busy}>
             <span className="entry-ja">新</span>
             <span className="entry-text">{busy ? "AI 正在写这一期…" : "生成新的一期"}</span>
+            <span className="chev" aria-hidden>›</span>
+          </button>
+        )}
+        {wishing ? (
+          <form
+            className="entry wish"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (wish.trim()) fresh(wish.trim());
+            }}
+          >
+            <span className="entry-ja">頼む</span>
+            <input autoFocus value={wish} maxLength={100} onChange={(e) => setWish(e.target.value)} placeholder="想听什么？比如：日本电车为什么这么准时" />
+            <button type="submit" className="small" disabled={busy || !wish.trim()}>
+              {busy ? "写着呢…" : "生成"}
+            </button>
+          </form>
+        ) : (
+          <button className="entry" onClick={() => setWishing(true)} disabled={busy}>
+            <span className="entry-ja">頼む</span>
+            <span className="entry-text">点播：想听什么就写什么</span>
             <span className="chev" aria-hidden>›</span>
           </button>
         )}

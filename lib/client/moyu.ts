@@ -241,7 +241,7 @@ export async function makeEpisode(p: Progress): Promise<Episode> {
 const RADIO_SEEN_KEY = "nihongo-speak:radio-seen";
 
 // The new episode is saved with its notes (see saveEpisode), so it can be looked back on in 听.
-export async function makeRadio(): Promise<RadioEpisode> {
+export async function makeRadio(wish?: string): Promise<RadioEpisode> {
   let seen: string[] = [];
   try {
     seen = JSON.parse(localStorage.getItem(RADIO_SEEN_KEY) ?? "[]");
@@ -249,7 +249,7 @@ export async function makeRadio(): Promise<RadioEpisode> {
   const res = await fetch("/api/podcast", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ kind: "radio", avoid: seen.slice(-30) }),
+    body: JSON.stringify({ kind: "radio", avoid: seen.slice(-30), wish }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? "生成失败");
