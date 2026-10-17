@@ -304,7 +304,6 @@ export default function Episode({ id }: { id: string }) {
   // Who is talking, which corner of the show this is, and how far into each corner.
   const k = ep.hitokoto;
   const who = now?.line ? (now.line.voice === RADIO_VOICE.A ? "A" : "B") : now?.sub === "ハル" ? "A" : now?.sub === "ケン" ? "B" : null;
-  const before = prep.current && at > 0 ? prep.current.clips[at - 1]?.show : null;
   const total = prep.current?.total ?? 0;
   const chapters: { part: RadioPart; at: number; to: number }[] = prep.current?.chapters.length
     ? prep.current.chapters.map((c, i, all) => ({ ...c, to: all[i + 1]?.at ?? total }))
@@ -348,15 +347,13 @@ export default function Episode({ id }: { id: string }) {
         </div>
       ) : (
         <div className="radio-now">
-          {loading ? (
+          {loading && (
             <div className="radio-prev">
               正在制作声音
               <span className="count">
                 {finished} / {made.clips.length}
               </span>
             </div>
-          ) : (
-            before && <div className="radio-prev">{before}</div>
           )}
           {speaking && !loading ? (
             <>
