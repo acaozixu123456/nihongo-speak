@@ -210,37 +210,6 @@ export async function generateScenario(topic: string, category: "work" | "life",
   return res.parsed_output;
 }
 
-// ---- Speaking diary ----
-
-const DiarySchema = z.object({
-  comment_zh: z.string().describe("講評（中国語、2文）。内容に一言反応してから、一番直すべき点を1つだけ"),
-  natural: z
-    .array(z.object({ ja: z.string(), kana: z.string(), zh: z.string() }))
-    .describe("学習者の話を、意味を変えずに自然な日本語に直したもの。1文ずつ。学習者のレベルで言える長さに"),
-  corrections: z
-    .array(z.object({ you_said: z.string(), better: z.string(), why_zh: z.string() }))
-    .describe("直す価値のある箇所を大事な順に最大2個。認識ミスらしきものは含めない"),
-});
-
-export type DiaryFeedback = z.infer<typeof DiarySchema>;
-
-export async function diaryFeedback(prompt: string, text: string) {
-  const res = await parse({
-    model: MODEL,
-    max_tokens: 8000,
-    system: `あなたは日本在住の社会人向けの日本語コーチです。学習者は中国人、レベルはN4〜N3。
-学習者が「${prompt}」というお題で、1分間日本語で話しました。下はその音声認識の結果です。
-- 認識ミスらしきものは文脈から補って、指摘しない。
-- natural は、学習者が言いたかったことを、日本人が普段話すような自然な日本語で。難しすぎる言葉は使わない。
-- 説明は中国語で、具体的に。`,
-    messages: [{ role: "user", content: text }],
-    output_config: { format: zodOutputFormat(DiarySchema) },
-  });
-  checkStop(res.stop_reason);
-  if (!res.parsed_output) throw new Error("AI 返回格式不对，请重试");
-  return res.parsed_output;
-}
-
 // ---- Judging one spoken answer (瞬间说 / 复习) ----
 
 const JudgeSchema = z.object({

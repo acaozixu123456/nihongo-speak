@@ -17,7 +17,7 @@ export default function Scenes({ tab: initial }: { tab?: BuildingId }) {
       <Link href="/me" className="back">← 我</Link>
       <header className="page-mast">
         <div>
-          <h1>场景</h1>
+          <h1>場面</h1>
           <p className="muted">每个场景三步：听 → 跟读 → 对话</p>
         </div>
       </header>

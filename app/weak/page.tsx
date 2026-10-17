@@ -6,7 +6,7 @@ export default function WeakPage() {
     <main>
       <Link href="/me" className="back">← 我</Link>
       <header className="page-mast">
-        <h1>薄弱点</h1>
+        <h1>苦手</h1>
       </header>
       <WeakList />
     </main>

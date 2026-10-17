@@ -276,7 +276,7 @@ export default function Quick({ drill }: { drill?: string }) {
     return (
       <main>
         <div className="row spread">
-          <Link href="/weak" className="back">← 薄弱点</Link>
+          <Link href="/weak" className="back">← 苦手</Link>
         </div>
         <header className="page-mast">
           <div>
