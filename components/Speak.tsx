@@ -54,16 +54,16 @@ export default function Speak() {
   const date = hydrated ? `${d.getMonth() + 1}月${d.getDate()}日（${WEEKDAY_JA[d.getDay()]}）${days > 0 ? ` · 连续 ${days} 天` : ""}` : "";
 
   const rows = [
-    { href: "/call", ja: "電話", label: "打电话" },
-    { href: "/scenes", ja: "場面", label: "场景对话" },
-    { href: "/diary", ja: "日記", label: "口语日记" },
+    { href: "/call", label: "電話" },
+    { href: "/scenes", label: "場面" },
+    { href: "/diary", label: "日記" },
   ];
 
   return (
     <main className="page">
       <Top note={date} />
       <h1 className="display">
-        話す<small>说</small>
+        話す
       </h1>
 
       <Link href={now?.href ?? "/quick"} className="today">
@@ -101,8 +101,7 @@ export default function Speak() {
       <div className="rows">
         {rows.map((r) => (
           <Link key={r.label} href={r.href} className="entry">
-            <span className="entry-ja">{r.ja}</span>
-            <span className="entry-text">{r.label}</span>
+            <span className="entry-text ja-serif">{r.label}</span>
             <span className="chev" aria-hidden>›</span>
           </Link>
         ))}

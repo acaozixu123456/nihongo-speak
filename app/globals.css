@@ -573,7 +573,6 @@ main.page { padding-top: calc(env(safe-area-inset-top) + 18px); }
   letter-spacing: 0.02em;
   margin: 26px 0 26px;
 }
-.display small { font-family: var(--sans); font-size: 14px; font-weight: 400; color: var(--muted); letter-spacing: 0.2em; margin-left: 12px; vertical-align: middle; }
 .ja-serif, .ep-title, .ep-head, .gram-pattern { font-family: var(--serif); }
 .kicker { display: block; font-size: 11px; letter-spacing: 0.18em; color: var(--muted); }
 .sec { font-size: 11px; letter-spacing: 0.18em; color: var(--muted); font-weight: 500; margin: 40px 0 6px; }
@@ -649,7 +648,6 @@ button.cta {
   font-size: 16px;
 }
 .rows > :last-child { border-bottom: 0; }
-.entry-ja { font-family: var(--serif); font-size: 15px; color: var(--accent); width: 34px; flex: none; letter-spacing: 0.04em; line-height: 1.25; }
 .entry-text { flex: 1; min-width: 0; }
 .entry-text small { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; line-height: 1.5; }
 button.entry { width: 100%; background: none; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; text-align: left; font-size: 16px; }
