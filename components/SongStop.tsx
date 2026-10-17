@@ -1,0 +1,27 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect } from "react";
+import { findEpisode, useProgress } from "@/lib/client/progress";
+import { useHydrated } from "@/lib/client/hydrated";
+import { stepDone } from "@/lib/client/route";
+import Earworm from "./Earworm";
+
+// 一休み: the break in the middle of 今日's route, the episode's 洗脑歌. Heard to the end (or closed),
+// the route moves on; an episode without a song is skipped.
+export default function SongStop({ id }: { id: string }) {
+  const p = useProgress();
+  const hydrated = useHydrated();
+  const ep = findEpisode(p, id);
+  useEffect(() => {
+    if (hydrated && !ep) stepDone();
+  }, [hydrated, ep]);
+
+  return (
+    <main className="page">
+      <Link href="/" className="back">← 今日</Link>
+      <h1 className="display">一休み</h1>
+      {ep && <Earworm ep={ep} kicker="一休み · 洗脑歌" onEnd={stepDone} />}
+    </main>
+  );
+}

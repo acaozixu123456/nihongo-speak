@@ -48,8 +48,9 @@ async function local(url: string) {
 
 type Media = { song: string; scenes: string[] };
 
-// kicker: the small line over the title before the singing starts.
-export default function Earworm({ ep, kicker = "趣味电台 · 洗脑歌" }: { ep: RadioEpisode; kicker?: string }) {
+// kicker: the small line over the title before the singing starts. onEnd: the song was heard to the
+// end or closed, or this episode can't have one (used by 今日's route to move on).
+export default function Earworm({ ep, kicker = "趣味电台 · 洗脑歌", onEnd }: { ep: RadioEpisode; kicker?: string; onEnd?: () => void }) {
   const [job, setJob] = useState<Job | null | undefined>(undefined);
   const [error, setError] = useState("");
   const [media, setMedia] = useState<Media | null>(null);
@@ -135,6 +136,13 @@ export default function Earworm({ ep, kicker = "趣味电台 · 洗脑歌" }: { 
     };
   }, [ready, ep.id]);
 
+  const gone = job === null || job?.step === "failed";
+  const end = useRef(onEnd);
+  end.current = onEnd;
+  useEffect(() => {
+    if (gone) end.current?.();
+  }, [gone]);
+
   if (job === undefined || job === null) return null;
 
   if (job.step === "failed") {
@@ -196,9 +204,16 @@ export default function Earworm({ ep, kicker = "趣味电台 · 洗脑歌" }: { 
           media={media}
           title={ep.title_zh}
           kicker={kicker}
+          onEnded={() => {
+            // On the route the next stop is announced, so the stage steps aside for it.
+            if (!onEnd) return;
+            setOpen(false);
+            onEnd();
+          }}
           onClose={() => {
             audio.current?.pause();
             setOpen(false);
+            onEnd?.();
           }}
         />
       )}
@@ -206,9 +221,11 @@ export default function Earworm({ ep, kicker = "趣味电台 · 洗脑歌" }: { 
   );
 }
 
-type StageProps = { audio: HTMLAudioElement; lines: Line[]; end: number; media: Media; title: string; kicker: string; onClose: () => void };
+type StageProps = { audio: HTMLAudioElement; lines: Line[]; end: number; media: Media; title: string; kicker: string; onEnded: () => void; onClose: () => void };
 
-function Stage({ audio: a, lines, end, media, title, kicker, onClose }: StageProps) {
+function Stage({ audio: a, lines, end, media, title, kicker, onEnded, onClose }: StageProps) {
+  const ended = useRef(onEnded);
+  ended.current = onEnded;
   const [at, setAt] = useState(-1);
   const [pos, setPos] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -216,8 +233,11 @@ function Stage({ audio: a, lines, end, media, title, kicker, onClose }: StagePro
 
   useEffect(() => {
     if (a.paused) setPaused(true);
-    const ended = () => setPaused(true);
-    a.addEventListener("ended", ended);
+    const done = () => {
+      setPaused(true);
+      ended.current();
+    };
+    a.addEventListener("ended", done);
     let raf = 0;
     const tick = () => {
       let i = -1;
@@ -229,7 +249,7 @@ function Stage({ audio: a, lines, end, media, title, kicker, onClose }: StagePro
     raf = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(raf);
-      a.removeEventListener("ended", ended);
+      a.removeEventListener("ended", done);
     };
   }, [a, lines, end]);
 
