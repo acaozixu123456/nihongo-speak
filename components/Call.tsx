@@ -42,7 +42,7 @@ export function CallList() {
             <span className="row-text">
               {c.titleZh}
               <small>
-                {c.incoming ? "来电" : "拨出"} · {c.who}
+                {c.who}
               </small>
             </span>
             <span className="chev" aria-hidden>›</span>

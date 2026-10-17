@@ -48,7 +48,7 @@ export default function ListenHome() {
     <main className="page">
       <Top note={date} />
       <h1 className="display">
-        聴く<small>听</small>
+        聴く
       </h1>
 
       {unheard ? (
@@ -67,13 +67,11 @@ export default function ListenHome() {
 
       <div className="rows">
         <Link href="/moyu" className="entry">
-          <span className="entry-ja">流す</span>
-          <span className="entry-text">一直听</span>
+          <span className="entry-text ja-serif">流す</span>
           <span className="chev" aria-hidden>›</span>
         </Link>
         {unheard && (
           <button className="entry" onClick={fresh} disabled={busy}>
-            <span className="entry-ja">新</span>
             <span className="entry-text">{busy ? "AI 正在写这一期…" : "生成新的一期"}</span>
             <span className="chev" aria-hidden>›</span>
           </button>
