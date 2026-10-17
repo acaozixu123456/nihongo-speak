@@ -756,3 +756,34 @@ button.cta {
 .sheet-ex .ja { font-size: 16px; }
 @keyframes rise { from { transform: translateY(40px); opacity: 0; } }
 @keyframes fade { from { opacity: 0; } }
+
+/* Making an episode's audio: a filling bar, dimmed lines that light up as they're ready, and a
+   calm note when a line needs another try. */
+.player-state .count { margin-left: 8px; color: var(--muted); font-variant-numeric: tabular-nums; font-family: var(--sans); }
+.track.making div { transition: width 0.4s ease-out; background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--card))); }
+.sline { transition: background 0.2s, opacity 0.5s; }
+.sline.pending { opacity: 0.38; }
+.making-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 4px 0;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--soft);
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+  animation: rise 0.25s ease-out;
+}
+.making-note i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.making-note.warn-note { background: color-mix(in srgb, var(--warn) 12%, var(--card)); color: var(--text); }
+.making-note.warn-note i { background: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
+.mk { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 11px; letter-spacing: 0.04em; color: var(--muted); }
+.mk::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.mk-work { color: var(--accent); }
+.mk-work::before, .mk-slow::before, .mk-retry::before { animation: pulse 1.2s ease-in-out infinite; }
+.mk-slow, .mk-retry { color: var(--warn); }
+.mk-fallback { color: var(--muted); }
+.mk-fail { color: var(--bad); }
+@keyframes pulse { 50% { opacity: 0.25; transform: scale(0.8); } }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { Explain } from "@/lib/claude";
-import { prepare, radioClips, type Prepared } from "@/lib/client/moyu";
+import { prepare, radioClips, type Clip, type ClipState, type Prepared } from "@/lib/client/moyu";
 import { play, SILENCE, ttsUrl, unlock } from "@/lib/client/player";
 import { findEpisode, markHeard, RADIO_VOICE, useProgress } from "@/lib/client/progress";
 import { setAudioSession } from "@/lib/client/recorder";
@@ -41,6 +41,8 @@ export default function Episode({ id }: { id: string }) {
   const [tab, setTab] = useState<Tab>("script");
   const [showZh, setShowZhState] = useState(false);
   const [error, setError] = useState("");
+  // How each clip is getting on while the episode's audio is being made.
+  const [made, setMade] = useState<{ clips: Clip[]; at: ClipState[] } | null>(null);
   const notes = useRef<HTMLDivElement>(null);
   const touched = useRef(0);
   const [pick, setPick] = useState<Pick | null>(null);
@@ -137,7 +139,11 @@ export default function Episode({ id }: { id: string }) {
     setError("");
     setPhase("loading");
     try {
-      const ready = await prepare(radioClips(episode));
+      const clips = radioClips(episode);
+      setMade({ clips, at: clips.map(() => ({ at: "wait" })) });
+      const ready = await prepare(clips, (i, st) =>
+        setMade((m) => (m && m.clips === clips ? { clips, at: m.at.map((x, j) => (j === i ? st : x)) } : m)),
+      );
       prep.current = ready;
       a.src = ready.url;
       await a.play();
@@ -177,6 +183,23 @@ export default function Episode({ id }: { id: string }) {
 
   const scenarioId = `radio:${ep.id}`;
 
+  // Progress while the audio is being made, and anything worth saying about it afterwards.
+  const loading = phase === "loading" && made;
+  const finished = made?.at.filter((x) => x.at === "done" || x.at === "fail").length ?? 0;
+  const stateOf = (ja: string) => {
+    const i = made?.clips.findIndex((c) => c.show === ja) ?? -1;
+    return i >= 0 ? made!.at[i] : undefined;
+  };
+  const where = (i: number) => {
+    const c = made!.clips[i];
+    const n = ep.lines.findIndex((l) => l.ja === c.show);
+    if (n >= 0) return `第 ${n + 1} 句`;
+    return c.parts.some((p) => p.voice.startsWith("zh-")) && !c.line ? "结尾提问" : "重点句";
+  };
+  const trouble = made?.at.findIndex((x) => x.at === "retry" || x.at === "slow") ?? -1;
+  const fallbackN = made?.at.filter((x) => x.at === "done" && x.fallback).length ?? 0;
+  const failN = made?.at.filter((x) => x.at === "fail").length ?? 0;
+
   return (
     <main className="page">
       <Link href="/" className="back">← 听</Link>
@@ -192,13 +215,43 @@ export default function Episode({ id }: { id: string }) {
         </button>
         <div className="player-body">
           <div className="player-state">
-            {phase === "idle" ? "收听这一期" : phase === "loading" ? "正在准备声音…" : speaking ?? ""}
+            {phase === "idle" ? (
+              "收听这一期"
+            ) : loading ? (
+              <>
+                正在制作声音
+                <span className="count">
+                  {finished} / {made.clips.length}
+                </span>
+              </>
+            ) : (
+              speaking ?? ""
+            )}
           </div>
-          <div className="track">
-            <div style={{ width: `${pos * 100}%` }} />
+          <div className={`track ${loading ? "making" : ""}`}>
+            <div style={{ width: `${(loading ? finished / made.clips.length : pos) * 100}%` }} />
           </div>
         </div>
       </div>
+      {loading && trouble >= 0 && (
+        <p className="making-note warn-note" key={trouble}>
+          <i />
+          {made.at[trouble].at === "retry"
+            ? `${where(trouble)}第一次没做成，正在第 ${(made.at[trouble] as { n: number }).n} 次尝试`
+            : `${where(trouble)}有点慢，已经同时换一路在做`}
+        </p>
+      )}
+      {!loading && made && (fallbackN > 0 || failN > 0) && (
+        <p className="making-note">
+          <i />
+          {[
+            fallbackN > 0 && `${fallbackN} 句当时 Gemini 没响应，临时用了备用声音，下次打开会重新做`,
+            failN > 0 && `${failN} 句没做出来，已跳过`,
+          ]
+            .filter(Boolean)
+            .join("；")}
+        </p>
+      )}
       {error && <p className="error">{error}</p>}
 
       <div ref={notes}>
@@ -222,7 +275,7 @@ export default function Episode({ id }: { id: string }) {
             {ep.lines.map((l, i) => (
               <div
                 key={i}
-                className={`sline ${speaking === l.ja ? "now" : ""}`}
+                className={`sline ${speaking === l.ja ? "now" : ""} ${loading && ["wait", "work"].includes(stateOf(l.ja)?.at ?? "") ? "pending" : ""}`}
                 onClick={() => seekLine(l.ja)}
                 data-line={l.ja}
                 data-before={ep.lines[i - 1]?.ja ?? ""}
@@ -231,6 +284,7 @@ export default function Episode({ id }: { id: string }) {
                 <div>
                   <div className="ja">{l.ja}</div>
                   {showZh && <div className="zh">{l.zh}</div>}
+                  <Mark st={stateOf(l.ja)} live={!!loading} />
                 </div>
               </div>
             ))}
@@ -362,4 +416,23 @@ function AskSheet({
       </div>
     </div>
   );
+}
+
+// A line's audio status, shown while it's being made (and afterwards only if something went wrong).
+function Mark({ st, live }: { st?: ClipState; live: boolean }) {
+  if (!st) return null;
+  const label =
+    st.at === "work"
+      ? live && "制作中"
+      : st.at === "slow"
+        ? "有点慢，换一路同时在做"
+        : st.at === "retry"
+          ? `第一次没成功 · 第 ${st.n} 次尝试`
+          : st.at === "fail"
+            ? "没做出来，已跳过"
+            : st.at === "done" && st.fallback
+              ? "备用声音"
+              : null;
+  if (!label) return null;
+  return <span className={`mk mk-${st.at === "done" ? "fallback" : st.at}`}>{label}</span>;
 }

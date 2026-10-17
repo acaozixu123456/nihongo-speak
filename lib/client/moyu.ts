@@ -269,14 +269,25 @@ const MAX_CACHED = 600;
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function fetchAudio(url: string): Promise<ArrayBuffer> {
+// How one clip is getting on, for showing progress while a round is being made.
+export type ClipState =
+  | { at: "wait" }
+  | { at: "work" }
+  | { at: "slow" } // past 6s: the server has started a second try alongside the first
+  | { at: "retry"; n: number } // the request failed; trying again (n = 2 or 3)
+  | { at: "done"; fallback?: boolean } // fallback: Gemini didn't answer, Azure's voice stood in
+  | { at: "fail" };
+type Report = (s: ClipState) => void;
+
+async function fetchAudio(url: string, report: Report = () => {}): Promise<{ buf: ArrayBuffer; fallback: boolean }> {
   let cache: Cache | null = null;
   try {
     cache = await caches.open(CACHE);
     const hit = await cache.match(url);
-    if (hit) return hit.arrayBuffer();
+    if (hit) return { buf: await hit.arrayBuffer(), fallback: false };
   } catch {}
   for (let attempt = 0; ; attempt++) {
+    const slow = setTimeout(() => report({ at: "slow" }), 6000);
     try {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -284,10 +295,13 @@ async function fetchAudio(url: string): Promise<ArrayBuffer> {
       // The server marks a fallback voice no-store: ask again next time instead of keeping it.
       const keep = !res.headers.get("cache-control")?.includes("no-store");
       if (cache && keep) await cache.put(url, new Response(buf, { headers: { "Content-Type": "audio/mpeg" } })).catch(() => {});
-      return buf;
+      return { buf, fallback: res.headers.get("x-tts-engine") === "azure" };
     } catch (e) {
       if (attempt >= 2) throw e;
+      report({ at: "retry", n: attempt + 2 });
       await wait(attempt ? 6000 : 2500);
+    } finally {
+      clearTimeout(slow);
     }
   }
 }
@@ -303,10 +317,17 @@ const pause = (ms: number): Frames => {
   return { chunks: new Array(n).fill(QUIET), sec: n * QUIET_SEC };
 };
 
-async function clipAudio(parts: Part[]): Promise<Frames> {
-  const out: Frames = { chunks: [], sec: 0 };
+async function clipAudio(parts: Part[], report?: Report): Promise<Frames & { fallback: boolean }> {
+  const out = { chunks: [] as Uint8Array[], sec: 0, fallback: false };
   for (const p of parts) {
-    for (const a of [p.text ? mp3Frames(await fetchAudio(ttsUrl(p.text, p.voice))) : null, p.pauseMs ? pause(p.pauseMs) : null]) {
+    let said: Frames | null = null;
+    if (p.text) {
+      const got = await fetchAudio(ttsUrl(p.text, p.voice), report);
+      // Only the Japanese line itself counts: the Chinese narration is always Azure.
+      if (got.fallback && p.voice.startsWith("ja-")) out.fallback = true;
+      said = mp3Frames(got.buf);
+    }
+    for (const a of [said, p.pauseMs ? pause(p.pauseMs) : null]) {
       if (!a) continue;
       out.chunks.push(...a.chunks);
       out.sec += a.sec;
@@ -370,16 +391,22 @@ export function mp3Frames(buf: ArrayBuffer): Frames {
 export type Prepared = { clips: Clip[]; url: string; starts: number[]; total: number };
 
 // Fetch every clip (a few at a time), drop any that fail, and join the rest into one MP3.
-export async function prepare(clips: Clip[]): Promise<Prepared> {
+// onProgress hears how each clip (by index into clips) is getting on.
+export async function prepare(clips: Clip[], onProgress?: (i: number, s: ClipState) => void): Promise<Prepared> {
   const out: (Frames | null)[] = new Array(clips.length).fill(null);
   let next = 0;
   const worker = async () => {
     while (next < clips.length) {
       const i = next++;
+      const report = (s: ClipState) => onProgress?.(i, s);
+      report({ at: "work" });
       try {
-        out[i] = await clipAudio(clips[i].parts);
+        const a = await clipAudio(clips[i].parts, report);
+        out[i] = a;
+        report({ at: "done", fallback: a.fallback });
       } catch (e) {
         console.warn(e);
+        report({ at: "fail" });
       }
     }
   };
