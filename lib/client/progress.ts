@@ -14,6 +14,8 @@ import {
   normalize,
   streak,
   totalXp,
+  type AskedItem,
+  type Skill,
   type Card,
   type CustomScenario,
   type DayStats,
@@ -28,7 +30,7 @@ import {
 } from "@/lib/progress-model";
 
 export { dayKey, level, streak, totalXp };
-export type { Card, CustomScenario, DiaryEntry, DrillItem, Progress, RadioEpisode, StuckLine, WeakPoint };
+export type { AskedItem, Skill, Card, CustomScenario, DiaryEntry, DrillItem, Progress, RadioEpisode, StuckLine, WeakPoint };
 
 // The phone's localStorage is the working copy; it is synced to the server
 // (when storage is set up) so nothing is lost if Safari data is cleared.
@@ -592,6 +594,14 @@ export function markHeard(id: string) {
   if (p.episodes.some((e) => e.id === id && !e.heard)) write({ ...p, episodes: p.episodes.map((e) => (e.id === id ? { ...e, heard: true } : e)) });
 }
 
+export function saveAsked(id: string, item: AskedItem) {
+  const p = read();
+  write({
+    ...p,
+    episodes: p.episodes.map((e) => (e.id === id ? { ...e, asked: [...(e.asked ?? []).filter((x) => x.text !== item.text), item].slice(-20) } : e)),
+  });
+}
+
 export const findEpisode = (p: Progress, id: string) => p.episodes.find((e) => e.id === id);
 
 // ---- Custom scenarios ----
@@ -664,4 +674,59 @@ export function quests(p: Progress): Quest[] {
       detail: due > 0 ? `${due} 句待复习` : reviewed ? "完成" : "今天没有到期的",
     },
   ];
+}
+
+// ---- 练一练: what was learned from 趣味电台, on a spaced schedule ----
+
+const SKILL_DAYS = [1, 2, 4, 7, 15, 30]; // next practice after a clean session at each level
+export const skillKey = (ja: string) => ja.replace(/[\s、。，,.!！?？「」『』・〜~…]/g, "");
+
+export type SkillItem = Pick<Skill, "ja" | "zh" | "kind" | "note" | "ep">;
+
+// Everything an episode teaches, plus what was asked about on its page.
+export function episodeItems(ep: RadioEpisode): SkillItem[] {
+  return [
+    ...(ep.words ?? []).map((w) => ({ ja: w.ja, zh: w.zh, kind: "word" as const, note: w.kana, ep: ep.id })),
+    ...ep.phrases.map((x) => ({ ja: x.ja, zh: x.zh, kind: "phrase" as const, ep: ep.id })),
+    ...(ep.grammar ?? []).map((g) => ({ ja: g.pattern, zh: g.zh, kind: "grammar" as const, note: g.ja, ep: ep.id })),
+    ...(ep.asked ?? []).map((x) => ({ ja: x.text, zh: x.meaning_zh, kind: "asked" as const, ep: ep.id })),
+  ];
+}
+
+// Due items, most overdue and weakest first.
+export function dueSkills(p: Progress, n: number, skip: Set<string> = new Set()): Skill[] {
+  const today = dayKey();
+  return Object.entries(p.skills)
+    .filter(([k, s]) => s.due <= today && !skip.has(k))
+    .sort(([, a], [, b]) => (a.due === b.due ? a.level - b.level : a.due < b.due ? -1 : 1))
+    .slice(0, n)
+    .map(([, s]) => s);
+}
+
+export const dueSkillCount = (p: Progress) => dueSkills(p, 999).length;
+
+// After a round: an item answered right every time moves up a level and comes back later; a miss
+// drops it a level and brings it back tomorrow.
+export function recordSkills(results: { item: SkillItem; ok: boolean }[]) {
+  const p = read();
+  const skills = { ...p.skills };
+  const byKey = new Map<string, { item: SkillItem; ok: boolean }>();
+  for (const r of results) {
+    const k = skillKey(r.item.ja);
+    const prev = byKey.get(k);
+    byKey.set(k, { item: r.item, ok: (prev?.ok ?? true) && r.ok });
+  }
+  for (const [k, { item, ok }] of byKey) {
+    const o = skills[k];
+    const level = o ? (ok ? Math.min(o.level + 1, SKILL_DAYS.length - 1) : Math.max(o.level - 1, 0)) : ok ? 1 : 0;
+    skills[k] = {
+      ...item,
+      ...(o ? { ep: o.ep } : {}),
+      level,
+      due: addDays(dayKey(), ok ? SKILL_DAYS[o ? o.level : 0] : 1),
+      seen: (o?.seen ?? 0) + 1,
+      miss: (o?.miss ?? 0) + (ok ? 0 : 1),
+    };
+  }
+  write(gainXp({ ...p, skills }, XP.review, "review"));
 }

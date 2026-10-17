@@ -542,3 +542,52 @@ ${a.before ? `直前のセリフ：${a.before}\n` : ""}選ばれた部分を含�
 選ばれた部分：${a.pick}`,
   );
 }
+
+// 练一练: a short Duolingo-style round built from what the learner met in 趣味电台: words, key
+// sentences, grammar and whatever they asked AI about. Each item comes with its level (0–5) from the
+// spaced schedule, which decides how hard its exercises are: recognising it, then using it in new
+// sentences, then saying it. Sentences are new every round, so nothing is passed by memorising answers.
+const GameSchema = z.object({
+  questions: z
+    .array(
+      z.object({
+        kind: z
+          .enum(["meaning", "listen", "pick", "fill", "order", "say"])
+          .describe(
+            "meaning: 日本語を見て中国語の意味を選ぶ。listen: 音声だけ聞いて中国語の意味を選ぶ。pick: 中国語を見て日本語を選ぶ。fill: 新しい場面の日本語の文の空欄（＿＿）に入るものを選ぶ。order: 中国語を見て日本語のパーツを並べる。say: 中国語を見て日本語を声に出して言う",
+          ),
+        about: z.string().describe("この問題で練習する項目。与えられた項目の ja をそのまま一字一句コピーする"),
+        ja: z.string().describe("meaning/listen: 出題する日本語。fill: ＿＿ を1つ含む、新しい日常・職場の場面の文。それ以外は空文字"),
+        zh: z.string().describe("pick/order/say: 出題する中国語。fill: 文全体の中国語訳。meaning/listen: 空文字"),
+        answer: z.string().describe("正解。meaning/listen は中国語、pick/fill は日本語、order/say は完成した日本語の文"),
+        options: z
+          .array(z.string())
+          .describe("meaning/listen/pick/fill: もっともらしいが間違いの選択肢3個（正解と同じ言語・同じくらいの長さ）。order: 紛らわしい余分なパーツ1〜2個。say: 空"),
+        tiles: z.array(z.string()).describe("order のみ：answer を順番どおり3〜6個のパーツに分けたもの（つなげると answer と完全に一致）。それ以外は空"),
+        explain_zh: z.string().describe("答えたあとに見せる一言解説（中国語、1文、なぜそうなるか・使い方のコツ）"),
+      }),
+    )
+    .describe("全部で10〜14問。各項目2問ずつ（項目が多ければ1問の項目があってよい）。易しい形式から順に並べ、同じ項目が続かないように混ぜる"),
+});
+
+export type Game = z.infer<typeof GameSchema>;
+
+export type GameItem = { ja: string; zh: string; kind: string; note?: string; level: number };
+
+export function makeGame(a: { topic?: string; items: GameItem[] }) {
+  return haikuFirst(
+    GameSchema,
+    `${COACH}
+学習者がポッドキャストで出会った単語・重点句・文法・質問した部分を、ゲーム形式で練習して、意味を本当に理解し、自分で使えるようにします。項目ごとのレベル（0〜5）で問題形式を選ぶ：
+- レベル0〜1（初めて・まだ不安定）：meaning か listen で意味を確認し、もう1問は pick。
+- レベル2〜3：fill か order で、新しい場面の中で使わせる。
+- レベル4〜5：say（自分で言う）と listen。
+同じ項目の2問は必ず違う形式にする（意味 → 使う、のように角度を変える）。
+- fill・order・say の文は元の文のコピーではなく、学習者の日常や職場（日本在住、IT系）で実際に使う新しい場面の短い文（N3程度）にする。
+- 間違いの選択肢は、ありがちな勘違い（似た語、似た文型、助詞違い、似た意味の中国語）にする。明らかに無関係なものは出さない。
+- 中国語は簡体字。`,
+    `${a.topic ? `番組のテーマ：${a.topic}\n` : ""}項目：
+${a.items.map((x) => `- [${x.kind}・レベル${x.level}] ${x.ja}${x.note ? `（${x.note}）` : ""}：${x.zh}`).join("\n")}`,
+    7000,
+  );
+}

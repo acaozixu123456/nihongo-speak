@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { makeRadio } from "@/lib/client/moyu";
-import { todayStats, useProgress, type RadioEpisode } from "@/lib/client/progress";
+import { dueSkillCount, todayStats, useProgress, type RadioEpisode } from "@/lib/client/progress";
 import { useHydrated } from "@/lib/client/hydrated";
 import Nav, { Top } from "./Nav";
 
@@ -27,6 +27,7 @@ export default function ListenHome() {
   const [wish, setWish] = useState("");
   const eps = hydrated ? p.episodes : [];
   const latest = eps[0];
+  const due = hydrated ? dueSkillCount(p) : 0;
   const minutes = Math.floor((todayStats(p).moyuSec ?? 0) / 60);
 
   const d = new Date();
@@ -69,6 +70,13 @@ export default function ListenHome() {
       {error && <p className="error">{error}</p>}
 
       <div className="rows">
+        {due > 0 && (
+          <Link href="/practice" className="entry">
+            <span className="entry-text ja-serif">練習</span>
+            <span className="entry-count">{due}</span>
+            <span className="chev" aria-hidden>›</span>
+          </Link>
+        )}
         <Link href="/moyu" className="entry">
           <span className="entry-text ja-serif">流す</span>
           <span className="chev" aria-hidden>›</span>

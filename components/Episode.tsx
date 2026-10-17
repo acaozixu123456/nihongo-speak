@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Explain } from "@/lib/claude";
 import { prepare, radioClips, type Clip, type ClipState, type Prepared } from "@/lib/client/moyu";
 import { play, preload, SILENCE, ttsUrl, unlock } from "@/lib/client/player";
-import { findEpisode, markHeard, RADIO_VOICE, useProgress } from "@/lib/client/progress";
+import { findEpisode, markHeard, RADIO_VOICE, saveAsked, useProgress } from "@/lib/client/progress";
 import { setAudioSession } from "@/lib/client/recorder";
 import { useHydrated } from "@/lib/client/hydrated";
 import Earworm from "./Earworm";
@@ -178,6 +178,8 @@ export default function Episode({ id }: { id: string }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "AI 出错了");
       setAsk((a) => (a?.pick === p ? { pick: p, answer: data as Explain } : a));
+      // Kept with the episode so 练一练 can practise it.
+      saveAsked(episode.id, { text: p.text, meaning_zh: (data as Explain).meaning_zh });
     } catch (e) {
       setAsk((a) => (a?.pick === p ? { pick: p, error: e instanceof Error ? e.message : "AI 出错了" } : a));
     }
@@ -325,6 +327,9 @@ export default function Episode({ id }: { id: string }) {
         </p>
       )}
       {error && <p className="error">{error}</p>}
+      <Link href={`/ep/${ep.id}/game`} className="btn game-go">
+        练一练<small>{ep.asked?.length ? ` · 含你问过 AI 的 ${ep.asked.length} 处` : " · 单词、句子、语法"}</small>
+      </Link>
 
       <div ref={notes}>
       <div className="seg">

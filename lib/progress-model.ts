@@ -55,7 +55,9 @@ export type DiaryEntry = {
 };
 
 // One 趣味电台 episode, kept with its notes (transcript, key sentences, words, grammar) to look back on.
-export type RadioEpisode = Radio & { id: string; date: string; heard?: boolean };
+// asked: what the learner selected and asked AI about on the episode's page (newest last), for 练一练.
+export type AskedItem = { text: string; meaning_zh: string };
+export type RadioEpisode = Radio & { id: string; date: string; heard?: boolean; asked?: AskedItem[] };
 export const EPISODES_KEPT = 50;
 
 export type CustomScenario = Scenario & { createdAt: number };
@@ -82,6 +84,21 @@ export type WeakPoint = {
   drill?: DrillItem[];
 };
 
+// One thing learned from 趣味电台 (a word, key sentence, grammar point or something asked about), practised
+// in 练一练 on a spaced schedule. level 0–5 picks the exercises: recognising it first, then using it in
+// new sentences, then saying it.
+export type Skill = {
+  ja: string;
+  zh: string;
+  kind: "word" | "phrase" | "grammar" | "asked";
+  note?: string; // reading, or the example sentence for grammar
+  ep: string; // episode it came from
+  level: number;
+  due: string; // YYYY-MM-DD
+  seen: number; // sessions it was in
+  miss: number; // sessions it was missed in
+};
+
 export type Progress = {
   goal: number;
   days: Record<string, number>; // YYYY-MM-DD -> xp
@@ -94,6 +111,7 @@ export type Progress = {
   episodes: RadioEpisode[]; // newest first
   quick: Record<string, QuickStat>;
   weak: Record<string, WeakPoint>;
+  skills: Record<string, Skill>; // keyed by the Japanese without spaces or punctuation
   freezes: number; // streak protectors in hand
   frozen: string[]; // days covered by a protector
   freezeAwardDay?: string;
@@ -115,6 +133,7 @@ export const EMPTY: Progress = {
   episodes: [],
   quick: {},
   weak: {},
+  skills: {},
   freezes: 0,
   frozen: [],
   bonusDays: [],
@@ -206,6 +225,12 @@ export function merge(a: Progress, b: Progress): Progress {
     }
   }
 
+  const skills: Record<string, Skill> = { ...(a.skills ?? {}) };
+  for (const [k, v] of Object.entries(b.skills ?? {})) {
+    const o = skills[k];
+    if (!o || v.seen > o.seen || (v.seen === o.seen && v.due > o.due)) skills[k] = v;
+  }
+
   const byId = <T extends { id: string }>(x: T[], y: T[]) => [...new Map([...x, ...y].map((i) => [i.id, i])).values()];
 
   return {
@@ -218,11 +243,16 @@ export function merge(a: Progress, b: Progress): Progress {
     custom: byId(a.custom, b.custom).sort((x, y) => y.createdAt - x.createdAt),
     diary: byId(a.diary, b.diary).sort((x, y) => (x.id < y.id ? 1 : -1)),
     episodes: byId(a.episodes ?? [], b.episodes ?? [])
-      .map((e) => ({ ...e, heard: e.heard || [...(a.episodes ?? []), ...(b.episodes ?? [])].some((o) => o.id === e.id && o.heard) }))
+      .map((e) => {
+        const copies = [...(a.episodes ?? []), ...(b.episodes ?? [])].filter((o) => o.id === e.id);
+        const asked = [...new Map(copies.flatMap((o) => o.asked ?? []).map((x) => [x.text, x])).values()];
+        return { ...e, heard: e.heard || copies.some((o) => o.heard), ...(asked.length ? { asked } : {}) };
+      })
       .sort((x, y) => (x.id < y.id ? 1 : -1))
       .slice(0, EPISODES_KEPT),
     quick,
     weak,
+    skills,
     freezes: newer.freezes,
     frozen: [...new Set([...a.frozen, ...b.frozen])],
     freezeAwardDay: newer.freezeAwardDay,
