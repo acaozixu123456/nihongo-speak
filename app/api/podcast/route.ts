@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { makePodcast } from "@/lib/claude";
 import { makeRadio } from "@/lib/radio";
 
-export const maxDuration = 60;
+// Gemini can take most of a minute on a whole show, and Claude then needs time of its own.
+export const maxDuration = 120;
 
 const str = (s: unknown, n: number): s is string => typeof s === "string" && s.length <= n;
 

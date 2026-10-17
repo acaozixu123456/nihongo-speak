@@ -522,7 +522,8 @@ ${a.cards.map((c) => `- ${c.ja}（${c.zh}）`).join("\n") || "（なし）"}
 
 // 趣味电台 (lib/radio.ts) when Gemini isn't available.
 export function makeRadioWithClaude<S extends z.ZodType>(schema: S, system: string, content: string) {
-  return haikuFirst(schema, system, content, 5000);
+  // A show of 30-40 lines with notes, in JSON: 5000 tokens cut it off.
+  return haikuFirst(schema, system, content, 14000);
 }
 
 // 问 AI: the learner selected a word, phrase or line they don't get; explain just that, in context.
