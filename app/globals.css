@@ -655,8 +655,7 @@ button.entry { width: 100%; background: none; border: 0; border-bottom: 1px soli
 .ep-date { width: 54px; flex: none; white-space: nowrap; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* ---- One episode ---- */
-.ep-head { font-size: 30px; font-weight: 600; line-height: 1.35; margin: 12px 0 10px; }
-.ep-hook { color: var(--muted); font-size: 15px; line-height: 1.8; margin: 0 0 24px; }
+.ep-head { font-size: 30px; font-weight: 600; line-height: 1.35; margin: 12px 0 24px; }
 .player {
   position: sticky;
   top: calc(env(safe-area-inset-top) + 8px);
