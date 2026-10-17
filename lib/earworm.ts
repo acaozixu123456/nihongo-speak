@@ -3,6 +3,7 @@ import { BlobNotFoundError, get, put } from "@vercel/blob";
 import * as z from "zod/v4";
 import type { Radio } from "@/lib/radio";
 import { vertexAccess } from "@/lib/vertex-tts";
+import { sungKana } from "@/lib/claude";
 
 // 洗脑歌: each 趣味电台 episode's words and grammar sung as a catchy J-pop song, with a little
 // cartoon for every line. All Google models on Vertex AI, paid from the Google Cloud credit:
@@ -17,7 +18,10 @@ const WRITER = "gemini-3.8-flash";
 const SINGER = "lyria-3-pro-preview";
 const PAINTER = "gemini-3.1-flash-image";
 
-const VERSION = 2;
+// 3: sung from kana lyrics and checked by ear, since Lyria read many kanji wrong.
+const VERSION = 3;
+// A song whose check still finds wrong readings is sung again, up to this many times in all.
+const MAX_SINGS = 3;
 
 const Line = z.object({
   sing: z.string().describe("歌う歌詞1行（日本語、8〜16字）。重点の単語や文型をそのまま入れる"),
@@ -47,7 +51,7 @@ export const SongSchema = z.object({
 export type Song = z.infer<typeof SongSchema>;
 export type SongLine = z.infer<typeof Line>;
 
-type Step = "lyrics" | "song" | "draw" | "ready" | "failed";
+type Step = "lyrics" | "song" | "check" | "draw" | "ready" | "failed";
 
 export type Job = {
   step: Step;
@@ -55,6 +59,9 @@ export type Job = {
   lines?: (SongLine & { at: number })[]; // in sung order, the chorus twice
   end?: number;
   lyria?: string; // what Lyria said it sang, kept for checking the timing
+  sung?: string[]; // the lyrics Lyria was given, in kana, in the order of the song's lines (no repeat)
+  sings?: number; // times sung at this version
+  wrong?: { n: number; heard: string }[]; // lines the last check heard sung wrong
   drawn?: boolean[];
   drawTries?: number;
   failedStep?: Step;
@@ -72,6 +79,10 @@ export const view = (j: Job | null) =>
     end: j.end,
     scenes: j.song?.scenes.length,
     version: j.version ?? 1,
+    // How the pronunciation check went, to look at from outside.
+    sung: j.sung,
+    sings: j.sings,
+    wrong: j.wrong,
     error: j.error,
   };
 
@@ -186,7 +197,14 @@ export function lineTimes(text: string, planned: number[]) {
   return use.map((t) => Math.max(0, t - LEAD));
 }
 
-async function sing(id: string, song: Song) {
+// The lines written once each, in order: the chorus comes twice in the song.
+const unique = (s: Song) => [...s.intro, ...s.verse1, ...s.chorus, ...s.verse2];
+
+async function sing(id: string, song: Song, given?: string[]) {
+  // Lyria reads kanji wrong often enough (細菌, 工面, 一夜) that it only ever sees kana.
+  const once = unique(song);
+  const sung = given?.length === once.length ? given : await sungKana(once.map((l) => l.sing));
+  const kana = new Map(once.map((l, i) => [l, sung[i]]));
   let t = BAR2;
   const planned: number[] = [];
   const lyrics = sections(song)
@@ -194,7 +212,7 @@ async function sing(id: string, song: Song) {
       const timed = lines.map((l) => {
         planned.push(t);
         t += BAR2;
-        return `[${(t - BAR2).toFixed(1)}:] ${l.sing}`;
+        return `[${(t - BAR2).toFixed(1)}:] ${kana.get(l) ?? l.sing}`;
       });
       return `[${name}]\n${timed.join("\n")}`;
     })
@@ -202,7 +220,7 @@ async function sing(id: string, song: Song) {
   const end = t + BAR2;
   // Gemini's style may name its own tempo; the timing needs this one.
   const style = song.style.replace(/\d+\s*BPM/gi, "");
-  const prompt = `Create a ${end}-second super catchy, upbeat J-pop earworm song for Japanese learners, like a cheerful kids-TV / anime opening jingle. ${style}. Exactly 120 BPM, 4/4. One clear lead vocal, diction clear and slow enough that every word is easy to hear. The chorus must be extremely repetitive and hook-heavy. Instrumental intro from 0.0 to ${BAR2.toFixed(1)} seconds. Each lyric line is sung over exactly two bars (${BAR2} seconds) and starts exactly at the time written before it, with no instrumental breaks between sections. Sing in Japanese exactly these timed lyrics:\n\n${lyrics}`;
+  const prompt = `Create a ${end}-second super catchy, upbeat J-pop earworm song for Japanese learners, like a cheerful kids-TV / anime opening jingle. ${style}. Exactly 120 BPM, 4/4. One clear lead vocal, diction clear and slow enough that every word is easy to hear. The chorus must be extremely repetitive and hook-heavy. Instrumental intro from 0.0 to ${BAR2.toFixed(1)} seconds. Each lyric line is sung over exactly two bars (${BAR2} seconds) and starts exactly at the time written before it, with no instrumental breaks between sections. The lyrics are written in kana so every word is sung with its right Japanese reading: sing each syllable exactly as written. Sing in Japanese exactly these timed lyrics:\n\n${lyrics}`;
   const parts = await vertex(
     SINGER,
     { contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { responseModalities: ["AUDIO", "TEXT"] } },
@@ -215,7 +233,49 @@ async function sing(id: string, song: Song) {
   const text = parts.map((p) => p.text ?? "").join("\n");
   const at = lineTimes(text, planned);
   const duration = Number(text.match(/duration_secs:\s*([\d.]+)/)?.[1] ?? 0);
-  return { lines: flat.map((l, i) => ({ ...l, at: at[i] })), end: Math.max(duration, end), lyria: text.slice(0, 6000), version: VERSION };
+  return { lines: flat.map((l, i) => ({ ...l, at: at[i] })), end: Math.max(duration, end), lyria: text.slice(0, 6000), version: VERSION, sung };
+}
+
+const CheckSchema = z.object({
+  wrong: z
+    .array(z.object({ n: z.number().int().describe("歌詞の行番号"), heard: z.string().describe("実際に聞こえた歌い方（かな）") }))
+    .describe("読み方を間違えて歌っている行だけ。正しく歌えている行は入れない"),
+});
+
+// Listens to the song and lists the lines sung with a wrong reading (a kanji read the Chinese way, a
+// syllable left out or changed). Stretched vowels, melody and timing don't count.
+async function check(id: string, sung: string[]) {
+  const mp3 = await readFile(id, "song.mp3");
+  if (!mp3) throw new Error("找不到歌");
+  const { $schema, ...schema } = z.toJSONSchema(CheckSchema) as Record<string, unknown>;
+  void $schema;
+  const parts = await vertex(
+    WRITER,
+    {
+      systemInstruction: {
+        parts: [
+          {
+            text: `日本語の覚え歌の発音チェック係です。歌を聞いて、下の歌詞（かな）と違う読み方で歌われている行を挙げてください。
+対象：違う音で歌っている（中国語の発音になっている、音が抜けている・別の音になっている）。
+対象外：伸ばし、こぶし、メロディー、タイミング、ほんの少しのなまり。自信がない行は挙げない。`,
+          },
+        ],
+      },
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { inlineData: { mimeType: "audio/mpeg", data: mp3.toString("base64") } },
+            { text: `歌詞：
+${sung.map((l, i) => `${i + 1}. ${l}`).join("\n")}` },
+          ],
+        },
+      ],
+      generationConfig: { responseMimeType: "application/json", responseJsonSchema: schema, temperature: 0 },
+    },
+    90000,
+  );
+  return CheckSchema.parse(JSON.parse(parts.filter((p) => !p.thought && p.text).map((p) => p.text).join(""))).wrong;
 }
 
 // Draws one scene. The image model allows only a few pictures a minute on this account, so a
@@ -279,7 +339,7 @@ export async function step(id: string, ep: Radio | null): Promise<Job | null> {
     j = { step: "lyrics" };
   }
   // Songs sung before the timing was laid out get sung again, keeping the lyrics and pictures.
-  if (j.step === "ready" && (j.version ?? 1) < VERSION) j = { ...j, step: "song", drawTries: 0 };
+  if (j.step === "ready" && (j.version ?? 1) < VERSION) j = { ...j, step: "song", drawTries: 0, sings: 0, sung: undefined };
   // A job that stopped on an error gets another go when the page is opened again later.
   if (j.step === "failed" && j.failedStep && Date.now() - (j.failedAt ?? 0) > 10 * 60 * 1000) {
     j = { ...j, step: j.failedStep, error: undefined, drawTries: 0 };
@@ -291,7 +351,13 @@ export async function step(id: string, ep: Radio | null): Promise<Job | null> {
       if (!ep) throw new Error("缺少这一期的内容");
       j = { ...j, song: await writeLyrics(ep), step: "song" };
     } else if (j.step === "song") {
-      j = { ...j, ...(await sing(id, j.song!)), step: "draw" };
+      const sung = await sing(id, j.song!, j.sung);
+      j = { ...j, ...sung, sings: (j.version === VERSION ? (j.sings ?? 0) : 0) + 1, step: "check" };
+    } else if (j.step === "check") {
+      // A check that can't be done doesn't hold the song up.
+      const wrong = await check(id, j.sung ?? []).catch((e) => (console.warn("earworm: check failed", id, e), []));
+      const again = wrong.length > 0 && (j.sings ?? 1) < MAX_SINGS;
+      j = { ...j, wrong, step: again ? "song" : j.drawn?.every(Boolean) ? "ready" : "draw" };
     } else if (j.step === "draw") {
       j = await drawMissing(id, j);
     }
