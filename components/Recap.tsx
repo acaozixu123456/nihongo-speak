@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { dayKey, useProgress, type RadioEpisode } from "@/lib/client/progress";
 import { useHydrated } from "@/lib/client/hydrated";
 import { play, ttsUrl, unlock } from "@/lib/client/player";
-import { primeBeat } from "@/lib/client/beat";
+import { primeBeat, type BeatMode } from "@/lib/client/beat";
 import { recap, recapDays, reelOrder, SRC_JA, type RecapItem } from "@/lib/client/recap";
 import type { LearnedSrc } from "@/lib/progress-model";
 import Earworm from "./Earworm";
@@ -56,7 +56,7 @@ export default function Recap() {
   const today = dayKey();
   const [range, setRange] = useState<Range>("1");
   const [picked, setPicked] = useState(false);
-  const [reel, setReel] = useState(false);
+  const [reel, setReel] = useState<BeatMode | null>(null);
   const [song, setSong] = useState<SongRef | null>(null);
 
   const items = useMemo(() => (hydrated ? reelOrder(recap(p, recapDays(Number(range), today))) : []), [p, hydrated, range, today]);
@@ -89,10 +89,10 @@ export default function Recap() {
     setSong(ref);
   }
 
-  function open() {
+  function open(mode: BeatMode) {
     unlock();
     primeBeat();
-    setReel(true);
+    setReel(mode);
   }
 
   return (
@@ -136,7 +136,7 @@ export default function Recap() {
           <span className="today-go">去听</span>
         </Link>
       ) : (
-        <button className="today today-btn" onClick={open} disabled={!items.length}>
+        <button className="today today-btn" onClick={() => open("calm")} disabled={!items.length}>
           <span className="kicker">{label}学了</span>
           <span className="today-title">
             <span className="rc-n">
@@ -158,6 +158,12 @@ export default function Recap() {
 
       {items.length > 0 && (
         <div className="rows">
+          <button className="entry" onClick={() => open("wild")}>
+            <span className="entry-text ja-serif">激しく</span>
+            <span className="chev" aria-hidden>
+              ›
+            </span>
+          </button>
           {songEp ? null : (
             <button className="entry" onClick={makeSong}>
               <span className="entry-text ja-serif">歌にする</span>
@@ -181,7 +187,7 @@ export default function Recap() {
       {missed.length > 0 && <ItemList title="错过的" items={missed} />}
       {rest.length > 0 && <ItemList title={missed.length ? "其他" : "全部"} items={rest} />}
 
-      {reel && <Reel items={[...missed, ...rest]} onClose={() => setReel(false)} />}
+      {reel && <Reel items={[...missed, ...rest]} mode={reel} onClose={() => setReel(null)} />}
     </main>
   );
 }

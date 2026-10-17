@@ -1147,6 +1147,40 @@ button.entry { width: 100%; background: none; border: 0; border-bottom: 1px soli
 .rl-end-t { font-size: 32px; font-weight: 700; margin: 8px 0 36px; }
 .rl-again { padding: 14px 34px; border-radius: 999px; border: 0; background: var(--fg); color: var(--bgc); font-size: 16px; font-weight: 600; }
 
+
+/* 激しく: the card shakes on every beat, the screen flashes, a tilted 「もう一回！」 slams in. */
+.rl-stage.wild::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  pointer-events: none;
+  animation: rl-flash var(--beat) ease-out infinite;
+}
+@keyframes rl-flash { 0% { opacity: 0.16; } 30%, 100% { opacity: 0; } }
+.rl-stage.wild::before { animation-name: rl-pulse-wild; }
+@keyframes rl-pulse-wild { 0% { transform: scale(1.14) rotate(4deg); } 45% { transform: scale(1) rotate(0); } }
+.rl-stage.wild .rl-ja { animation: rl-shake var(--beat) ease-out infinite; }
+@keyframes rl-shake {
+  0% { transform: scale(1.12) rotate(-2deg); }
+  12% { transform: scale(1.04) translateX(-4px) rotate(1.5deg); }
+  24% { transform: translateX(3px); }
+  40%, 100% { transform: none; }
+}
+.rl-again-tag {
+  margin: 22px auto 0;
+  width: max-content;
+  padding: 8px 20px;
+  border-radius: 10px;
+  background: var(--hi);
+  color: var(--bgc);
+  font-family: var(--ja);
+  font-weight: 900;
+  font-size: 26px;
+  transform: rotate(-6deg);
+  animation: rl-stamp-in 0.3s cubic-bezier(0.2, 1.8, 0.4, 1) both;
+}
+@keyframes rl-stamp-in { from { transform: rotate(-6deg) scale(2.4); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .rl-card, .rl-ja, .rl-stage::before, .rl-along, .rl-end { animation: none; }
+  .rl-card, .rl-ja, .rl-stage::before, .rl-stage::after, .rl-along, .rl-end, .rl-again-tag { animation: none; }
 }

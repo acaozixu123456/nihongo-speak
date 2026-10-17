@@ -44,10 +44,13 @@ export function ttsUrl(text: string, voice: string) {
   const key = voiceKey(text, voice);
   if (VOICE_LIBRARY.has(key)) return `/voice/${key}.mp3`;
   // v=2 skips anything the browser kept from before fallback voices were marked no-store.
-  return `/api/tts?${new URLSearchParams({ text, voice, v: "2" })}`;
+  // lang=ja: text with no kana could have been read in Chinese before the server named the language,
+  // so it gets a new address instead of the copy the phone and the CDN kept.
+  const kanjiOnly = voice.startsWith("ja-JP") && !/[\u3040-\u30ff]/.test(text);
+  return `/api/tts?${new URLSearchParams({ text, voice, v: "2", ...(kanjiOnly ? { lang: "ja" } : {}) })}`;
 }
 
-// Every recording played here is also kept: in memory as a ready blob for instant replays, and in the
+// Every recording played here (made on demand, or pre-recorded under /voice) is also kept: in memory as a ready blob for instant replays, and in the
 // same Cache Storage 趣味电台 fills while it makes an episode, so a sentence heard there (or tapped
 // once) plays straight away next time, even after the app was closed.
 export const AUDIO_CACHE = "nihongo-speak-moyu-v2";
@@ -67,7 +70,7 @@ async function fetchBlob(src: string): Promise<{ blob: Blob; keep: boolean }> {
   const blob = await res.blob();
   // The server marks a fallback voice no-store: ask again next time instead of keeping it.
   const keep = !res.headers.get("cache-control")?.includes("no-store");
-  if (cache && keep && src.startsWith("/api/tts")) {
+  if (cache && keep) {
     cache.put(src, new Response(blob, { headers: { "Content-Type": "audio/mpeg" } })).catch(() => {});
   }
   return { blob, keep };
