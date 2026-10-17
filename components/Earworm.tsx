@@ -101,11 +101,14 @@ export default function Earworm({ ep }: { ep: RadioEpisode }) {
       try {
         const song = await local(file(ep.id, "song.mp3"));
         urls.push(song);
-        const scenes = await Promise.all(
-          Array.from({ length: ready.scenes! }, async (_, i) => {
+        // Only the scenes the lines use: one the painter never managed to draw isn't there.
+        const used = [...new Set(ready.lines!.map((l) => l.scene))];
+        const scenes: string[] = [];
+        await Promise.all(
+          used.map(async (i) => {
             const src = await local(file(ep.id, `i${i}.png`));
             urls.push(src);
-            return src;
+            scenes[i] = src;
           }),
         );
         if (!gone) setMedia({ song, scenes });
@@ -161,7 +164,7 @@ export default function Earworm({ ep }: { ep: RadioEpisode }) {
     <>
       <audio ref={audio} playsInline />
       <button className="ew-card ew-ready" onClick={start} disabled={!media}>
-        <span className="ew-poster" style={{ backgroundImage: `url(${file(ep.id, "i0.png")})` }}>
+        <span className="ew-poster" style={{ backgroundImage: `url(${file(ep.id, `i${ready.lines![0].scene}.png`)})` }}>
           {media ? "▶" : <span className="ew-spin" />}
         </span>
         <span className="ew-text">
