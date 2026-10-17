@@ -5,11 +5,11 @@ import { calls } from "@/content/calls";
 import { makeRadio } from "./moyu";
 import { dayKey, dueCards, dueSkillCount, weakItems, weakList, type Progress } from "./progress";
 
-// 今日のルート: one fixed line of stops for today (listen → practise → speak → call), so opening the app
+// 今日のルート: one fixed line of stops for today (listen → practise → a song to unwind → speak → call), so opening the app
 // never asks what to do. Each page calls stepDone() when its part is over; the bar on top then moves
 // on to the next stop by itself.
 
-export type StopKey = "listen" | "game" | "skills" | "review" | "quick" | "call" | "flow";
+export type StopKey = "listen" | "game" | "song" | "skills" | "review" | "quick" | "call" | "flow";
 export type Stop = { key: StopKey; ja: string; meta: string; href: string; min: number };
 export type Route = { day: string; quiet: boolean; stops: Stop[]; at: number };
 
@@ -77,7 +77,9 @@ export function plan(p: Progress, quiet: boolean): Stop[] {
   const ep = todaysEpisode(p);
   const epHref = ep ? `/ep/${ep.id}` : NEW_EP;
   const listen: Stop = { key: "listen", ja: "聴く", meta: ep ? ep.title_zh : "新しい回", href: epHref, min: 6 };
-  if (quiet) return [listen, { key: "flow", ja: "流す", meta: "心の中で", href: "/moyu", min: 10 }];
+  // The episode's 洗脑歌, as a break in the middle.
+  const song: Stop = { key: "song", ja: "一休み", meta: "洗脑歌", href: `${epHref}/song`, min: 2 };
+  if (quiet) return [listen, song, { key: "flow", ja: "流す", meta: "心の中で", href: "/moyu", min: 10 }];
 
   // 練習's daily set: what is due, plus questions made from the points missed when speaking.
   const skills = dueSkillCount(p) + weakItems(p, 3).length;
@@ -86,7 +88,7 @@ export function plan(p: Progress, quiet: boolean): Stop[] {
   // The people who remember earlier calls come first.
   const pool = calls.filter((c) => c.person);
   const call = (pool.length ? pool : calls)[day % (pool.length || calls.length)];
-  const episode: Stop[] = [listen, { key: "game", ja: "練習", meta: "今の話", href: `${epHref}/game`, min: 3 }];
+  const episode: Stop[] = [listen, { key: "game", ja: "練習", meta: "今の話", href: `${epHref}/game`, min: 3 }, song];
   const rest: Stop[] = [
     ...(skills > 0 ? [{ key: "skills" as const, ja: "復習", meta: `${Math.min(skills, 12)}個`, href: "/practice", min: 3 }] : []),
     cards > 0
@@ -139,8 +141,7 @@ export function setQuiet(p: Progress, quiet: boolean) {
   const r = read();
   if (!r || r.at === 0) return write(r ? { ...r, quiet, stops: plan(p, quiet) } : null);
   const done = r.stops.slice(0, r.at);
-  const heard = done.some((s) => s.key === "listen");
-  const next = plan(p, quiet).filter((s) => !(heard && (s.key === "listen" || s.key === "game")) && !done.some((d) => d.key === s.key));
+  const next = plan(p, quiet).filter((s) => !done.some((d) => d.key === s.key));
   write({ ...r, quiet, stops: [...done, ...next] });
 }
 
