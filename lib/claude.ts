@@ -512,8 +512,8 @@ export function explainSelection(a: { pick: string; line: string; before?: strin
   return haikuFirst(
     ExplainSchema,
     `${COACH}
-学習者は日本語のポッドキャストの文稿を読んでいて、分からない部分を選んで質問しています。質問文はありません。選ばれた部分だけを、その文脈での意味として説明してください。前置きや一般論は不要。`,
-    `番組のテーマ：${a.topic}
+学習者は日本語学習アプリの画面（ラジオの文稿、練習問題、例文、講評など）を読んでいて、分からない部分を選んで質問しています。質問文はありません。選ばれた部分だけを、その文脈での意味として説明してください。中国語の部分が選ばれたら、その日本語での言い方を中心に説明する。前置きや一般論は不要。`,
+    `画面：${a.topic}
 ${a.before ? `直前のセリフ：${a.before}\n` : ""}選ばれた部分を含む文：${a.line}
 選ばれた部分：${a.pick}`,
   );
@@ -569,4 +569,25 @@ export function retellEnd(a: { topic: string; first: string; last: string; focus
 1回目：${a.first}
 3回目：${a.last}`,
   );
+}
+
+// ---- Readings for the speech model ----
+
+// The kana reading of text written only in kanji (細菌 → さいきん), so Gemini TTS doesn't read it
+// in Chinese. Backs up Gemini's own answer in /api/tts. Null when no clean reading comes back.
+export async function kanaReading(text: string): Promise<string | null> {
+  const res = await client.messages.create(
+    {
+      model: MODEL,
+      max_tokens: 200,
+      system: "日本語の読み方をひらがなだけで答える。記号や数字も読みに直す。説明は書かない。",
+      messages: [{ role: "user", content: text }],
+    },
+    { timeout: 8000 },
+  );
+  const out = res.content
+    .map((b) => (b.type === "text" ? b.text : ""))
+    .join("")
+    .trim();
+  return /^[぀-ヿ\s、。！？・ー]+$/.test(out) ? out : null;
 }

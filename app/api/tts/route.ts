@@ -1,6 +1,7 @@
 import { synthesize } from "@/lib/azure";
 import { FLASH, FLASH_LITE, geminiConfigured, geminiVoice, synthesizeGemini } from "@/lib/gemini-tts";
 import { readingOf, synthesizeVertex, vertexConfigured } from "@/lib/vertex-tts";
+import { kanaReading } from "@/lib/claude";
 
 // "HD|fallback" voice lists as the scenarios write them; Chinese is for 摸鱼模式's narration.
 // Has kanji but no kana at all, e.g. 主食 or 確認.
@@ -47,9 +48,15 @@ export async function GET(request: Request) {
 // its own daily quota (100 on the first paid tier). Azure stays as the last fallback (no key, quota
 // used up everywhere, slow answer) and keeps the Chinese narration.
 async function speak(text: string, voice: string): Promise<{ audio: BodyInit; engine: string }> {
-  const gemini = geminiVoice(voice);
-  // Kanji with no kana would come out in Chinese: Gemini says the reading instead (Azure reads it fine).
-  const said = gemini && KANJI_ONLY.test(text) ? ((await readingOf(text).catch(() => null)) ?? text) : text;
+  // Kanji with no kana would come out in Chinese: Gemini says the reading instead. Without a
+  // reading it goes to Azure, which reads kanji in Japanese, rather than to Gemini as it is.
+  let gemini = geminiVoice(voice);
+  let said = text;
+  if (gemini && KANJI_ONLY.test(text)) {
+    const kana = await reading(text);
+    if (kana) said = kana;
+    else gemini = null;
+  }
   if (gemini && vertexConfigured()) {
     try {
       return { audio: new Uint8Array(await hedgedVertex(said, gemini)), engine: "vertex" };
@@ -81,4 +88,14 @@ async function hedgedVertex(text: string, voice: string) {
   first.catch(() => {});
   second.catch(() => {});
   return Promise.any([first, second]);
+}
+
+// Gemini's reading and Haiku's, asked together: whichever gives a clean one first. Each failed now
+// and then on its own, and one that fails used to leave the word to be read in Chinese.
+function reading(text: string): Promise<string | null> {
+  const asks = [readingOf(text), kanaReading(text)].map((p) => p.catch(() => null));
+  return new Promise((done) => {
+    let left = asks.length;
+    for (const p of asks) p.then((r) => (r ? done(r) : --left || done(null)));
+  });
 }

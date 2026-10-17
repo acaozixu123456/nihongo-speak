@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Boot from "@/components/Boot";
 import RouteBar from "@/components/RouteBar";
+import AskAi from "@/components/AskAi";
 
 export const metadata: Metadata = {
   title: "日语听说练习",
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         {children}
         <RouteBar />
+        <AskAi />
         <Boot />
       </body>
     </html>

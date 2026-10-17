@@ -72,6 +72,8 @@ export async function synthesizeVertex(text: string, voice: string, timeoutMs = 
 // Gemini TTS reads text written only in kanji (主食, 木炭) in Chinese, even when told the language
 // is Japanese; the same word in hiragana comes out right. So such text is first turned into its
 // reading with the text model. Null when it can't be.
+// Its thinking counts against maxOutputTokens: with a small cap the answer often never came, and
+// the word went to the speech model as kanji, so about half of them were still read in Chinese.
 export async function readingOf(text: string, timeoutMs = 6000): Promise<string | null> {
   const a = account();
   if (!a) return null;
@@ -84,11 +86,14 @@ export async function readingOf(text: string, timeoutMs = 6000): Promise<string 
         parts: [{ text: "日本語の読み方をひらがなだけで答える。記号や数字も読みに直す。説明は書かない。" }],
       },
       contents: [{ role: "user", parts: [{ text }] }],
-      generationConfig: { temperature: 0, maxOutputTokens: 200 },
+      generationConfig: { temperature: 0, maxOutputTokens: 2048 },
     }),
     signal: AbortSignal.timeout(timeoutMs),
   });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    console.warn(`readingOf ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    return null;
+  }
   const reply = (await res.json()) as { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[] };
   const out = (reply.candidates?.[0]?.content?.parts ?? [])
     .filter((p) => !p.thought && p.text)
@@ -96,5 +101,7 @@ export async function readingOf(text: string, timeoutMs = 6000): Promise<string 
     .join("")
     .trim();
   // Only kana (and the odd mark or space) counts as a reading.
-  return /^[぀-ヿ\s、。！？・ー]+$/.test(out) ? out : null;
+  if (/^[぀-ヿ\s、。！？・ー]+$/.test(out)) return out;
+  console.warn(`readingOf gave no reading for ${text}: ${out.slice(0, 80)}`);
+  return null;
 }
