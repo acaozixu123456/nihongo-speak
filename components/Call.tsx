@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { stepDone } from "@/lib/client/route";
 import { useEffect, useRef, useState } from "react";
 import { calls, callTalk, type Call as CallDef } from "@/content/calls";
 import type { Feedback, Turn } from "@/lib/claude";
@@ -10,7 +11,6 @@ import { transcribe } from "@/lib/client/recorder";
 import { knownTags, memories, recordFeedback, recordPoints, recordSpeech, recordTalkTurn, remember, useProgress, wavSeconds } from "@/lib/client/progress";
 import FeedbackCard from "./FeedbackCard";
 import HoldButton from "./HoldButton";
-import Nav from "./Nav";
 
 // audio: Gemini Live's own recording of the line, for 再听一遍.
 type Message = Turn & { zh?: string; audio?: string };
@@ -28,7 +28,7 @@ const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec 
 export function CallList() {
   return (
     <main>
-      <Link href="/speak" className="back">← 说</Link>
+      <Link href="/me" className="back">← 我</Link>
       <header className="page-mast">
         <div>
           <h1>打电话</h1>
@@ -49,7 +49,6 @@ export function CallList() {
           </Link>
         ))}
       </div>
-      <Nav on="speak" />
     </main>
   );
 }
@@ -182,6 +181,7 @@ export default function Call({ call }: { call: CallDef }) {
     stopLive();
     setEndedAt(Date.now());
     setPhase("ended");
+    stepDone();
     if (!said) return;
     setBusy("feedback");
     try {

@@ -23,10 +23,10 @@ import {
   type SkillItem,
 } from "@/lib/client/progress";
 import { setAudioSession, transcribe } from "@/lib/client/recorder";
+import { stepDone } from "@/lib/client/route";
 import { useHydrated } from "@/lib/client/hydrated";
 import { Star } from "./FeedbackCard";
 import HoldButton from "./HoldButton";
-import Nav from "./Nav";
 
 type AiQ = GameData["questions"][number];
 // match (连连看) is put together on the phone from the round's short items; the rest come from AI.
@@ -250,6 +250,7 @@ export default function Game({ id }: { id: string }) {
     if (!replay) recordWeakRound(scored.filter((r) => r.item.kind === "weak").map((r) => ({ tag: r.item.ep.slice(WEAK_EP.length), ok: r.ok })));
     const rate = results.slice(0, total).filter((r) => r.ok).length / total;
     setTimeout(() => sfx("stamp"), 350);
+    stepDone();
     setTimeout(() => {
       sfx("win");
       if (rate >= 0.5) confetti(rate === 1 ? 120 : 60);
@@ -260,9 +261,8 @@ export default function Game({ id }: { id: string }) {
   if (!daily && !ep) {
     return (
       <main className="page">
-        <Link href="/" className="back">← 聴く</Link>
+        <Link href="/" className="back">← 今日</Link>
         <p className="muted">找不到这一期了（只保留最近 50 期）。</p>
-        <Nav on="listen" />
       </main>
     );
   }
@@ -273,7 +273,7 @@ export default function Game({ id }: { id: string }) {
     </Link>
   ) : (
     <Link href="/" className="back">
-      ← 聴く
+      ← 今日
     </Link>
   );
   if (error) {
@@ -307,7 +307,6 @@ export default function Game({ id }: { id: string }) {
         {back}
         <h1 className="ep-head">今天没有要复习的</h1>
         <p className="muted">听完一期、练一练之后，学过的内容会按记忆曲线回到这里；说话时常错的点也会混进来。</p>
-        <Nav on="listen" />
       </main>
     );
   }

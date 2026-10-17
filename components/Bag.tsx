@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { play, ttsUrl, unlock } from "@/lib/client/player";
 import { dayKey, dueCards, findScenario, useProgress } from "@/lib/client/progress";
-import Nav from "./Nav";
 
 // How well a saved expression is known, from its review interval step.
 const RANK = ["新收藏", "熟悉", "熟练", "掌握"];
@@ -64,7 +63,6 @@ export default function Bag() {
           })}
         </div>
       )}
-      <Nav on="me" />
     </main>
   );
 }

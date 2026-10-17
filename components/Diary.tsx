@@ -17,7 +17,6 @@ import {
 } from "@/lib/client/progress";
 import { diaryMetrics } from "@/lib/client/metrics";
 import HoldButton from "./HoldButton";
-import Nav from "./Nav";
 
 const VOICE = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-NanamiNeural";
 const LIMIT = 60;
@@ -328,7 +327,6 @@ export default function Diary() {
           })}
         </>
       )}
-      <Nav on="me" />
     </main>
   );
 }
