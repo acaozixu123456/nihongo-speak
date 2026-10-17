@@ -15,7 +15,7 @@ export const shortDate = (day: string) => {
   return `${m}月${d}日`;
 };
 
-// 听: the latest 趣味电台 episode with its notes, a new one on demand, 一直听 (摸鱼模式), and the back catalogue.
+// 听: one card to press (the unheard episode, or make a new one), then 一直听 and the back catalogue as quiet rows.
 export default function ListenHome() {
   const p = useProgress();
   const hydrated = useHydrated();
@@ -41,6 +41,9 @@ export default function ListenHome() {
     }
   }
 
+  const unheard = latest && !latest.heard ? latest : null;
+  const past = unheard ? eps.slice(1) : eps;
+
   return (
     <main className="page">
       <Top note={date} />
@@ -48,43 +51,45 @@ export default function ListenHome() {
         聴く<small>听</small>
       </h1>
 
-      {latest && !latest.heard ? (
-        <EpisodeCard ep={latest} n={eps.length} />
+      {unheard ? (
+        <EpisodeCard ep={unheard} />
       ) : (
-        <div className="today">
+        <button className="today today-btn" onClick={fresh} disabled={busy}>
           <span className="kicker">趣味电台</span>
           <span className="today-title">
             <span className="ja-serif">{latest ? "新しい回" : "はじめての回"}</span>
           </span>
-          <span className="today-zh">两位主持人聊一个日本的冷知识，约 5 分钟。AI 同时整理好文稿、重点句、单词和语法，重点句自动进复习。</span>
-        </div>
+          <span className="today-zh">两人聊一个日本冷知识，约 5 分钟</span>
+          <span className="today-go">{busy ? "AI 正在写这一期…" : "▶ 生成并收听"}</span>
+        </button>
       )}
-      <button className="cta" onClick={fresh} disabled={busy}>
-        {busy ? "AI 正在写这一期，大约 20 秒…" : latest && !latest.heard ? "换一期新的" : "生成新的一期"}
-      </button>
       {error && <p className="error">{error}</p>}
 
-      <Link href="/moyu" className="entry entry-solo">
-        <span className="entry-ja">流す</span>
-        <span className="entry-text">
-          一直听
-          <small>电台、复习、瞬间说轮着放，锁屏不停，适合通勤和摸鱼</small>
-        </span>
-        <span className="chev" aria-hidden>›</span>
-      </Link>
+      <div className="rows">
+        <Link href="/moyu" className="entry">
+          <span className="entry-ja">流す</span>
+          <span className="entry-text">一直听</span>
+          <span className="chev" aria-hidden>›</span>
+        </Link>
+        {unheard && (
+          <button className="entry" onClick={fresh} disabled={busy}>
+            <span className="entry-ja">新</span>
+            <span className="entry-text">{busy ? "AI 正在写这一期…" : "换一期新的"}</span>
+            <span className="chev" aria-hidden>›</span>
+          </button>
+        )}
+      </div>
 
-      {eps.length > (latest && !latest.heard ? 1 : 0) && (
+      {past.length > 0 && (
         <section>
-          <h2 className="sec">往期 · {eps.length}</h2>
+          <h2 className="sec">往期</h2>
           <div className="rows">
-            {eps.slice(latest && !latest.heard ? 1 : 0).map((e) => (
+            {past.map((e) => (
               <Link key={e.id} href={`/ep/${e.id}`} className="ep-row">
                 <span className="ep-date">{shortDate(e.date)}</span>
                 <span className="entry-text">
                   {e.title_zh}
-                  <small>
-                    {e.words?.length ?? 0} 个单词 · {e.grammar?.length ?? 0} 个语法{e.heard ? "" : " · 没听过"}
-                  </small>
+                  {!e.heard && <i className="dot" aria-label="没听过" />}
                 </span>
                 <span className="chev" aria-hidden>›</span>
               </Link>
@@ -97,19 +102,11 @@ export default function ListenHome() {
   );
 }
 
-function EpisodeCard({ ep, n }: { ep: RadioEpisode; n: number }) {
+function EpisodeCard({ ep }: { ep: RadioEpisode }) {
   return (
     <Link href={`/ep/${ep.id}`} className="today">
-      <span className="kicker">
-        趣味电台 · 第 {n} 期 · {shortDate(ep.date)}
-      </span>
+      <span className="kicker">趣味电台 · 新的一期</span>
       <span className="ep-title">{ep.title_zh}</span>
-      <span className="today-zh">{ep.hook_zh}</span>
-      <span className="ep-meta">
-        <i>{ep.lines.length} 句对话</i>
-        <i>{ep.words?.length ?? 0} 个单词</i>
-        <i>{ep.grammar?.length ?? 0} 个语法</i>
-      </span>
       <span className="today-go">▶ 收听</span>
     </Link>
   );
