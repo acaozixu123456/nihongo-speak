@@ -151,3 +151,37 @@ export async function transcribe(wav: Blob, referenceText?: string): Promise<Stt
   if (!res.ok) throw new Error(data.error ?? "语音识别失败");
   return data;
 }
+
+// Azure's short-audio API takes about a minute; a longer recording is cut into pieces at the quietest
+// moment near each limit (so a word is rarely split), recognised in parallel and joined.
+const PIECE_S = 50;
+export async function transcribeLong(wav: Blob): Promise<string> {
+  const bytes = new Uint8Array(await wav.arrayBuffer());
+  const pcm = new Int16Array(bytes.buffer.slice(44, bytes.length - ((bytes.length - 44) % 2)));
+  if (pcm.length <= PIECE_S * RATE * 1.15) return (await transcribe(wav)).text;
+  const cuts: number[] = [0];
+  const win = RATE / 10; // 100ms windows
+  while (pcm.length - cuts[cuts.length - 1] > PIECE_S * RATE * 1.15) {
+    const from = cuts[cuts.length - 1] + (PIECE_S - 8) * RATE;
+    const to = Math.min(cuts[cuts.length - 1] + PIECE_S * RATE, pcm.length - win);
+    let best = to;
+    let quiet = Infinity;
+    for (let i = from; i < to; i += win) {
+      let e = 0;
+      for (let j = i; j < i + win; j++) e += Math.abs(pcm[j]);
+      if (e < quiet) {
+        quiet = e;
+        best = i + win / 2;
+      }
+    }
+    cuts.push(best);
+  }
+  cuts.push(pcm.length);
+  const pieces = cuts.slice(0, -1).map((c, i) => {
+    const out = new Float32Array(cuts[i + 1] - c);
+    for (let j = 0; j < out.length; j++) out[j] = pcm[c + j] / 0x8000;
+    return encodeWav(out, RATE);
+  });
+  const texts = await Promise.all(pieces.map((p) => transcribe(p).then((r) => r.text)));
+  return texts.filter(Boolean).join("");
+}

@@ -7,6 +7,7 @@ import {
   EMPTY,
   EPISODES_KEPT,
   MEMORIES_KEPT,
+  RETELLS_KEPT,
   active,
   addDays,
   dayKey,
@@ -26,6 +27,7 @@ import {
   type PersonMemory,
   type Progress,
   type RadioEpisode,
+  type Retell,
   type ScenarioProgress,
   type StuckLine,
   type WeakPoint,
@@ -33,7 +35,7 @@ import {
 } from "@/lib/progress-model";
 
 export { dayKey, level, streak, totalXp };
-export type { AskedItem, Skill, Card, CustomScenario, DiaryEntry, DrillItem, Learned, PersonMemory, Progress, RadioEpisode, StuckLine, WeakPoint };
+export type { AskedItem, Skill, Card, CustomScenario, DiaryEntry, DrillItem, Learned, PersonMemory, Progress, RadioEpisode, Retell, StuckLine, WeakPoint };
 
 // The phone's localStorage is the working copy; it is synced to the server
 // (when storage is set up) so nothing is lost if Safari data is cleared.
@@ -594,6 +596,15 @@ export function remember(person: string, ja: string) {
 }
 
 export const memories = (p: Progress, person: string) => p.people[person] ?? [];
+
+// ---- 三回話す ----
+
+export function recordRetell(r: Retell) {
+  const p = read();
+  write({ ...p, retells: [...(p.retells ?? []).filter((x) => !(x.date === r.date && x.topic === r.topic)), r].slice(-RETELLS_KEPT) });
+}
+
+export const retellToday = (p: Progress) => (p.retells ?? []).some((r) => r.date === dayKey());
 
 // ---- Saved expressions ----
 
