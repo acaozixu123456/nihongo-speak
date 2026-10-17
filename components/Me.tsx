@@ -4,9 +4,8 @@ import Link from "next/link";
 import { dayKey, streak, useProgress } from "@/lib/client/progress";
 import { allTime, lastDays } from "@/lib/client/metrics";
 import { useHydrated } from "@/lib/client/hydrated";
-import Places from "./Places";
 
-// "我": the record up top, then every place to pick by hand, as tiles rather than a list.
+// 记录: the streak and days; every feature itself is on 今日.
 export default function Me() {
   const p = useProgress();
   const hydrated = useHydrated();
@@ -18,7 +17,7 @@ export default function Me() {
   return (
     <main className="page">
       <Link href="/" className="back">← 今日</Link>
-      <h1 className="display">我</h1>
+      <h1 className="display">记录</h1>
 
       <Link href="/stats" className="me-card">
         <div className="me-nums">
@@ -46,7 +45,9 @@ export default function Me() {
         </div>
       </Link>
 
-      <Places />
+      <Link href="/today" className="row-link">
+        今天学过的 <span aria-hidden>›</span>
+      </Link>
     </main>
   );
 }

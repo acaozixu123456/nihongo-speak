@@ -37,7 +37,7 @@ export default function Stats() {
 
   return (
     <main>
-      <Link href="/me" className="back">← 我</Link>
+      <Link href="/me" className="back">← 记录</Link>
       <header className="page-mast">
         <div>
           <h1>記録</h1>

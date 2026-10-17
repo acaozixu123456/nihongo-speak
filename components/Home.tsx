@@ -11,8 +11,8 @@ import { finished, minutes, oneFix, plan, quietPref, setQuiet, startRoute, useRo
 
 const WEEKDAY_JA = ["日", "月", "火", "水", "木", "金", "土"];
 
-// 今日: the only thing on the first screen is today's route and one button. Everything to pick
-// by hand (radio, scenes, calls…) lives behind 我, and shows here too once the route is done.
+// 今日: today's route and its one button first; under it every feature, grouped, so the app shows
+// what is in it. The record (streak, days) lives behind 记录.
 export default function Home() {
   const p = useProgress();
   const hydrated = useHydrated();
@@ -26,11 +26,12 @@ export default function Home() {
   const top = (
     <div className="top">
       <span>{date}</span>
-      <Link href="/me" className="top-me" aria-label="我的记录">
-        我
+      <Link href="/me" className="top-me pill">
+        记录
       </Link>
     </div>
   );
+  const tag = <p className="tagline">每天 10 分钟，练日语的听和说</p>;
   if (!hydrated) return <main className="page">{top}</main>;
 
   if (finished(r)) {
@@ -38,24 +39,28 @@ export default function Home() {
     return (
       <main className="page">
         {top}
-        <div className="done-stamp small">済</div>
+        {tag}
         <div className="today">
-          {fix && (
-            <>
-              <span className="kicker">明日はこれだけ</span>
-              <div className="one-fix">
-                <div className="ja">
-                  <del>{fix.said}</del> → <ins>{fix.better}</ins>
+          <div className="done-row">
+            <span className="done-stamp mini">済</span>
+            {fix ? (
+              <div>
+                <span className="kicker">明日はこれだけ</span>
+                <div className="one-fix">
+                  <div className="ja">
+                    <del>{fix.said}</del> → <ins>{fix.better}</ins>
+                  </div>
+                  <small>{fix.why}</small>
                 </div>
-                <small>{fix.why}</small>
               </div>
-            </>
-          )}
-          <Link href="/today" className="today-go">
+            ) : (
+              <span className="kicker">また明日</span>
+            )}
+          </div>
+          <Link href="/today" className="today-go ghost">
             ♪ 今日の歌
           </Link>
         </div>
-        <span className="kicker more-kicker">もっとやるなら</span>
         <Places />
       </main>
     );
@@ -67,7 +72,7 @@ export default function Home() {
   return (
     <main className="page">
       {top}
-      <h1 className="display">今日</h1>
+      {tag}
       <button
         className="today today-btn"
         onClick={() => {
@@ -99,6 +104,7 @@ export default function Home() {
         <span className="sw" aria-hidden />
         今は声を出せない
       </label>
+      <Places />
     </main>
   );
 }

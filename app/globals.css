@@ -1336,7 +1336,22 @@ button.today-go { width: 100%; border: none; cursor: pointer; }
 .radio-cover.drawn .radio-waves { bottom: 14px; right: 16px; }
 .radio-cover.drawn .radio-waves i { background: #fbf6ee; opacity: 0.85; box-shadow: 0 0 4px rgba(0, 0, 0, 0.3); }
 .radio-title.under { margin-top: 14px; color: var(--text); font-size: 24px; max-width: none; }
-/* 今日 after the route: a smaller stamp, then the places to go on with. */
-.done-stamp.small { width: 92px; height: 92px; margin: 14px auto 18px; font-size: 30px; }
-.more-kicker { display: block; margin: 26px 0 10px; }
+/* 今日: one line saying what the app is, the route, then every feature in three groups. */
+.top-me.pill { width: auto; padding: 0 14px; border-radius: 999px; font-family: var(--sans); font-size: 13px; }
+.tagline { margin: 10px 0 16px; font-size: 14px; color: var(--muted); }
+.done-row { display: flex; gap: 16px; align-items: center; margin-bottom: 16px; }
+.done-stamp.mini { flex: none; width: 64px; height: 64px; margin: 0; font-size: 24px; border-width: 2.5px; }
+.done-row .one-fix { margin-top: 6px; }
+.today-go.ghost { background: none; color: var(--accent); border: 1px solid var(--accent); box-shadow: none; }
+.places { margin-top: 8px; }
+.pl-head { color: var(--text); letter-spacing: 0.04em; display: flex; align-items: baseline; gap: 8px; margin: 26px 2px 10px; font-family: var(--serif); font-size: 21px; font-weight: 600; }
+.pl-head small { font-family: var(--sans); font-size: 12px; font-weight: 400; color: var(--muted); }
+.pl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pl { position: relative; display: block; padding: 12px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; text-decoration: none; color: var(--text); transition: transform 0.15s; }
+.pl:active { transform: scale(0.985); }
+.pl b { display: block; font-family: var(--serif); font-size: 18px; font-weight: 600; }
+.pl span { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl em { position: absolute; top: 11px; right: 12px; font-style: normal; font-size: 12px; color: var(--accent); }
+.row-link { display: flex; justify-content: space-between; margin-top: 14px; padding: 14px 4px; border-bottom: 1px solid var(--line); color: var(--text); text-decoration: none; font-size: 15px; }
+.row-link span { color: var(--muted); }
 .retell-other { flex: none; align-self: flex-start; margin-left: 10px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--muted); font-size: 13px; white-space: nowrap; cursor: pointer; }
