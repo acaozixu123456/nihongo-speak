@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   try {
     // ?engine=vertex skips the chain and fails loudly, to check the Vertex AI key on the live site.
     const gemini = geminiVoice(voice);
-    const { audio, engine } =
+    const { audio, engine, said } =
       url.searchParams.get("engine") === "vertex" && gemini
         ? { audio: new Uint8Array(await synthesizeVertex(text, gemini, 12000)), engine: "vertex" }
         : await speak(text, voice);
@@ -31,6 +31,8 @@ export async function GET(request: Request) {
       headers: {
         "Content-Type": "audio/mpeg",
         "X-TTS-Engine": engine,
+        // What Gemini was given when it wasn't the text itself (a kanji word's reading), to check it.
+        ...(said && said !== text ? { "X-TTS-Said": encodeURIComponent(said) } : {}),
         // Same text + voice gives the same audio, so let the phone keep it, and Vercel's CDN too: a line
         // asked for before then comes back in a few dozen ms instead of being synthesized again.
         "Cache-Control": fallback ? "no-store" : "public, max-age=31536000, immutable",
@@ -47,7 +49,7 @@ export async function GET(request: Request) {
 // Google Cloud credit (and once that runs out it fails fast). Then the Gemini API, each model with
 // its own daily quota (100 on the first paid tier). Azure stays as the last fallback (no key, quota
 // used up everywhere, slow answer) and keeps the Chinese narration.
-async function speak(text: string, voice: string): Promise<{ audio: BodyInit; engine: string }> {
+async function speak(text: string, voice: string): Promise<{ audio: BodyInit; engine: string; said?: string }> {
   // Kanji with no kana would come out in Chinese: Gemini says the reading instead. Without a
   // reading it goes to Azure, which reads kanji in Japanese, rather than to Gemini as it is.
   let gemini = geminiVoice(voice);
@@ -59,7 +61,7 @@ async function speak(text: string, voice: string): Promise<{ audio: BodyInit; en
   }
   if (gemini && vertexConfigured()) {
     try {
-      return { audio: new Uint8Array(await hedgedVertex(said, gemini)), engine: "vertex" };
+      return { audio: new Uint8Array(await hedgedVertex(said, gemini)), engine: "vertex", said };
     } catch (e) {
       console.warn(e);
     }
@@ -67,7 +69,7 @@ async function speak(text: string, voice: string): Promise<{ audio: BodyInit; en
   if (gemini && geminiConfigured()) {
     for (const model of [FLASH, FLASH_LITE]) {
       try {
-        return { audio: new Uint8Array(await synthesizeGemini(said, gemini, 12000, model)), engine: "gemini" };
+        return { audio: new Uint8Array(await synthesizeGemini(said, gemini, 12000, model)), engine: "gemini", said };
       } catch (e) {
         console.warn(e);
         if (!String(e).includes("Gemini TTS 429")) break;
