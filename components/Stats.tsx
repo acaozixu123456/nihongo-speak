@@ -11,7 +11,6 @@ import {
 } from "@/lib/client/progress";
 import { allTime, diaryMetrics, formatDuration, lastDays, weeks } from "@/lib/client/metrics";
 import { Bars, Line } from "./Charts";
-import Nav from "./Nav";
 import Reminders from "./Reminders";
 
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`;
@@ -170,7 +169,6 @@ export default function Stats() {
         </div>
         <p className="small-text" style={{ marginBottom: 0 }}>从零开始。手机和电脑上的记录会一起清空。</p>
       </div>
-      <Nav on="me" />
     </main>
   );
 }

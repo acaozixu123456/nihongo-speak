@@ -133,7 +133,7 @@ export default function Recap() {
             <span className="ja-serif">まだ空っぽ</span>
           </span>
           <span className="today-zh">听一期电台、练一组，学过、练过的都会收到这里</span>
-          <span className="today-go">去听</span>
+          <span className="today-go">始める</span>
         </Link>
       ) : (
         <button className="today today-btn" onClick={() => open("calm")} disabled={!items.length}>

@@ -1,66 +1,51 @@
 "use client";
 
 import Link from "next/link";
-import { diaryToday, dueCards, streak, useProgress, weakList } from "@/lib/client/progress";
-import { allTime, formatDuration } from "@/lib/client/metrics";
-import Nav from "./Nav";
+import { dueCards, streak, useProgress, weakList } from "@/lib/client/progress";
+import { allTime } from "@/lib/client/metrics";
+import { useHydrated } from "@/lib/client/hydrated";
 
-// "我" opens from either page's top-right button, so going back returns to whichever it was.
-function BackLink() {
-  return (
-    <a
-      href="/"
-      className="back"
-      onClick={(e) => {
-        if (history.length > 1) {
-          e.preventDefault();
-          history.back();
-        }
-      }}
-    >
-      ← 返回
-    </a>
-  );
-}
-
-// The learner's own corner: diary, weak points, saved expressions and growth.
+// "我": everything to pick by hand, for when today's route isn't what you want.
 export default function Me() {
   const p = useProgress();
+  const hydrated = useHydrated();
   const all = allTime(p);
   const due = dueCards(p).length;
-  const weak = weakList(p);
 
   const rows = [
-    { href: "/diary", glyph: "話", label: "口语日记", detail: diaryToday(p) ? "今天说过了，可以再来一段" : "用一分钟说说今天，AI 帮你改成自然的日语" },
-    { href: "/weak", glyph: "弱", label: "薄弱点", detail: weak.length ? `${weak.length} 个 · 最常错的是「${weak[0].tag}」` : "AI 发现你反复出错的地方会记在这里" },
-    { href: "/bag", glyph: "蔵", label: "收藏的表达", detail: `${p.cards.length} 句${due ? ` · ${due} 句今天该复习` : ""}` },
-    { href: "/stats", glyph: "伸", label: "成长记录", detail: "开口时长、反应速度、发音分数的变化" },
+    { href: "/episodes", label: "往期", n: p.episodes.length },
+    { href: "/scenes", label: "場面" },
+    { href: "/call", label: "電話" },
+    { href: "/diary", label: "日記" },
+    { href: "/weak", label: "弱点", n: weakList(p).length },
+    { href: "/bag", label: "収蔵", n: p.cards.length, hot: due > 0 },
   ];
 
   return (
-    <main>
-      <BackLink />
-      <header className="page-mast">
-        <div>
-          <h1>我</h1>
-          <p className="muted">
-            连续 {streak(p)} 天 · 一共开口 {formatDuration(all.speakSec)} · {all.said} 句
-          </p>
-        </div>
-      </header>
-      <div className="list">
+    <main className="page">
+      <Link href="/" className="back">← 今日</Link>
+      <h1 className="display">我</h1>
+      {hydrated && (
+        <Link href="/stats" className="me-stats">
+          <span>
+            <b className="accent">{streak(p)}</b>
+            <small>連続</small>
+          </span>
+          <span>
+            <b>{all.said}</b>
+            <small>話した文</small>
+          </span>
+        </Link>
+      )}
+      <div className="rows">
         {rows.map((r) => (
-          <Link key={r.href} href={r.href} className="row-link">
-            <span className="glyph">{r.glyph}</span>
-            <span className="row-text">
-              {r.label}
-              <small>{r.detail}</small>
-            </span>
+          <Link key={r.href} href={r.href} className="entry">
+            <span className="entry-text ja-serif">{r.label}</span>
+            {hydrated && !!r.n && <span className={r.hot ? "entry-count" : "entry-n"}>{r.n}</span>}
             <span className="chev" aria-hidden>›</span>
           </Link>
         ))}
       </div>
-      <Nav on="me" />
     </main>
   );
 }

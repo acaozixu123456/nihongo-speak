@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Nav from "@/components/Nav";
 import { WeakList } from "@/components/WeakList";
 
 export default function WeakPage() {
@@ -10,7 +9,6 @@ export default function WeakPage() {
         <h1>薄弱点</h1>
       </header>
       <WeakList />
-      <Nav on="me" />
     </main>
   );
 }

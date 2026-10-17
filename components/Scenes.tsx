@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useState } from "react";
 import type { BuildingId } from "@/lib/client/game";
 import { Floors } from "./Floors";
-import Nav from "./Nav";
 
 const TABS: BuildingId[] = ["work", "life", "custom"];
 const TAB_LABEL: Record<BuildingId, string> = { work: "工作", life: "生活", custom: "我的" };
@@ -15,7 +14,7 @@ export default function Scenes({ tab: initial }: { tab?: BuildingId }) {
 
   return (
     <main>
-      <Link href="/speak" className="back">← 说</Link>
+      <Link href="/me" className="back">← 我</Link>
       <header className="page-mast">
         <div>
           <h1>场景</h1>
@@ -37,7 +36,6 @@ export default function Scenes({ tab: initial }: { tab?: BuildingId }) {
         ))}
       </div>
       <Floors key={tab} id={tab} />
-      <Nav on="speak" />
     </main>
   );
 }

@@ -7,7 +7,6 @@ import { BLOCK_LABEL, buildRound, makeEpisode, makeRadio, prepare, pruneCache, t
 import { SILENCE } from "@/lib/client/player";
 import { markHeard, recordMoyu, recordStuck, todayStats, useProgress, type Progress, type RadioEpisode } from "@/lib/client/progress";
 import { setAudioSession } from "@/lib/client/recorder";
-import Nav from "./Nav";
 
 const RATES = [0.9, 1, 1.1];
 const RATE_KEY = "nihongo-speak:moyu-rate";
@@ -226,7 +225,7 @@ export default function Moyu() {
 
   return (
     <main className="moyu">
-      <Link href="/" className="back">← 听</Link>
+      <Link href="/" className="back">← 今日</Link>
       <header className="page-mast">
         <div>
           <h1>摸鱼模式</h1>
@@ -295,7 +294,6 @@ export default function Moyu() {
           if (s.cur && audio.current?.src === s.cur.url && !audio.current.ended) setPhase("paused");
         }}
       />
-      <Nav on="listen" />
     </main>
   );
 }

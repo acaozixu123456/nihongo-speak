@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Boot from "@/components/Boot";
+import RouteBar from "@/components/RouteBar";
 
 export const metadata: Metadata = {
   title: "日语听说练习",
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         {children}
+        <RouteBar />
         <Boot />
       </body>
     </html>

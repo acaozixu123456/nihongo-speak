@@ -22,9 +22,9 @@ import {
 } from "@/lib/client/progress";
 import { totals } from "@/lib/client/metrics";
 import { addDays } from "@/lib/progress-model";
+import { stepDone, useOnRoute } from "@/lib/client/route";
 import AiJudge, { type Verdict } from "./AiJudge";
 import HoldButton from "./HoldButton";
-import Nav from "./Nav";
 
 type Result = {
   item: QuickItem;
@@ -38,6 +38,7 @@ type Result = {
 const SIZES = [5, 10, 20];
 const SIZE_KEY = "nihongo-speak:quick-size";
 const HINT_CHARS = 3;
+const ROUTE_SIZE = 5;
 
 const secs = (ms: number) => (ms / 1000).toFixed(1);
 
@@ -259,6 +260,17 @@ export default function Quick({ drill }: { drill?: string }) {
     show(index + 1);
   }
 
+  // On today's route: a short round starts at once, and the route moves on after its summary.
+  const onRoute = useOnRoute();
+  useEffect(() => {
+    if (onRoute && !round && !drill) begin(ROUTE_SIZE);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onRoute]);
+  const over = !!round && !item;
+  useEffect(() => {
+    if (over) stepDone();
+  }, [over]);
+
   // ---- Intro for a targeted drill ----
   if (!round && drill) {
     return (
@@ -311,7 +323,6 @@ export default function Quick({ drill }: { drill?: string }) {
             )}
           </div>
         )}
-        <Nav on="speak" />
       </main>
     );
   }
@@ -323,7 +334,7 @@ export default function Quick({ drill }: { drill?: string }) {
     const mastered = quickMastered(p);
     return (
       <main>
-        <Link href="/speak" className="back">← 说</Link>
+        <Link href="/" className="back">← 今日</Link>
         <header className="page-mast">
           <div>
             <h1>瞬间说</h1>
@@ -356,7 +367,6 @@ export default function Quick({ drill }: { drill?: string }) {
           </div>
           <button className="primary next-cta" onClick={() => begin()}>开始</button>
         </div>
-        <Nav on="speak" />
       </main>
     );
   }
@@ -439,9 +449,8 @@ export default function Quick({ drill }: { drill?: string }) {
           <button className="primary next-cta" onClick={() => begin()}>再来一轮</button>
         )}
         <p style={{ textAlign: "center" }}>
-          <Link href="/speak" className="muted">回到说</Link>
+          <Link href="/" className="muted">回到今日</Link>
         </p>
-        <Nav on="speak" />
       </main>
     );
   }

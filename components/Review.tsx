@@ -8,8 +8,8 @@ import { dueCards, findEpisode, findScenario, recordSpeech, reviewCard, useProgr
 import AiJudge, { type Verdict } from "./AiJudge";
 import HoldButton from "./HoldButton";
 import { useCoach } from "@/lib/client/coach";
+import { stepDone, useOnRoute } from "@/lib/client/route";
 import type { Variant } from "@/lib/claude";
-import Nav from "./Nav";
 
 function tone(score: number) {
   return score >= 80 ? "good" : score >= 60 ? "warn" : "bad";
@@ -57,6 +57,20 @@ export default function Review() {
     setIndex(0);
   }
 
+  // On today's route there is no intro: the cards start at once, and the route moves on when they're done.
+  const onRoute = useOnRoute();
+  useEffect(() => {
+    if (onRoute && !queue) {
+      if (due.length) begin();
+      else stepDone();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onRoute]);
+  const over = !!queue && !card;
+  useEffect(() => {
+    if (over) stepDone();
+  }, [over]);
+
   function listen(c: Card, ja = c.ja) {
     unlock();
     play(ttsUrl(ja, c.voice), 1).catch(() => setError("音频播放失败"));
@@ -103,7 +117,7 @@ export default function Review() {
   if (p.cards.length === 0) {
     return (
       <main>
-        <Link href="/speak" className="back">← 说</Link>
+        <Link href="/" className="back">← 今日</Link>
         <header className="page-mast">
           <div>
             <h1>复习</h1>
@@ -117,7 +131,6 @@ export default function Review() {
           </p>
           <Link href="/scenes">去练习 →</Link>
         </div>
-        <Nav on="speak" />
       </main>
     );
   }
@@ -125,7 +138,7 @@ export default function Review() {
   if (!queue) {
     return (
       <main>
-        <Link href="/speak" className="back">← 说</Link>
+        <Link href="/" className="back">← 今日</Link>
         <header className="page-mast">
           <div>
             <h1>复习</h1>
@@ -148,7 +161,6 @@ export default function Review() {
             </>
           )}
         </div>
-        <Nav on="speak" />
       </main>
     );
   }
@@ -156,7 +168,7 @@ export default function Review() {
   if (!card) {
     return (
       <main>
-        <Link href="/speak" className="back">← 说</Link>
+        <Link href="/" className="back">← 今日</Link>
         <header className="page-mast">
           <div>
             <h1>复习</h1>
@@ -171,9 +183,8 @@ export default function Review() {
               <Link href="/weak">看 AI 找出的薄弱点 →</Link>
             </p>
           )}
-          <Link href="/speak" className="btn primary next-cta" style={{ display: "block" }}>回到今日训练 →</Link>
+          <Link href="/" className="btn primary next-cta" style={{ display: "block" }}>回到今日 →</Link>
         </div>
-        <Nav on="speak" />
       </main>
     );
   }

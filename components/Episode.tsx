@@ -11,8 +11,8 @@ import { useHydrated } from "@/lib/client/hydrated";
 import Earworm from "./Earworm";
 import { hasSavedSet, prefetchGame } from "./Game";
 import { Star } from "./FeedbackCard";
-import { shortDate } from "./ListenHome";
-import Nav from "./Nav";
+import { shortDate } from "./Episodes";
+import { stepDone } from "@/lib/client/route";
 
 type Tab = "script" | "phrases" | "words" | "grammar";
 const TABS: { key: Tab; label: string }[] = [
@@ -125,9 +125,8 @@ export default function Episode({ id }: { id: string }) {
   if (!ep) {
     return (
       <main className="page">
-        <Link href="/" className="back">← 听</Link>
+        <Link href="/" className="back">← 今日</Link>
         <p className="muted">找不到这一期了（只保留最近 50 期）。</p>
-        <Nav on="listen" />
       </main>
     );
   }
@@ -271,7 +270,7 @@ export default function Episode({ id }: { id: string }) {
 
   return (
     <main className="page">
-      <Link href="/" className="back">← 听</Link>
+      <Link href="/" className="back">← 今日</Link>
       <div className="kicker">
         趣味电台 · {shortDate(ep.date)}
       </div>
@@ -459,9 +458,9 @@ export default function Episode({ id }: { id: string }) {
           if (!prep.current || audio.current?.src !== prep.current.url) return;
           setPhase("paused");
           markHeard(episode.id);
+          stepDone();
         }}
       />
-      <Nav on="listen" />
     </main>
   );
 }
