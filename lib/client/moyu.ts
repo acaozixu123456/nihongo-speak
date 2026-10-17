@@ -263,7 +263,8 @@ export async function makeRadio(): Promise<RadioEpisode> {
 
 // Each part is played from its own recording (pre-made ones ship with the site, see ttsUrl), so a
 // sentence is only synthesized once however many clips it turns up in.
-const CACHE = "nihongo-speak-moyu";
+// v2: v1 kept lines that had fallen back to Azure's flatter voice forever.
+const CACHE = "nihongo-speak-moyu-v2";
 const MAX_CACHED = 600;
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -280,7 +281,9 @@ async function fetchAudio(url: string): Promise<ArrayBuffer> {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const buf = await res.arrayBuffer();
-      if (cache) await cache.put(url, new Response(buf, { headers: { "Content-Type": "audio/mpeg" } })).catch(() => {});
+      // The server marks a fallback voice no-store: ask again next time instead of keeping it.
+      const keep = !res.headers.get("cache-control")?.includes("no-store");
+      if (cache && keep) await cache.put(url, new Response(buf, { headers: { "Content-Type": "audio/mpeg" } })).catch(() => {});
       return buf;
     } catch (e) {
       if (attempt >= 2) throw e;
@@ -316,6 +319,7 @@ async function clipAudio(parts: Part[]): Promise<Frames> {
 export async function pruneCache() {
   try {
     await caches.delete("nihongo-speak-podcast"); // the old commute-podcast cache
+    await caches.delete("nihongo-speak-moyu");
     const c = await caches.open(CACHE);
     const keys = await c.keys();
     if (keys.length > MAX_CACHED) for (const k of keys.slice(0, keys.length / 2)) await c.delete(k);

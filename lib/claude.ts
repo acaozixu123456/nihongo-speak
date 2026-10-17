@@ -518,3 +518,27 @@ ${a.cards.map((c) => `- ${c.ja}（${c.zh}）`).join("\n") || "（なし）"}
 export function makeRadioWithClaude<S extends z.ZodType>(schema: S, system: string, content: string) {
   return haikuFirst(schema, system, content, 5000);
 }
+
+// 问 AI: the learner selected a word, phrase or line they don't get; explain just that, in context.
+const ExplainSchema = z.object({
+  reading: z.string().describe("選ばれた部分の読み（ひらがな）。中国語だけが選ばれた場合は空文字"),
+  meaning_zh: z.string().describe("この文脈での意味（中国語、1〜2文）"),
+  points: z
+    .array(z.object({ ja: z.string().describe("語・文法・言い回し（日本語）"), zh: z.string().describe("説明（中国語、1〜2文）") }))
+    .describe("分解して説明すべき語や文法、1〜4個。選ばれた部分が単語ひとつなら、その語の使い方を1個"),
+  nuance_zh: z.string().describe("語感・場面・言い換え（中国語、1〜2文）。とくになければ空文字"),
+  example: z.object({ ja: z.string().describe("日常や職場で使える別の例文（日本語、短く）"), zh: z.string() }),
+});
+
+export type Explain = z.infer<typeof ExplainSchema>;
+
+export function explainSelection(a: { pick: string; line: string; before?: string; topic: string }) {
+  return haikuFirst(
+    ExplainSchema,
+    `${COACH}
+学習者は日本語のポッドキャストの文稿を読んでいて、分からない部分を選んで質問しています。質問文はありません。選ばれた部分だけを、その文脈での意味として説明してください。前置きや一般論は不要。`,
+    `番組のテーマ：${a.topic}
+${a.before ? `直前のセリフ：${a.before}\n` : ""}選ばれた部分を含む文：${a.line}
+選ばれた部分：${a.pick}`,
+  );
+}
