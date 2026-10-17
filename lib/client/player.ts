@@ -43,7 +43,8 @@ export function setRate(r: number) {
 export function ttsUrl(text: string, voice: string) {
   const key = voiceKey(text, voice);
   if (VOICE_LIBRARY.has(key)) return `/voice/${key}.mp3`;
-  return `/api/tts?${new URLSearchParams({ text, voice })}`;
+  // v=2 skips anything the browser kept from before fallback voices were marked no-store.
+  return `/api/tts?${new URLSearchParams({ text, voice, v: "2" })}`;
 }
 
 let finish: (() => void) | null = null;

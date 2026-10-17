@@ -710,3 +710,49 @@ button.cta {
 .note .ja { font-size: 18px; }
 .gram-pattern { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
 .gram-ex { font-family: var(--ja); font-size: 15px; margin-top: 10px; padding-left: 12px; border-left: 2px solid var(--accent); cursor: pointer; }
+
+/* 问 AI: select anything in an episode's notes, then one tap */
+.ask-bar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom) + 84px);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 40px);
+  padding: 11px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  box-shadow: var(--shadow);
+  font-size: 14px;
+}
+.ask-bar:active:not(:disabled) { transform: translateX(-50%) scale(0.97); }
+.ask-bar b { flex: none; font-weight: 600; }
+.ask-bar span { font-family: var(--ja); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.9; }
+.sheet-back { position: fixed; inset: 0; z-index: 40; background: rgba(20, 18, 15, 0.35); display: flex; align-items: flex-end; justify-content: center; animation: fade 0.2s; }
+.sheet {
+  width: 100%;
+  max-width: 560px;
+  max-height: 82vh;
+  overflow-y: auto;
+  background: var(--card);
+  border-radius: 26px 26px 0 0;
+  padding: 10px 24px calc(env(safe-area-inset-bottom) + 20px);
+  animation: rise 0.25s ease-out;
+}
+.sheet-grip { width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 0 auto 18px; }
+.sheet-pick { font-family: var(--serif); font-size: 24px; font-weight: 600; line-height: 1.5; margin: 8px 0 2px; }
+.sheet-wait { margin: 18px 0; }
+.sheet-meaning { font-size: 15px; line-height: 1.8; margin: 14px 0 10px; }
+.sheet-point { display: flex; flex-direction: column; padding: 12px 0; border-top: 1px solid var(--line); }
+.sheet-point b { font-family: var(--ja); font-weight: 500; font-size: 16px; }
+.sheet-point span { font-size: 13px; color: var(--muted); line-height: 1.7; margin-top: 2px; }
+.sheet-nuance { font-size: 13px; color: var(--muted); line-height: 1.7; margin: 10px 0; padding: 12px 14px; background: var(--soft); border-radius: 14px; }
+.sheet-ex { margin-top: 12px; padding-left: 12px; border-left: 2px solid var(--accent); cursor: pointer; }
+.sheet-ex .ja { font-size: 16px; }
+@keyframes rise { from { transform: translateY(40px); opacity: 0; } }
+@keyframes fade { from { opacity: 0; } }

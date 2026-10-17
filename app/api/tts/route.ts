@@ -15,15 +15,19 @@ export async function GET(request: Request) {
   try {
     // ?engine=vertex skips the chain and fails loudly, to check the Vertex AI key on the live site.
     const gemini = geminiVoice(voice);
-    const audio =
+    const { audio, engine } =
       url.searchParams.get("engine") === "vertex" && gemini
-        ? new Uint8Array(await synthesizeVertex(text, gemini, 12000))
+        ? { audio: new Uint8Array(await synthesizeVertex(text, gemini, 12000)), engine: "vertex" }
         : await speak(text, voice);
+    // A Japanese line that fell back to Azure sounds noticeably worse: don't let the phone keep it,
+    // so the next play asks Gemini again.
+    const fallback = engine === "azure" && gemini;
     return new Response(audio, {
       headers: {
         "Content-Type": "audio/mpeg",
+        "X-TTS-Engine": engine,
         // Same text + voice gives the same audio, so let the phone keep it.
-        "Cache-Control": "private, max-age=31536000, immutable",
+        "Cache-Control": fallback ? "no-store" : "private, max-age=31536000, immutable",
       },
     });
   } catch (e) {
@@ -36,11 +40,11 @@ export async function GET(request: Request) {
 // Google Cloud credit (and once that runs out it fails fast). Then the Gemini API, each model with
 // its own daily quota (100 on the first paid tier). Azure stays as the last fallback (no key, quota
 // used up everywhere, slow answer) and keeps the Chinese narration.
-async function speak(text: string, voice: string): Promise<BodyInit> {
+async function speak(text: string, voice: string): Promise<{ audio: BodyInit; engine: string }> {
   const gemini = geminiVoice(voice);
   if (gemini && vertexConfigured()) {
     try {
-      return new Uint8Array(await synthesizeVertex(text, gemini, 12000));
+      return { audio: new Uint8Array(await hedgedVertex(text, gemini)), engine: "vertex" };
     } catch (e) {
       console.warn(e);
     }
@@ -48,12 +52,25 @@ async function speak(text: string, voice: string): Promise<BodyInit> {
   if (gemini && geminiConfigured()) {
     for (const model of [FLASH, FLASH_LITE]) {
       try {
-        return new Uint8Array(await synthesizeGemini(text, gemini, 12000, model));
+        return { audio: new Uint8Array(await synthesizeGemini(text, gemini, 12000, model)), engine: "gemini" };
       } catch (e) {
         console.warn(e);
         if (!String(e).includes("Gemini TTS 429")) break;
       }
     }
   }
-  return synthesize(text, voice);
+  return { audio: await synthesize(text, voice), engine: "azure" };
+}
+
+// Now and then a Vertex request hangs for the whole timeout (about 1 in 6 when a phone asks for a
+// dozen lines at once), which used to drop that line to Azure. If the first try hasn't answered in
+// 5s, a second one starts alongside it and whichever finishes first wins.
+async function hedgedVertex(text: string, voice: string) {
+  const first = synthesizeVertex(text, voice, 15000);
+  const second = new Promise<Awaited<typeof first>>((ok, fail) =>
+    setTimeout(() => synthesizeVertex(text, voice, 15000).then(ok, fail), 5000),
+  );
+  first.catch(() => {});
+  second.catch(() => {});
+  return Promise.any([first, second]);
 }

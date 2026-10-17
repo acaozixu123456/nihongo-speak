@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import type { Explain } from "@/lib/claude";
 import { prepare, radioClips, type Prepared } from "@/lib/client/moyu";
 import { play, SILENCE, ttsUrl, unlock } from "@/lib/client/player";
 import { findEpisode, markHeard, RADIO_VOICE, useProgress } from "@/lib/client/progress";
@@ -21,6 +22,10 @@ const TABS: { key: Tab; label: string }[] = [
 const HOST_NAME = { A: "ハル", B: "ケン" } as const;
 
 type Phase = "idle" | "loading" | "playing" | "paused";
+const ZH_KEY = "nihongo-speak:ep-zh";
+
+// What the learner selected, with the line it sits in, for 问 AI.
+type Pick = { text: string; line: string; before?: string };
 
 // One 趣味电台 episode: play it straight through (the line being spoken lights up in the transcript),
 // then the notes the AI wrote with it: key sentences (already in review), words and grammar.
@@ -34,16 +39,55 @@ export default function Episode({ id }: { id: string }) {
   const [at, setAt] = useState(-1);
   const [pos, setPos] = useState(0);
   const [tab, setTab] = useState<Tab>("script");
-  const [showZh, setShowZh] = useState(true);
+  const [showZh, setShowZhState] = useState(false);
   const [error, setError] = useState("");
+  const notes = useRef<HTMLDivElement>(null);
+  const touched = useRef(0);
+  const [pick, setPick] = useState<Pick | null>(null);
+  const [ask, setAsk] = useState<{ pick: Pick; answer?: Explain; error?: string } | null>(null);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    try {
+      setShowZhState(localStorage.getItem(ZH_KEY) === "1");
+    } catch {}
+    // Scrolling by hand pauses the follow-along for a few seconds.
+    const hand = () => (touched.current = Date.now());
+    window.addEventListener("touchmove", hand, { passive: true });
+    window.addEventListener("wheel", hand, { passive: true });
+    // Selecting text anywhere in the notes offers 问 AI about it. Tapping the button can clear the
+    // selection first, so the offer stays up a moment after it goes.
+    let clear: ReturnType<typeof setTimeout> | undefined;
+    const onSelect = () => {
+      const sel = document.getSelection();
+      const text = sel?.toString().trim() ?? "";
+      const node = sel?.anchorNode;
+      const el = node ? (node instanceof Element ? node : node.parentElement)?.closest<HTMLElement>("[data-line]") : null;
+      if (text && el && notes.current?.contains(el)) {
+        clearTimeout(clear);
+        setPick({ text: text.slice(0, 300), line: el.dataset.line!, before: el.dataset.before || undefined });
+      } else {
+        clearTimeout(clear);
+        clear = setTimeout(() => setPick(null), 1500);
+      }
+    };
+    document.addEventListener("selectionchange", onSelect);
+    return () => {
+      window.removeEventListener("touchmove", hand);
+      window.removeEventListener("wheel", hand);
+      document.removeEventListener("selectionchange", onSelect);
+      clearTimeout(clear);
       audio.current?.pause();
       if (prep.current) URL.revokeObjectURL(prep.current.url);
-    },
-    [],
-  );
+    };
+  }, []);
+
+  const speaking = prep.current && at >= 0 ? prep.current.clips[at]?.show : null;
+
+  // Keep the line being spoken in view, unless the learner is scrolling around themselves.
+  useEffect(() => {
+    if (!speaking || Date.now() - touched.current < 4000) return;
+    notes.current?.querySelector<HTMLElement>(".sline.now")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [speaking]);
 
   if (!hydrated) return <main className="page" />;
   if (!ep) {
@@ -56,6 +100,31 @@ export default function Episode({ id }: { id: string }) {
     );
   }
   const episode = ep;
+
+  function setShowZh(on: boolean) {
+    setShowZhState(on);
+    try {
+      localStorage.setItem(ZH_KEY, on ? "1" : "0");
+    } catch {}
+  }
+
+  async function askAi(p: Pick) {
+    setAsk({ pick: p });
+    setPick(null);
+    document.getSelection()?.removeAllRanges();
+    try {
+      const res = await fetch("/api/explain", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ pick: p.text, line: p.line, before: p.before, topic: episode.title_zh.slice(0, 80) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "AI 出错了");
+      setAsk((a) => (a?.pick === p ? { pick: p, answer: data as Explain } : a));
+    } catch (e) {
+      setAsk((a) => (a?.pick === p ? { pick: p, error: e instanceof Error ? e.message : "AI 出错了" } : a));
+    }
+  }
 
   async function toggle() {
     const a = audio.current!;
@@ -92,7 +161,8 @@ export default function Episode({ id }: { id: string }) {
   function seekLine(ja: string) {
     const cur = prep.current;
     const a = audio.current;
-    if (!cur || !a) return;
+    // A long press that selected text isn't a tap.
+    if (!cur || !a || document.getSelection()?.toString()) return;
     const i = cur.clips.findIndex((c) => c.show === ja);
     if (i < 0) return;
     a.currentTime = cur.starts[i] + 0.01;
@@ -105,7 +175,6 @@ export default function Episode({ id }: { id: string }) {
     play(ttsUrl(ja, RADIO_VOICE.A)).catch(() => {});
   }
 
-  const speaking = prep.current && at >= 0 ? prep.current.clips[at]?.show : null;
   const scenarioId = `radio:${ep.id}`;
 
   return (
@@ -132,6 +201,7 @@ export default function Episode({ id }: { id: string }) {
       </div>
       {error && <p className="error">{error}</p>}
 
+      <div ref={notes}>
       <div className="seg">
         {TABS.map((t) => (
           <button key={t.key} className={tab === t.key ? "on" : ""} onClick={() => setTab(t.key)}>
@@ -143,14 +213,20 @@ export default function Episode({ id }: { id: string }) {
       {tab === "script" && (
         <>
           <div className="row spread note-head">
-            <span>{ep.lines.length} 句 · 点一句跳过去</span>
+            <span>{ep.lines.length} 句 · 点一句跳过去，长按选中问 AI</span>
             <button className="small ghost" onClick={() => setShowZh(!showZh)}>
               {showZh ? "隐藏中文" : "显示中文"}
             </button>
           </div>
           <div className="script">
             {ep.lines.map((l, i) => (
-              <div key={i} className={`sline ${speaking === l.ja ? "now" : ""}`} onClick={() => seekLine(l.ja)}>
+              <div
+                key={i}
+                className={`sline ${speaking === l.ja ? "now" : ""}`}
+                onClick={() => seekLine(l.ja)}
+                data-line={l.ja}
+                data-before={ep.lines[i - 1]?.ja ?? ""}
+              >
                 <span className={`who who-${l.who}`}>{HOST_NAME[l.who]}</span>
                 <div>
                   <div className="ja">{l.ja}</div>
@@ -170,7 +246,7 @@ export default function Episode({ id }: { id: string }) {
         <>
           <p className="note-head">这几句已经放进复习，明天开始会让你说出来。</p>
           {ep.phrases.map((ph) => (
-            <div key={ph.ja} className="note">
+            <div key={ph.ja} className="note" data-line={ph.ja}>
               <div className="note-main" onClick={() => say(ph.ja)}>
                 <div className="ja">{ph.ja}</div>
                 <div className="zh">{ph.zh}</div>
@@ -185,7 +261,7 @@ export default function Episode({ id }: { id: string }) {
         <>
           <p className="note-head">点单词听发音，想记的点收藏进复习。</p>
           {(ep.words ?? []).map((w) => (
-            <div key={w.ja} className="note">
+            <div key={w.ja} className="note" data-line={w.ja}>
               <div className="note-main" onClick={() => say(w.ja)}>
                 <div className="ja">
                   {w.ja}
@@ -203,7 +279,7 @@ export default function Episode({ id }: { id: string }) {
       {tab === "grammar" && (
         <>
           {(ep.grammar ?? []).map((g) => (
-            <div key={g.pattern} className="note gram">
+            <div key={g.pattern} className="note gram" data-line={g.ja}>
               <div className="note-main">
                 <div className="gram-pattern">{g.pattern}</div>
                 <div className="zh">{g.zh}</div>
@@ -216,6 +292,16 @@ export default function Episode({ id }: { id: string }) {
           {!ep.grammar?.length && <p className="muted">这一期是旧版生成的，没有语法整理。</p>}
         </>
       )}
+
+      </div>
+
+      {pick && !ask && (
+        <button className="ask-bar" onClick={() => askAi(pick)}>
+          <b>问 AI</b>
+          <span>{pick.text}</span>
+        </button>
+      )}
+      {ask && <AskSheet ask={ask} onClose={() => setAsk(null)} onSay={say} />}
 
       <audio
         ref={audio}
@@ -232,5 +318,48 @@ export default function Episode({ id }: { id: string }) {
       />
       <Nav on="listen" />
     </main>
+  );
+}
+
+function AskSheet({
+  ask,
+  onClose,
+  onSay,
+}: {
+  ask: { pick: Pick; answer?: Explain; error?: string };
+  onClose: () => void;
+  onSay: (ja: string) => void;
+}) {
+  const a = ask.answer;
+  return (
+    <div className="sheet-back" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-grip" />
+        <div className="kicker">问 AI</div>
+        <div className="sheet-pick">{ask.pick.text}</div>
+        {a?.reading && a.reading !== ask.pick.text && <div className="kana">{a.reading}</div>}
+        {!a && !ask.error && <p className="muted sheet-wait">AI 正在看这一句…</p>}
+        {ask.error && <p className="error">{ask.error}</p>}
+        {a && (
+          <>
+            <p className="sheet-meaning">{a.meaning_zh}</p>
+            {a.points.map((pt) => (
+              <div key={pt.ja} className="sheet-point">
+                <b>{pt.ja}</b>
+                <span>{pt.zh}</span>
+              </div>
+            ))}
+            {a.nuance_zh && <p className="sheet-nuance">{a.nuance_zh}</p>}
+            <div className="sheet-ex" onClick={() => onSay(a.example.ja)}>
+              <div className="ja">{a.example.ja}</div>
+              <div className="zh">{a.example.zh}</div>
+            </div>
+          </>
+        )}
+        <button className="cta" onClick={onClose}>
+          知道了
+        </button>
+      </div>
+    </div>
   );
 }
