@@ -1,7 +1,7 @@
 import { readFile } from "@/lib/earworm";
 
 const ID = /^[a-z0-9-]{1,40}$/i;
-const FILE = /^(song\.mp3|[ci]\d{1,2}\.(mp4|png))$/;
+const FILE = /^(song\.mp3|cover\.png|[ci]\d{1,2}\.(mp4|png))$/;
 const TYPE = { mp3: "audio/mpeg", mp4: "video/mp4", png: "image/png" } as const;
 
 // The song, pictures and animations of a 洗脑歌, out of the private Blob store. They never change.

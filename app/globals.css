@@ -1330,3 +1330,10 @@ button.today-go { width: 100%; border: none; cursor: pointer; }
 .retell-bars b { font-family: var(--serif); font-size: 20px; }
 .retell-bars span { font-size: 11px; color: var(--muted); }
 @keyframes pulse { 50% { opacity: 0.3; } }
+/* With its picture: the title sits on a shade along the bottom. */
+.radio-cover.drawn { height: auto; aspect-ratio: 16 / 9; background-size: cover; background-position: center; display: flex; align-items: flex-end; padding: 0 18px 16px; }
+.radio-cover.drawn::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(20, 12, 8, 0) 40%, rgba(20, 12, 8, 0.72) 100%); }
+.radio-cover.drawn .radio-title { position: relative; color: #fbf6ee; font-size: 22px; max-width: 78%; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35); }
+.radio-cover.drawn .radio-hosts { top: 14px; bottom: auto; left: 14px; }
+.radio-cover.drawn .radio-waves { bottom: 18px; }
+.radio-cover.drawn .radio-waves i { background: #fbf6ee; opacity: 0.8; }
