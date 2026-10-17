@@ -716,7 +716,6 @@ button.entry { width: 100%; background: none; border: 0; border-bottom: 1px soli
 .who { flex: none; width: 30px; font-family: var(--serif); font-size: 12px; padding-top: 4px; color: var(--muted); }
 .who-A { color: var(--accent); }
 .quiz { margin: 28px 0 0; padding: 18px 20px; border-radius: 18px; background: var(--soft); font-size: 14px; line-height: 1.8; }
-.call-ken { display: block; margin-top: 12px; padding: 13px; font-size: 14px; }
 .quiz span { display: block; font-size: 11px; letter-spacing: 0.18em; color: var(--muted); margin-bottom: 4px; }
 .note { display: flex; gap: 12px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); }
 .note:last-child { border-bottom: 0; }
