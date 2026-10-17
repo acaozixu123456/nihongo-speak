@@ -267,18 +267,40 @@ function meaningOf(items: SkillItem[], q: Q) {
   return items.find((x) => skillKey(x.ja) === skillKey(q.about))?.zh ?? q.explain_zh;
 }
 
-async function load(items: SkillItem[], p: Progress, topic?: string) {
-  const res = await fetch("/api/game", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      topic: topic?.slice(0, 80),
-      items: items.map((x) => ({ ja: x.ja, zh: x.zh, kind: x.kind, note: x.note, level: p.skills[skillKey(x.ja)]?.level ?? 0 })),
-    }),
+// Rounds asked for ahead of time (the episode page starts one when it opens, so 练一练 is ready by
+// the time it's tapped), by request body. Taken once: the next round is written fresh.
+const early = new Map<string, Promise<GameData>>();
+
+function request(items: SkillItem[], p: Progress, topic?: string) {
+  return JSON.stringify({
+    topic: topic?.slice(0, 80),
+    items: items.map((x) => ({ ja: x.ja, zh: x.zh, kind: x.kind, note: x.note, level: p.skills[skillKey(x.ja)]?.level ?? 0 })),
   });
+}
+
+async function fetchGame(body: string): Promise<GameData> {
+  const res = await fetch("/api/game", { method: "POST", headers: { "content-type": "application/json" }, body });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? "AI 出错了");
-  const qs = prepare(data as GameData);
+  return data as GameData;
+}
+
+export function prefetchGame(p: Progress, ep: RadioEpisode) {
+  const items = roundItems(p, ep);
+  if (!items.length) return;
+  const body = request(items, p, ep.title_zh);
+  if (early.has(body)) return;
+  const job = fetchGame(body);
+  job.catch(() => early.delete(body));
+  early.set(body, job);
+}
+
+async function load(items: SkillItem[], p: Progress, topic?: string) {
+  const body = request(items, p, topic);
+  const ready = early.get(body);
+  early.delete(body);
+  const data = await (ready?.catch(() => fetchGame(body)) ?? fetchGame(body));
+  const qs = prepare(data);
   if (!qs.length) throw new Error("这次没出好题，再试一次");
   return qs;
 }
