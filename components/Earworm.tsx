@@ -14,6 +14,7 @@ type Job = {
   lines?: Line[];
   end?: number;
   scenes?: number;
+  version?: number;
   error?: string;
 };
 
@@ -99,7 +100,8 @@ export default function Earworm({ ep }: { ep: RadioEpisode }) {
     const urls: string[] = [];
     (async () => {
       try {
-        const song = await local(file(ep.id, "song.mp3"));
+        // A song sung again keeps its file name, so the version keeps an old copy from being used.
+        const song = await local(`${file(ep.id, "song.mp3")}?v=${ready.version ?? 1}`);
         urls.push(song);
         // Only the scenes the lines use: one the painter never managed to draw isn't there.
         const used = [...new Set(ready.lines!.map((l) => l.scene))];

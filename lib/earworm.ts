@@ -17,6 +17,8 @@ const WRITER = "gemini-3.8-flash";
 const SINGER = "lyria-3-pro-preview";
 const PAINTER = "gemini-3.1-flash-image";
 
+const VERSION = 2;
+
 const Line = z.object({
   sing: z.string().describe("歌う歌詞1行（日本語、8〜16字）。重点の単語や文型をそのまま入れる"),
   kw: z.string().describe("この行で覚える単語・文型（画面に大きく出す。単語は表記どおり、文型は「〜ないように」の形）"),
@@ -28,7 +30,7 @@ const Line = z.object({
 export const SongSchema = z.object({
   style: z
     .string()
-    .describe("Music style prompt in English: genre, tempo (BPM), vocal (one clear singer), instruments. Super catchy, upbeat, earworm."),
+    .describe("Music style prompt in English: genre, vocal (one clear singer), instruments. Super catchy, upbeat, earworm. No tempo."),
   scenes: z
     .array(
       z.object({
@@ -57,6 +59,7 @@ export type Job = {
   drawTries?: number;
   failedStep?: Step;
   failedAt?: number;
+  version?: number; // songs made before VERSION get sung again (their lyrics and pictures stay)
   error?: string;
   busyUntil?: number;
 };
@@ -68,6 +71,7 @@ export const view = (j: Job | null) =>
     lines: j.lines,
     end: j.end,
     scenes: j.song?.scenes.length,
+    version: j.version ?? 1,
     error: j.error,
   };
 
@@ -158,47 +162,41 @@ const sections = (s: Song) => [
   ["Chorus", s.chorus],
 ] as const;
 
-// Lyria answers with the lyrics it sang, a start time on the first line of each section
-// ("[25.9:] 引っかかっちゃう…", the rest "[:] …"), its tempo ("bpm: 130.0") and the song's length
-// ("duration_secs: 70.1"). Each line is sung over two bars, so the lines of a section follow its
-// start eight beats apart (squeezed if the next section starts sooner). Spreading them evenly up
-// to the next section went wrong whenever an instrumental break came in between.
-export function lineTimes(text: string, sections: number[]) {
-  const count = sections.reduce((a, b) => a + b, 0);
-  const known: (number | null)[] = [];
+// Lyria sings timed lyrics on time: given "[8.0:] 玄関ドアは…" it starts that line within half a
+// second of 8.0 (checked with speech recognition). So the song is laid out here, at 120 BPM with a
+// line every two bars after a two-bar intro, and the captions follow the plan. Left to itself,
+// Lyria put in instrumental breaks and stretched lines, and only said where each section started.
+const BAR2 = 4; // seconds: two bars of 4/4 at 120 BPM
+const LEAD = 0.4; // the singer comes in a little ahead of the beat
+
+// When each line is sung: as Lyria reports it back ("[8.0:] …") where it does, else as planned.
+export function lineTimes(text: string, planned: number[]) {
+  const said: number[] = [];
   // Only sung lines count: the section descriptions that follow carry times too, but in English.
-  for (const m of text.matchAll(/^\[(\d+(?:\.\d+)?)?:[^\]]*\]\s*(.+)$/gm)) {
-    if (known.length >= count) break;
-    if (/[\u3040-\u30ff\u4e00-\u9fff]/.test(m[2])) known.push(m[1] ? Number(m[1]) : null);
+  for (const m of text.matchAll(/^\[(\d+(?:\.\d+)?):[^\]]*\]\s*(.+)$/gm)) {
+    if (/[\u3040-\u30ff\u4e00-\u9fff]/.test(m[2])) said.push(Number(m[1]));
   }
-  const duration = Number(text.match(/duration_secs:\s*([\d.]+)/)?.[1] ?? 0);
-  const bpm = Number(text.match(/bpm:\s*([\d.]+)/)?.[1] ?? 0);
-  const pace = bpm > 60 && bpm < 240 ? 480 / bpm : 3.5;
-  // Where each section starts, as Lyria says, or right after the one before.
-  const firsts: number[] = [];
-  let n = 0;
-  for (const len of sections) {
-    firsts.push(n);
-    n += len;
-  }
-  const said = known.length === count ? firsts.map((i) => known[i]) : known.filter((x): x is number => x !== null);
-  const at: number[] = [];
-  let next = said[0] ?? 0;
-  sections.forEach((len, k) => {
-    const start = Math.max(said[k] ?? next, at.length ? at[at.length - 1] + 1 : 0);
-    const after = said[k + 1];
-    const step = after != null && after > start ? Math.min(pace, (after - start) / len) : pace;
-    for (let i = 0; i < len; i++) at.push(start + i * step);
-    next = start + len * step;
-  });
-  return { at, end: Math.max(duration, next) };
+  const use = said.length >= planned.length ? said.slice(0, planned.length) : planned;
+  return use.map((t) => Math.max(0, t - LEAD));
 }
 
 async function sing(id: string, song: Song) {
+  let t = BAR2;
+  const planned: number[] = [];
   const lyrics = sections(song)
-    .map(([name, lines]) => `[${name}]\n${lines.map((l) => l.sing).join("\n")}`)
+    .map(([name, lines]) => {
+      const timed = lines.map((l) => {
+        planned.push(t);
+        t += BAR2;
+        return `[${(t - BAR2).toFixed(1)}:] ${l.sing}`;
+      });
+      return `[${name}]\n${timed.join("\n")}`;
+    })
     .join("\n\n");
-  const prompt = `Create a 70-second super catchy, upbeat J-pop earworm song for Japanese learners, like a cheerful kids-TV / anime opening jingle. ${song.style}. One clear lead vocal, diction clear and slow enough that every word is easy to hear. The chorus must be extremely repetitive and hook-heavy. Sing in Japanese, exactly these lyrics:\n\n${lyrics}`;
+  const end = t + BAR2;
+  // Gemini's style may name its own tempo; the timing needs this one.
+  const style = song.style.replace(/\d+\s*BPM/gi, "");
+  const prompt = `Create a ${end}-second super catchy, upbeat J-pop earworm song for Japanese learners, like a cheerful kids-TV / anime opening jingle. ${style}. Exactly 120 BPM, 4/4. One clear lead vocal, diction clear and slow enough that every word is easy to hear. The chorus must be extremely repetitive and hook-heavy. Instrumental intro from 0.0 to ${BAR2.toFixed(1)} seconds. Each lyric line is sung over exactly two bars (${BAR2} seconds) and starts exactly at the time written before it, with no instrumental breaks between sections. Sing in Japanese exactly these timed lyrics:\n\n${lyrics}`;
   const parts = await vertex(
     SINGER,
     { contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { responseModalities: ["AUDIO", "TEXT"] } },
@@ -209,8 +207,9 @@ async function sing(id: string, song: Song) {
   await save(id, "song.mp3", Buffer.from(audio.data, "base64"), "audio/mpeg");
   const flat = sections(song).flatMap(([, lines]) => lines);
   const text = parts.map((p) => p.text ?? "").join("\n");
-  const { at, end } = lineTimes(text, sections(song).map(([, lines]) => lines.length));
-  return { lines: flat.map((l, i) => ({ ...l, at: at[i] })), end, lyria: text.slice(0, 6000) };
+  const at = lineTimes(text, planned);
+  const duration = Number(text.match(/duration_secs:\s*([\d.]+)/)?.[1] ?? 0);
+  return { lines: flat.map((l, i) => ({ ...l, at: at[i] })), end: Math.max(duration, end), lyria: text.slice(0, 6000), version: VERSION };
 }
 
 // Draws one scene. The image model allows only a few pictures a minute on this account, so a
@@ -273,6 +272,8 @@ export async function step(id: string, ep: Radio | null): Promise<Job | null> {
     if (!ep) return null;
     j = { step: "lyrics" };
   }
+  // Songs sung before the timing was laid out get sung again, keeping the lyrics and pictures.
+  if (j.step === "ready" && (j.version ?? 1) < VERSION) j = { ...j, step: "song", drawTries: 0 };
   // A job that stopped on an error gets another go when the page is opened again later.
   if (j.step === "failed" && j.failedStep && Date.now() - (j.failedAt ?? 0) > 10 * 60 * 1000) {
     j = { ...j, step: j.failedStep, error: undefined, drawTries: 0 };
