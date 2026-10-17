@@ -8,9 +8,10 @@ const str = (s: unknown, n: number): s is string => typeof s === "string" && s.l
 
 // script: Haiku writes today's episode from the learner's profile. 摸鱼模式 turns it into audio (see lib/client/moyu.ts).
 // radio: one 趣味电台 episode (lib/radio.ts), avoiding the titles the phone has already heard,
-// on the learner's own topic when they asked for one (点播).
+// on the learner's own topic when they asked for one (点播), with one of their recent mistakes as
+// the listener's letter (お便り).
 export async function POST(request: Request) {
-  const body = (await request.json()) as { kind: "script" | "radio"; weak?: unknown; cards?: unknown; scenes?: unknown; avoid?: unknown; wish?: unknown };
+  const body = (await request.json()) as { kind: "script" | "radio"; weak?: unknown; cards?: unknown; scenes?: unknown; avoid?: unknown; wish?: unknown; letter?: { said?: unknown; better?: unknown; where?: unknown } };
   try {
     if (body.kind === "script") {
       const weak = (Array.isArray(body.weak) ? body.weak : []).slice(0, 3).filter((w) => str(w?.tag, 80) && str(w?.zh, 200));
@@ -33,7 +34,12 @@ export async function POST(request: Request) {
     if (body.kind === "radio") {
       const avoid = (Array.isArray(body.avoid) ? body.avoid : []).slice(-30).filter((t) => str(t, 60));
       const wish = str(body.wish, 100) && body.wish.trim() ? body.wish.trim() : undefined;
-      return NextResponse.json(await makeRadio(avoid, wish));
+      const l = body.letter;
+      const letter =
+        l && str(l.said, 200) && str(l.better, 200) && l.said && l.better
+          ? { said: l.said, better: l.better, where: str(l.where, 60) && l.where ? l.where : undefined }
+          : undefined;
+      return NextResponse.json(await makeRadio(avoid, wish, letter));
     }
     return NextResponse.json({ error: "unknown kind" }, { status: 400 });
   } catch (e) {

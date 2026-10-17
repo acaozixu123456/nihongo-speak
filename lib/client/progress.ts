@@ -477,6 +477,17 @@ export function weakList(p: Progress) {
     .sort((x, y) => weakness(y) - weakness(x) || (x.last < y.last ? 1 : -1));
 }
 
+// The listener's letter for the next 趣味电台 episode: the newest mistake, unless the last
+// episode already read it out.
+export function radioLetter(): { said: string; better: string } | undefined {
+  const p = read();
+  const last = p.episodes[0]?.letter?.said;
+  return [...weakList(p)]
+    .sort((x, y) => ((x.lastMiss ?? x.last) < (y.lastMiss ?? y.last) ? 1 : -1))
+    .map((w) => w.examples[0])
+    .find((e) => e && e.said !== last && e.said !== e.better);
+}
+
 // The shakiest points not practised today, as items for the daily 练一练 round: the pattern (or the
 // tag) with the latest mistake as its example, pitched so the exercises make the learner use the form.
 export const WEAK_EP = "weak:";

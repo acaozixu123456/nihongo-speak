@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { readJob, step, view } from "@/lib/earworm";
-import { RadioSchema } from "@/lib/radio";
+import { OldRadioSchema } from "@/lib/radio";
 import { storageReady } from "@/lib/store";
 import { vertexConfigured } from "@/lib/vertex-tts";
 
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   const id = typeof body.id === "string" ? body.id : "";
   if (!ID.test(id)) return NextResponse.json({ error: "bad id" }, { status: 400 });
   if (!storageReady() || !vertexConfigured()) return NextResponse.json({ error: "not set up" }, { status: 503 });
-  const ep = body.episode ? RadioSchema.safeParse(body.episode) : null;
+  const ep = body.episode ? OldRadioSchema.safeParse(body.episode) : null;
   try {
     return NextResponse.json({ job: view(await step(id, ep?.success ? ep.data : null)) });
   } catch (e) {
