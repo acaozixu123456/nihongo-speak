@@ -21,6 +21,7 @@ import {
   type DayStats,
   type DiaryEntry,
   type DrillItem,
+  type Learned,
   type Progress,
   type RadioEpisode,
   type ScenarioProgress,
@@ -30,7 +31,7 @@ import {
 } from "@/lib/progress-model";
 
 export { dayKey, level, streak, totalXp };
-export type { AskedItem, Skill, Card, CustomScenario, DiaryEntry, DrillItem, Progress, RadioEpisode, StuckLine, WeakPoint };
+export type { AskedItem, Skill, Card, CustomScenario, DiaryEntry, DrillItem, Learned, Progress, RadioEpisode, StuckLine, WeakPoint };
 
 // The phone's localStorage is the working copy; it is synced to the server
 // (when storage is set up) so nothing is lost if Safari data is cleared.
@@ -199,6 +200,19 @@ export function onXp(cb: (e: XpEvent) => void) {
 function bumpStats(p: Progress, fn: (s: DayStats) => DayStats): Progress {
   const today = dayKey();
   return { ...p, stats: { ...p.stats, [today]: fn(p.stats[today] ?? {}) } };
+}
+
+// Notes what was practised today for the 今日 recap; a miss sticks for the rest of the day.
+function learn(p: Progress, items: Learned[]): Progress {
+  return bumpStats(p, (s) => {
+    const list = [...(s.learned ?? [])];
+    for (const it of items) {
+      const i = list.findIndex((x) => x.ja === it.ja);
+      if (i < 0) list.push(it);
+      else list[i] = { ...list[i], miss: list[i].miss || it.miss };
+    }
+    return { ...s, learned: list.slice(-200) };
+  });
 }
 
 function gainXp(p: Progress, amount: number, kind: XpKind): Progress {
@@ -406,7 +420,7 @@ export function recordQuick(item: QuickItem, ms: number | null, hinted = false) 
     }),
   );
   if (spoke) next = gainXp(next, XP.quick, "quick");
-  write(next);
+  write(learn(next, [{ ja: item.ja, kana: item.reading, zh: item.zh, src: "quick", miss: !fast, voice: item.voice }]));
 }
 
 // The AI judged today's answer as wrong in meaning: it was quick, but it doesn't count as recalled.
@@ -504,9 +518,11 @@ export function recordShadow(id: string, line: number, score: number) {
   const p = read();
   const prevBest = p.scenarios[id]?.shadow?.[line] ?? 0;
   const amount = XP.shadow + (score >= 80 && prevBest < 80 ? XP.shadowPass : 0);
+  const l = findScenario(p, id)?.lines[line];
+  const noted = l ? learn(p, [{ ja: l.ja, kana: l.kana, zh: l.zh, src: "scene", miss: score < 80, voice: l.voice }]) : p;
   write(
     gainXp(
-      updateScenario(p, id, (s) => ({ ...s, shadow: { ...s.shadow, [line]: Math.max(prevBest, score) } })),
+      updateScenario(noted, id, (s) => ({ ...s, shadow: { ...s.shadow, [line]: Math.max(prevBest, score) } })),
       amount,
       "scene",
     ),
@@ -559,7 +575,9 @@ export function reviewCard(id: string, remembered: boolean) {
     const step = remembered ? Math.min(c.step + 1, INTERVALS.length - 1) : 0;
     return { ...c, step, due: addDays(dayKey(), remembered ? INTERVALS[c.step] : 1) };
   });
-  write(gainXp({ ...p, cards }, XP.review, "review"));
+  const c = p.cards.find((x) => x.id === id);
+  const noted = c ? learn({ ...p, cards }, [{ ja: c.ja, kana: c.reading, zh: c.zh, src: "review", miss: !remembered, voice: c.voice }]) : { ...p, cards };
+  write(gainXp(noted, XP.review, "review"));
 }
 
 // ---- Diary ----
@@ -728,5 +746,6 @@ export function recordSkills(results: { item: SkillItem; ok: boolean }[]) {
       miss: (o?.miss ?? 0) + (ok ? 0 : 1),
     };
   }
-  write(gainXp({ ...p, skills }, XP.review, "review"));
+  const noted = [...byKey.values()].map(({ item, ok }) => ({ ja: item.ja, kana: item.kind === "word" ? item.note : undefined, zh: item.zh, src: "game" as const, miss: !ok }));
+  write(gainXp(learn({ ...p, skills }, noted), XP.review, "review"));
 }

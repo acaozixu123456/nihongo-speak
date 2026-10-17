@@ -962,3 +962,140 @@ button.entry { width: 100%; background: none; border: 0; border-bottom: 1px soli
 .game-score b { font-size: 32px; color: var(--accent); }
 .game-wait .spin { border-color: var(--line); border-top-color: var(--accent); }
 .entry-count { color: var(--accent); font-size: 14px; }
+
+/* ---- 今日 ---- */
+.top-r { display: flex; align-items: center; gap: 8px; }
+.top-today {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+  text-decoration: none;
+  font-family: var(--serif);
+  font-size: 15px;
+  letter-spacing: 0.04em;
+}
+.top-today b { font-family: var(--sans); font-size: 12px; font-weight: 600; color: #fff; background: var(--accent); border-radius: 999px; padding: 1px 7px; }
+.rc-n { font-family: var(--serif); font-size: 64px; font-weight: 600; line-height: 1; color: var(--accent); }
+.rc-n small { font-family: var(--sans); font-size: 14px; color: var(--muted); margin-left: 6px; font-weight: 400; }
+.rc-miss { font-size: 13px; color: var(--accent); border: 1.5px solid var(--accent); border-radius: 6px; padding: 2px 8px; transform: rotate(-4deg); font-weight: 600; }
+.rc-stamps { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.rc-stamps i { font-style: normal; font-size: 12px; color: var(--muted); background: var(--soft); border-radius: 999px; padding: 3px 10px; font-family: var(--ja); }
+.rc-item { align-items: flex-start; }
+.rc-ja { display: block; font-family: var(--ja); font-size: 17px; font-weight: 500; line-height: 1.5; }
+.rc-ja em { font-style: normal; font-size: 12px; color: var(--muted); margin-left: 8px; font-weight: 400; }
+.rc-src { flex: none; font-size: 11px; color: var(--faint); font-family: var(--ja); padding-top: 4px; }
+
+/* 洗脑连播: full screen, a new colour and a slam on every card, everything pulsing on the beat. */
+.rl-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  --bgc: #e8452c;
+  --fg: #fff;
+  --hi: #fff;
+  background: var(--bgc);
+  color: var(--fg);
+  transition: background 0.15s;
+}
+.rl-stage.c1 { --bgc: #1f1c18; --fg: #f4f1ea; --hi: #ff5a3c; }
+.rl-stage.c2 { --bgc: #fbf7ef; --fg: #1f1c18; --hi: #e8452c; }
+.rl-stage.c3 { --bgc: #f2c14e; --fg: #1f1c18; --hi: #1f1c18; }
+.rl-stage::before {
+  content: "";
+  position: absolute;
+  width: 140vmax;
+  height: 140vmax;
+  border-radius: 50%;
+  background: repeating-radial-gradient(circle, transparent 0 28px, color-mix(in srgb, var(--fg) 7%, transparent) 28px 56px);
+  animation: rl-pulse var(--beat) ease-out infinite;
+  pointer-events: none;
+}
+@keyframes rl-pulse { 0% { transform: scale(1.06); } 40% { transform: scale(1); } }
+.rl-head {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 18px);
+  left: 18px;
+  right: 60px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+  font-family: var(--ja);
+}
+.rl-track { position: absolute; left: 0; right: 0; top: 0; height: 4px; background: color-mix(in srgb, var(--fg) 18%, transparent); }
+.rl-track div { height: 100%; background: var(--fg); transition: width 0.3s; }
+.rl-card { position: relative; width: 100%; padding: 0 22px; text-align: center; animation: rl-slam 0.42s cubic-bezier(0.2, 1.5, 0.4, 1) both; }
+.rl-card.rush { animation-duration: 0.22s; }
+@keyframes rl-slam {
+  0% { transform: scale(2.6) rotate(-8deg); opacity: 0; filter: blur(6px); }
+  55% { transform: scale(0.94) rotate(1deg); opacity: 1; filter: none; }
+  100% { transform: none; }
+}
+.rl-kana { font-family: var(--ja); font-size: 17px; letter-spacing: 0.1em; opacity: 0.8; min-height: 1.4em; }
+.rl-ja {
+  font-family: var(--ja);
+  font-weight: 900;
+  font-size: 64px;
+  line-height: 1.2;
+  color: var(--hi);
+  margin: 8px 0 12px;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  animation: rl-bump var(--beat) ease-out infinite;
+}
+.rl-ja.long { font-size: 40px; }
+.rl-ja.longer { font-size: 28px; line-height: 1.45; }
+@keyframes rl-bump { 0% { transform: scale(1.04); } 35% { transform: scale(1); } }
+.rl-say { font-family: var(--ja); font-size: 17px; font-weight: 600; line-height: 1.5; margin-bottom: 10px; }
+.rl-zh { font-size: 20px; line-height: 1.5; opacity: 0; transform: translateY(12px) scale(0.9); transition: all 0.25s cubic-bezier(0.3, 1.6, 0.5, 1); }
+.rl-zh.on { opacity: 1; transform: none; }
+.rl-stamp {
+  position: absolute;
+  top: -64px;
+  right: 26px;
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--hi);
+  border: 2.5px solid var(--hi);
+  border-radius: 8px;
+  padding: 4px 8px;
+  transform: rotate(12deg);
+  animation: rl-stamp 0.35s 0.25s cubic-bezier(0.2, 1.8, 0.4, 1) both;
+}
+@keyframes rl-stamp { from { transform: rotate(12deg) scale(3); opacity: 0; } }
+.rl-along {
+  margin: 26px auto 0;
+  width: max-content;
+  padding: 10px 22px;
+  border-radius: 999px;
+  background: var(--fg);
+  color: var(--bgc);
+  font-weight: 700;
+  font-size: 18px;
+  animation: rl-bump var(--beat) ease-out infinite;
+}
+.rl-end { position: relative; text-align: center; animation: rl-slam 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) both; }
+.rl-end-n { font-family: var(--serif); font-weight: 700; font-size: 120px; line-height: 1; color: var(--hi); }
+.rl-end-t { font-size: 32px; font-weight: 700; margin: 8px 0 36px; }
+.rl-again { padding: 14px 34px; border-radius: 999px; border: 0; background: var(--fg); color: var(--bgc); font-size: 16px; font-weight: 600; }
+
+.confetti { position: fixed; inset: 0; z-index: 60; pointer-events: none; overflow: hidden; }
+.confetti i { position: absolute; top: -12px; width: 8px; height: 14px; border-radius: 2px; animation: confetti-fall linear forwards; }
+@keyframes confetti-fall { to { top: 105%; transform: translateX(40px) rotate(720deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .rl-card, .rl-ja, .rl-stage::before, .rl-along, .rl-end { animation: none; }
+}

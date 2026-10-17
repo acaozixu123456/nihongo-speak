@@ -1,6 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
+import { dayKey, useProgress } from "@/lib/client/progress";
+import { useHydrated } from "@/lib/client/hydrated";
+import { recap } from "@/lib/client/recap";
 
 // Two places only: 听 and 说. "我" (records, saved lines) sits behind the small button at the top.
 const TABS = [
@@ -24,14 +28,22 @@ export default function Nav({ on }: { on: NavKey }) {
   );
 }
 
-// Page head shared by 听 and 说: today's date on the left, the way to "我" on the right.
+// Page head shared by 听 and 说: today's date on the left; 今日 (everything learned today) and "我" on the right.
 export function Top({ note }: { note?: string }) {
+  const p = useProgress();
+  const hydrated = useHydrated();
+  const n = useMemo(() => (hydrated ? recap(p, [dayKey()]).length : 0), [p, hydrated]);
   return (
     <div className="top">
       <span>{note}</span>
-      <Link href="/me" className="top-me" aria-label="我的记录">
-        我
-      </Link>
+      <span className="top-r">
+        <Link href="/today" className={`top-today ${n ? "on" : ""}`} aria-label="今天学过的">
+          今日{n > 0 && <b>{n}</b>}
+        </Link>
+        <Link href="/me" className="top-me" aria-label="我的记录">
+          我
+        </Link>
+      </span>
     </div>
   );
 }
