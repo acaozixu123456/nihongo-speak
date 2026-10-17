@@ -524,7 +524,7 @@ const ExplainSchema = z.object({
   reading: z.string().describe("選ばれた部分の読み（ひらがな）。中国語だけが選ばれた場合は空文字"),
   meaning_zh: z.string().describe("この文脈での意味（中国語、1〜2文）"),
   points: z
-    .array(z.object({ ja: z.string().describe("語・文法・言い回し（日本語）"), zh: z.string().describe("説明（中国語、1〜2文）") }))
+    .array(z.object({ ja: z.string().describe("見出しだけ：語や文型そのもの（日本語、15字以内、説明は書かない）。例：「もったいぶる」「〜とか」"), zh: z.string().describe("説明（中国語、1〜2文）") }))
     .describe("分解して説明すべき語や文法、1〜4個。選ばれた部分が単語ひとつなら、その語の使い方を1個"),
   nuance_zh: z.string().describe("語感・場面・言い換え（中国語、1〜2文）。とくになければ空文字"),
   example: z.object({ ja: z.string().describe("日常や職場で使える別の例文（日本語、短く）"), zh: z.string() }),
