@@ -10,7 +10,7 @@ import { setAudioSession } from "@/lib/client/recorder";
 
 type Line = { sing: string; kw: string; kana: string; zh: string; scene: number; at: number };
 type Job = {
-  step: "lyrics" | "song" | "draw" | "ready" | "failed";
+  step: "lyrics" | "song" | "check" | "draw" | "ready" | "failed";
   lines?: Line[];
   end?: number;
   scenes?: number;
@@ -21,6 +21,7 @@ type Job = {
 const DOING: Record<string, string> = {
   lyrics: "正在把单词写成歌词",
   song: "正在作曲、演唱",
+  check: "正在检查每句的发音",
   draw: "正在给每句歌词画插图",
 };
 

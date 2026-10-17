@@ -581,3 +581,27 @@ export async function kanaReading(text: string): Promise<string | null> {
   const { kana } = await haikuFirst(ReadingSchema, "日本語の読み方をひらがなだけで答える。記号や数字も読みに直す。", text, 300);
   return /^[぀-ヿ\s、。！？・ー]+$/.test(kana.trim()) ? kana.trim() : null;
 }
+
+// ---- 洗脑歌: lyrics as they are sung ----
+
+const SungSchema = z.object({
+  lines: z.array(z.string().describe("その行を、歌うとおりにかなだけで書いたもの")),
+});
+
+// Lyria sings kanji with the wrong reading (細菌 as しょーべる…, 工面 as こうめ), so it is given the
+// lyrics in kana only. Particles are written as they sound (は→わ, へ→え) so it doesn't sing "ha".
+export async function sungKana(lines: string[]): Promise<string[]> {
+  const { lines: out } = await haikuFirst(
+    SungSchema,
+    `日本語の歌詞を、歌手がそのまま歌える「かなだけ」の歌詞に書き直す。
+- 漢字はすべて、その文脈での正しい読みのひらがなにする。外来語・カタカナ語はカタカナのまま。
+- 助詞の「は」「へ」は発音どおり「わ」「え」と書く。「を」はそのまま。
+- 区切りのスペース、！や？などの記号、繰り返しは元のまま残す。言葉を足したり削ったりしない。
+- 1行に1つ、同じ数・同じ順で返す。`,
+    lines.map((l, i) => `${i + 1}. ${l}`).join("\n"),
+    3000,
+  );
+  if (out.length !== lines.length) throw new Error("歌词注音行数不对");
+  const kana = /^[぀-ヿ\s、。！？!?…〜ー・,.「」]+$/;
+  return out.map((k, i) => (kana.test(k.trim()) ? k.trim() : lines[i]));
+}
