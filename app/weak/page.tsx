@@ -7,10 +7,7 @@ export default function WeakPage() {
     <main>
       <Link href="/me" className="back">← 我</Link>
       <header className="page-mast">
-        <div>
-          <h1>薄弱点</h1>
-          <p className="muted">AI 从你每次开口里找出的、反复出错的语法和说法</p>
-        </div>
+        <h1>薄弱点</h1>
       </header>
       <WeakList />
       <Nav on="me" />

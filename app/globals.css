@@ -609,16 +609,14 @@ a.today:active { transform: scale(0.99); }
   font-size: 15px;
   letter-spacing: 0.06em;
 }
+button.today-btn { width: 100%; text-align: left; font-size: inherit; border-radius: var(--radius); padding: 24px 22px 20px; }
+button.today-btn:disabled { opacity: 1; }
+button.today-btn:disabled .today-go { opacity: 0.6; }
+.weak-top { display: block; font-family: var(--ja); font-size: 24px; font-weight: 600; line-height: 1.45; margin: 14px 0 8px; }
+.today .weak-ex { display: block; color: var(--muted); }
+.weak-n { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .steps3 { display: flex; gap: 6px; margin-top: 20px; }
-.steps3 i {
-  flex: 1;
-  font-style: normal;
-  font-size: 11px;
-  color: var(--faint);
-  padding-top: 8px;
-  border-top: 2px solid var(--line);
-  letter-spacing: 0.08em;
-}
+.steps3 i { flex: 1; border-top: 2px solid var(--line); }
 .steps3 i.on { color: var(--muted); border-color: var(--text); }
 .steps3 i.now { color: var(--accent); border-color: var(--accent); }
 
@@ -639,6 +637,7 @@ button.cta {
 
 /* Rows: a two-character serif mark, two lines of text, a chevron. */
 .rows { margin-top: 18px; }
+.sec + .rows { margin-top: 0; }
 .entry, .ep-row {
   display: flex;
   align-items: center;
@@ -653,7 +652,8 @@ button.cta {
 .entry-ja { font-family: var(--serif); font-size: 15px; color: var(--accent); width: 34px; flex: none; letter-spacing: 0.04em; line-height: 1.25; }
 .entry-text { flex: 1; min-width: 0; }
 .entry-text small { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; line-height: 1.5; }
-.entry-solo { margin-top: 26px; border-top: 1px solid var(--line); }
+button.entry { width: 100%; background: none; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; text-align: left; font-size: 16px; }
+.rows .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 8px; vertical-align: middle; }
 .ep-date { width: 54px; flex: none; white-space: nowrap; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* ---- One episode ---- */
