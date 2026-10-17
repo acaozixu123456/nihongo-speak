@@ -60,7 +60,7 @@ export default function ListenHome() {
             <span className="ja-serif">{latest ? "新しい回" : "はじめての回"}</span>
           </span>
           <span className="today-zh">两人聊一个日本冷知识，约 5 分钟</span>
-          <span className="today-go">{busy ? "AI 正在写这一期…" : "▶ 生成并收听"}</span>
+          <span className="today-go">{busy ? "AI 正在写这一期…" : "生成新的一期"}</span>
         </button>
       )}
       {error && <p className="error">{error}</p>}
@@ -74,7 +74,7 @@ export default function ListenHome() {
         {unheard && (
           <button className="entry" onClick={fresh} disabled={busy}>
             <span className="entry-ja">新</span>
-            <span className="entry-text">{busy ? "AI 正在写这一期…" : "换一期新的"}</span>
+            <span className="entry-text">{busy ? "AI 正在写这一期…" : "生成新的一期"}</span>
             <span className="chev" aria-hidden>›</span>
           </button>
         )}
