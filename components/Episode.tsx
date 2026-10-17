@@ -8,6 +8,7 @@ import { play, preload, SILENCE, ttsUrl, unlock } from "@/lib/client/player";
 import { findEpisode, markHeard, RADIO_VOICE, useProgress } from "@/lib/client/progress";
 import { setAudioSession } from "@/lib/client/recorder";
 import { useHydrated } from "@/lib/client/hydrated";
+import Earworm from "./Earworm";
 import { Star } from "./FeedbackCard";
 import { shortDate } from "./ListenHome";
 import Nav from "./Nav";
@@ -264,6 +265,7 @@ export default function Episode({ id }: { id: string }) {
       </div>
       <h1 className="ep-head">{ep.title_zh}</h1>
       <p className="ep-hook">{ep.hook_zh}</p>
+      <Earworm ep={ep} />
 
       <div className="player">
         <button className="play" onClick={toggle} aria-label={phase === "playing" ? "暂停" : "播放"}>
