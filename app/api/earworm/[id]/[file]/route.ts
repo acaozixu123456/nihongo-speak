@@ -14,6 +14,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     headers: {
       "Content-Type": TYPE[file.split(".").pop() as keyof typeof TYPE],
       "Cache-Control": "public, max-age=31536000, immutable",
+      // Vercel's CDN keeps them too, so a replay elsewhere doesn't read the Blob store again.
+      "CDN-Cache-Control": "max-age=31536000",
     },
   });
 }

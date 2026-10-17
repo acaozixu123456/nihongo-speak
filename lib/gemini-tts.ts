@@ -63,12 +63,13 @@ function apiKey() {
   return key;
 }
 
-// Only the sentence is sent: a style instruction in front of it gets read out loud.
+// Only the sentence is sent: a style instruction in front of it gets read out loud. Every voice here
+// is Japanese, and saying so matters: a word written only in kanji (邪魔, 確認) was read in Chinese.
 export const request = (text: string, voice: string) => ({
   contents: [{ parts: [{ text }] }],
   generationConfig: {
     responseModalities: ["AUDIO"],
-    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
+    speechConfig: { languageCode: "ja-JP", voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
   },
 });
 

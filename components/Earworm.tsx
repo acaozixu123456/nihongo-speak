@@ -34,7 +34,7 @@ async function local(url: string) {
     const cache = await caches.open(CACHE);
     res = await cache.match(url);
     if (!res) {
-      const fresh = await fetch(url);
+      const fresh = await fetch(url, { signal: AbortSignal.timeout(60000) });
       if (!fresh.ok) throw new Error(String(fresh.status));
       await cache.put(url, fresh.clone());
       res = fresh;
@@ -58,7 +58,15 @@ export default function Earworm({ ep, kicker = "趣味电台 · 洗脑歌" }: { 
   const latest = useRef(ep);
   latest.current = ep;
 
-  // Ask how far it has got, and keep it going while this page is open.
+  // Ask how far it has got, and keep it going while this page is open. A request the phone
+  // dropped (screen locked, app in the background) gives up after a while rather than leaving
+  // the spinner up forever, and coming back to the page asks again straight away.
+  const [wake, setWake] = useState(0);
+  useEffect(() => {
+    const back = () => document.visibilityState === "visible" && setWake((n) => n + 1);
+    document.addEventListener("visibilitychange", back);
+    return () => document.removeEventListener("visibilitychange", back);
+  }, []);
   useEffect(() => {
     let stop = false;
     (async () => {
@@ -70,12 +78,14 @@ export default function Earworm({ ep, kicker = "趣味电台 · 洗脑歌" }: { 
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ id: latest.current.id, episode: latest.current }),
+            signal: AbortSignal.timeout(130000),
           });
           const data = (await res.json()) as { job?: Job | null; error?: string };
           if (!res.ok) throw new Error(data.error ?? "出错了");
           if (stop) return;
           const j = data.job ?? null;
-          setJob(j);
+          // A finished song stays the same object, so its files aren't fetched (and the playing ones dropped) again.
+          setJob((prev) => (prev?.step === "ready" && j?.step === "ready" ? prev : j));
           setError("");
           if (j && (j.step === "ready" || j.step === "failed")) return;
           if (!j) return; // this episode can't have one (an old episode without words)
@@ -91,7 +101,7 @@ export default function Earworm({ ep, kicker = "趣味电台 · 洗脑歌" }: { 
     return () => {
       stop = true;
     };
-  }, [ep.id]);
+  }, [ep.id, wake]);
 
   // Once it is ready, fetch the song and every scene in the background.
   const ready = job?.step === "ready" ? job : null;
@@ -167,7 +177,7 @@ export default function Earworm({ ep, kicker = "趣味电台 · 洗脑歌" }: { 
     <>
       <audio ref={audio} playsInline />
       <button className="ew-card ew-ready" onClick={start} disabled={!media}>
-        <span className="ew-poster" style={{ backgroundImage: `url(${file(ep.id, `i${ready.lines![0].scene}.png`)})` }}>
+        <span className="ew-poster" style={{ backgroundImage: `url(${media?.scenes[ready.lines![0].scene] ?? file(ep.id, `i${ready.lines![0].scene}.png`)})` }}>
           {media ? "▶" : <span className="ew-spin" />}
         </span>
         <span className="ew-text">
