@@ -23,6 +23,9 @@ const HOST_NAME = { A: "ハル", B: "ケン" } as const;
 
 type Phase = "idle" | "loading" | "playing" | "paused";
 const ZH_KEY = "nihongo-speak:ep-zh";
+const RATE_KEY = "nihongo-speak:ep-rate";
+// Slower speeds for when the hosts run too fast to follow.
+const RATES = [1, 0.85, 0.7];
 
 // What the learner selected, with the line it sits in, for 问 AI.
 type Pick = { text: string; line: string; before?: string };
@@ -40,6 +43,7 @@ export default function Episode({ id }: { id: string }) {
   const [pos, setPos] = useState(0);
   const [tab, setTab] = useState<Tab>("script");
   const [showZh, setShowZhState] = useState(false);
+  const [rate, setRateState] = useState(1);
   const [error, setError] = useState("");
   // How each clip is getting on while the episode's audio is being made.
   const [made, setMade] = useState<{ clips: Clip[]; at: ClipState[] } | null>(null);
@@ -51,6 +55,8 @@ export default function Episode({ id }: { id: string }) {
   useEffect(() => {
     try {
       setShowZhState(localStorage.getItem(ZH_KEY) === "1");
+      const r = Number(localStorage.getItem(RATE_KEY));
+      if (RATES.includes(r)) setRateState(r);
     } catch {}
     // Scrolling by hand pauses the follow-along for a few seconds.
     const hand = () => (touched.current = Date.now());
@@ -110,6 +116,40 @@ export default function Episode({ id }: { id: string }) {
     } catch {}
   }
 
+  function setRate(r: number) {
+    setRateState(r);
+    const a = audio.current;
+    if (a) a.playbackRate = a.defaultPlaybackRate = r;
+    try {
+      localStorage.setItem(RATE_KEY, String(r));
+    } catch {}
+  }
+
+  // Back to the start of the line being spoken; tapped again right away, the line before it.
+  function jump(by: -1 | 1) {
+    const cur = prep.current;
+    const a = audio.current;
+    if (!cur || !a) return;
+    let i = 0;
+    while (i + 1 < cur.starts.length && cur.starts[i + 1] <= a.currentTime) i++;
+    if (by < 0 && a.currentTime - cur.starts[i] < 1.2) i--;
+    if (by > 0) i++;
+    i = Math.max(0, Math.min(cur.starts.length - 1, i));
+    a.currentTime = cur.starts[i] + 0.01;
+    if (a.paused) a.play().catch(() => {});
+  }
+
+  // Lock screen and earphone buttons: the episode's title, and previous / next line.
+  function lockScreen() {
+    const ms = navigator.mediaSession;
+    if (!ms) return;
+    try {
+      ms.metadata = new MediaMetadata({ title: episode.title_zh, artist: "趣味电台" });
+      ms.setActionHandler("previoustrack", () => jump(-1));
+      ms.setActionHandler("nexttrack", () => jump(1));
+    } catch {}
+  }
+
   async function askAi(p: Pick) {
     setAsk({ pick: p });
     setPick(null);
@@ -146,6 +186,8 @@ export default function Episode({ id }: { id: string }) {
       );
       prep.current = ready;
       a.src = ready.url;
+      a.playbackRate = a.defaultPlaybackRate = rate;
+      lockScreen();
       await a.play();
     } catch (e) {
       setError(e instanceof Error ? e.message : "播放失败");
@@ -232,6 +274,20 @@ export default function Episode({ id }: { id: string }) {
             <div style={{ width: `${(loading ? finished / made.clips.length : pos) * 100}%` }} />
           </div>
         </div>
+        {(phase === "playing" || phase === "paused") && (
+          <>
+            <button className="player-tool" onClick={() => jump(-1)} aria-label="再听这一句">
+              重听
+            </button>
+            <button
+              className="player-tool"
+              onClick={() => setRate(RATES[(RATES.indexOf(rate) + 1) % RATES.length])}
+              aria-label="播放速度"
+            >
+              {rate}×
+            </button>
+          </>
+        )}
       </div>
       {loading && trouble >= 0 && (
         <p className="making-note warn-note" key={trouble}>

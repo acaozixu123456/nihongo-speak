@@ -57,7 +57,7 @@ main {
   padding: calc(env(safe-area-inset-top) + 20px) 22px calc(env(safe-area-inset-bottom) + 110px);
   overflow-x: clip;
 }
-h1 { font-size: 28px; font-weight: 700; margin: 8px 0 4px; letter-spacing: 0.01em; }
+h1 { font-family: var(--serif); font-size: 28px; font-weight: 600; margin: 8px 0 4px; letter-spacing: 0.02em; }
 h2 { font-size: 12px; font-weight: 500; color: var(--muted); letter-spacing: 0.12em; margin: 30px 0 10px; }
 h2 span { margin-left: 6px; }
 .card h2, .modal h2 { margin-top: 0; }
@@ -688,6 +688,19 @@ button.cta {
   place-items: center;
 }
 .player-body { flex: 1; min-width: 0; }
+.player-tool {
+  flex: none;
+  min-width: 40px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--soft);
+  border-color: transparent;
+  font-variant-numeric: tabular-nums;
+}
+.player-tool + .player-tool { margin-left: -8px; }
 .player-state { font-family: var(--ja); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 7px; }
 .track { height: 2px; background: var(--line); border-radius: 1px; overflow: hidden; }
 .track div { height: 100%; background: var(--accent); transition: width 0.25s linear; }
