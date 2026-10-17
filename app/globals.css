@@ -1336,3 +1336,7 @@ button.today-go { width: 100%; border: none; cursor: pointer; }
 .radio-cover.drawn .radio-waves { bottom: 14px; right: 16px; }
 .radio-cover.drawn .radio-waves i { background: #fbf6ee; opacity: 0.85; box-shadow: 0 0 4px rgba(0, 0, 0, 0.3); }
 .radio-title.under { margin-top: 14px; color: var(--text); font-size: 24px; max-width: none; }
+/* 今日 after the route: a smaller stamp, then the places to go on with. */
+.done-stamp.small { width: 92px; height: 92px; margin: 14px auto 18px; font-size: 30px; }
+.more-kicker { display: block; margin: 26px 0 10px; }
+.retell-other { flex: none; align-self: flex-start; margin-left: 10px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--muted); font-size: 13px; white-space: nowrap; cursor: pointer; }

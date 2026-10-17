@@ -42,21 +42,26 @@ type Topic = { title: string; about: string; keys: { ja: string; kana?: string }
 
 const LIFE_TOPICS = ["今天上班（或今天一天）做了什么", "这个周末做了什么，或打算做什么", "最近吃过的好吃的东西", "最近让你吃惊或开心的一件事"];
 
-// Today's episode when there is one; otherwise something from the learner's own day.
-function topicFor(p: Progress): Topic {
+function epTopic(ep: Progress["episodes"][number]): Topic {
+  const main = ep.lines.filter((l) => l.part === "main").map((l) => l.ja);
+  return {
+    title: ep.title_zh,
+    about: `${ep.title_zh}\n${(main.length ? main : ep.lines.map((l) => l.ja)).join("").slice(0, 600)}`,
+    keys: (ep.words ?? []).slice(0, 3).map((w) => ({ ja: w.ja, kana: w.kana })),
+    starters: ["今日ラジオで、〜って話を聞いたんですけど。", "びっくりしたのは、〜ってことです。", "だから、〜らしいですよ。"],
+  };
+}
+
+const lifeTopic = (t: string): Topic => ({ title: t, about: t, keys: [], starters: ["実は、〜んですよ。", "それで、〜。", "結局、〜って感じでした。"] });
+
+// What there is to tell, first one first: today's episode when there is one, else something from the
+// learner's own day; then the other recent episodes and life topics, for practising off the route.
+function topicsFor(p: Progress): Topic[] {
   const ep = todaysEpisode(p);
-  if (ep) {
-    const main = ep.lines.filter((l) => l.part === "main").map((l) => l.ja);
-    return {
-      title: ep.title_zh,
-      about: `${ep.title_zh}\n${(main.length ? main : ep.lines.map((l) => l.ja)).join("").slice(0, 600)}`,
-      keys: (ep.words ?? []).slice(0, 3).map((w) => ({ ja: w.ja, kana: w.kana })),
-      starters: ["今日ラジオで、〜って話を聞いたんですけど。", "びっくりしたのは、〜ってことです。", "だから、〜らしいですよ。"],
-    };
-  }
   const day = Number(dayKey().replace(/-/g, ""));
-  const t = LIFE_TOPICS[day % LIFE_TOPICS.length];
-  return { title: t, about: t, keys: [], starters: ["実は、〜んですよ。", "それで、〜。", "結局、〜って感じでした。"] };
+  const life = LIFE_TOPICS.map((_, i) => lifeTopic(LIFE_TOPICS[(day + i) % LIFE_TOPICS.length]));
+  const eps = p.episodes.filter((e) => e !== ep).slice(0, 8).map(epTopic);
+  return ep ? [epTopic(ep), ...life.slice(0, 1), ...eps, ...life.slice(1)] : [life[0], ...eps, ...life.slice(1)];
 }
 
 const voiceOf = (person: string) => calls.find((c) => c.person === person)?.talk.aiVoice ?? RADIO_VOICE.B;
@@ -78,7 +83,9 @@ export default function Retell() {
   const p = useProgress();
   const hydrated = useHydrated();
   const onRoute = useOnRoute();
-  const [topic, setTopic] = useState<Topic | null>(null);
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [pick, setPick] = useState(0);
+  const topic: Topic | null = topics[pick] ?? null;
   const [round, setRound] = useState(0);
   const [phase, setPhase] = useState<Phase>("ready");
   const [left, setLeft] = useState(SECONDS[0]);
@@ -95,12 +102,12 @@ export default function Retell() {
   const before = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!hydrated || topic) return;
-    setTopic(topicFor(p));
+    if (!hydrated || topics.length) return;
+    setTopics(topicsFor(p));
     known.current = knownTags(p);
     const past = (p.retells ?? []).filter((r) => r.date !== dayKey());
     before.current = past.length ? past[past.length - 1].cpm[0] : null;
-  }, [hydrated, p, topic]);
+  }, [hydrated, p, topics]);
 
   useEffect(
     () => () => {
@@ -282,6 +289,11 @@ export default function Retell() {
         </span>
         <span className="today-title">
           <span className="retell-topic">{topic.title}</span>
+          {round === 0 && phase === "ready" && !onRoute && topics.length > 1 && (
+            <button className="retell-other" onClick={() => setPick((pick + 1) % topics.length)}>
+              別の話 ›
+            </button>
+          )}
           {talking && <span className={`today-big ${left < 10 ? "hurry" : ""}`}>{clock(left)}</span>}
         </span>
         {topic.keys.length > 0 && (

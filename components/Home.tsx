@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import Places from "./Places";
 import { unlock } from "@/lib/client/player";
 import { useProgress } from "@/lib/client/progress";
 import { useHydrated } from "@/lib/client/hydrated";
@@ -11,7 +12,7 @@ import { finished, minutes, oneFix, plan, quietPref, setQuiet, startRoute, useRo
 const WEEKDAY_JA = ["日", "月", "火", "水", "木", "金", "土"];
 
 // 今日: the only thing on the first screen is today's route and one button. Everything to pick
-// by hand (radio, scenes, calls…) lives behind 我.
+// by hand (radio, scenes, calls…) lives behind 我, and shows here too once the route is done.
 export default function Home() {
   const p = useProgress();
   const hydrated = useHydrated();
@@ -37,7 +38,7 @@ export default function Home() {
     return (
       <main className="page">
         {top}
-        <div className="done-stamp">済</div>
+        <div className="done-stamp small">済</div>
         <div className="today">
           {fix && (
             <>
@@ -54,7 +55,8 @@ export default function Home() {
             ♪ 今日の歌
           </Link>
         </div>
-        <p className="see-you">また明日</p>
+        <span className="kicker more-kicker">もっとやるなら</span>
+        <Places />
       </main>
     );
   }
