@@ -179,7 +179,7 @@ export default function Reel({ items, mode, onClose }: { items: RecapItem[]; mod
       <div className="rl-card" key={`${phase.lap}-${phase.i}`}>
         <div className="rl-kana">{it.kana && it.kana !== it.ja ? it.kana : " "}</div>
         <div className={`rl-ja ${size(it.ja)}`}>{it.ja}</div>
-        {it.say !== it.ja && <div className="rl-say">{it.say}</div>}
+        {it.say !== it.ja && it.say !== it.kana && <div className="rl-say">{it.say}</div>}
         <div className={`rl-zh ${phase.zh || phase.lap > 0 ? "on" : ""}`}>{it.zh}</div>
         {it.miss && <div className="rl-stamp">要記</div>}
         {phase.again && !phase.along && (

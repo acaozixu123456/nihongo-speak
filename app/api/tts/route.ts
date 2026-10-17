@@ -1,8 +1,11 @@
 import { synthesize } from "@/lib/azure";
 import { FLASH, FLASH_LITE, geminiConfigured, geminiVoice, synthesizeGemini } from "@/lib/gemini-tts";
-import { synthesizeVertex, vertexConfigured } from "@/lib/vertex-tts";
+import { readingOf, synthesizeVertex, vertexConfigured } from "@/lib/vertex-tts";
 
 // "HD|fallback" voice lists as the scenarios write them; Chinese is for 摸鱼模式's narration.
+// Has kanji but no kana at all, e.g. 主食 or 確認.
+const KANJI_ONLY = /^(?=.*[\u4e00-\u9fff])[^\u3040-\u30ff]+$/;
+
 const VOICE = /^(ja-JP|zh-CN)-[\w:]+Neural(@\w+)?(\|(ja-JP|zh-CN)-[\w:]+Neural(@\w+)?)*$/;
 
 export async function GET(request: Request) {
@@ -45,9 +48,11 @@ export async function GET(request: Request) {
 // used up everywhere, slow answer) and keeps the Chinese narration.
 async function speak(text: string, voice: string): Promise<{ audio: BodyInit; engine: string }> {
   const gemini = geminiVoice(voice);
+  // Kanji with no kana would come out in Chinese: Gemini says the reading instead (Azure reads it fine).
+  const said = gemini && KANJI_ONLY.test(text) ? ((await readingOf(text).catch(() => null)) ?? text) : text;
   if (gemini && vertexConfigured()) {
     try {
-      return { audio: new Uint8Array(await hedgedVertex(text, gemini)), engine: "vertex" };
+      return { audio: new Uint8Array(await hedgedVertex(said, gemini)), engine: "vertex" };
     } catch (e) {
       console.warn(e);
     }
@@ -55,7 +60,7 @@ async function speak(text: string, voice: string): Promise<{ audio: BodyInit; en
   if (gemini && geminiConfigured()) {
     for (const model of [FLASH, FLASH_LITE]) {
       try {
-        return { audio: new Uint8Array(await synthesizeGemini(text, gemini, 12000, model)), engine: "gemini" };
+        return { audio: new Uint8Array(await synthesizeGemini(said, gemini, 12000, model)), engine: "gemini" };
       } catch (e) {
         console.warn(e);
         if (!String(e).includes("Gemini TTS 429")) break;

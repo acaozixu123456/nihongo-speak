@@ -27,7 +27,9 @@ export function recapDays(n: number, today = dayKey()) {
 export function recap(p: Progress, days: string[]): RecapItem[] {
   const inRange = new Set(days);
   const out: RecapItem[] = [];
-  const add = (it: Learned, say = it.ja) => it.ja && out.push({ voice: RADIO_VOICE.A, ...it, say });
+  // A word written only in kanji is said from its reading: TTS can take bare kanji for Chinese.
+  const add = (it: Learned, say = it.ja) =>
+    it.ja && out.push({ voice: RADIO_VOICE.A, ...it, say: say === it.ja && it.kana && !/[\u3040-\u30ff]/.test(it.ja) ? it.kana : say });
 
   for (const ep of p.episodes.filter((e) => inRange.has(e.date))) {
     for (const w of ep.words ?? []) add({ ja: w.ja, kana: w.kana, zh: w.zh, src: "radio" });

@@ -44,10 +44,10 @@ export function ttsUrl(text: string, voice: string) {
   const key = voiceKey(text, voice);
   if (VOICE_LIBRARY.has(key)) return `/voice/${key}.mp3`;
   // v=2 skips anything the browser kept from before fallback voices were marked no-store.
-  // lang=ja: text with no kana could have been read in Chinese before the server named the language,
+  // yomi=1: text with no kana used to be read in Chinese (the server now says its reading instead),
   // so it gets a new address instead of the copy the phone and the CDN kept.
   const kanjiOnly = voice.startsWith("ja-JP") && !/[\u3040-\u30ff]/.test(text);
-  return `/api/tts?${new URLSearchParams({ text, voice, v: "2", ...(kanjiOnly ? { lang: "ja" } : {}) })}`;
+  return `/api/tts?${new URLSearchParams({ text, voice, v: "2", ...(kanjiOnly ? { yomi: "1" } : {}) })}`;
 }
 
 // Every recording played here (made on demand, or pre-recorded under /voice) is also kept: in memory as a ready blob for instant replays, and in the

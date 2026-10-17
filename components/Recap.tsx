@@ -31,7 +31,7 @@ function readSong(): SongRef | null {
 // The 洗脑歌 server takes an episode; a day's recap goes in as one with no script.
 function asEpisode(id: string, items: RecapItem[], title: string): RadioEpisode {
   const top = items.slice(0, 20);
-  const grammar = top.filter((i) => i.say !== i.ja);
+  const grammar = top.filter((i) => i.say !== i.ja && i.say !== i.kana);
   const words = top.filter((i) => !grammar.includes(i) && (i.kana || i.ja.length <= 8));
   const phrases = top.filter((i) => !grammar.includes(i) && !words.includes(i));
   return {
