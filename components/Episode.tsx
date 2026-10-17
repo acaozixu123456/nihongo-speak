@@ -251,7 +251,8 @@ export default function Episode({ id }: { id: string }) {
     const c = made!.clips[i];
     const n = ep.lines.findIndex((l) => l.ja === c.show);
     if (n >= 0) return `第 ${n + 1} 句`;
-    return c.parts.some((p) => p.voice.startsWith("zh-")) && !c.line ? "结尾提问" : "重点句";
+    if (!c.line) return i === 0 ? "开场" : "结尾提问";
+    return "重点句";
   };
   const trouble = made?.at.findIndex((x) => x.at === "retry" || x.at === "slow") ?? -1;
   const fallbackN = made?.at.filter((x) => x.at === "done" && x.fallback).length ?? 0;
@@ -264,7 +265,6 @@ export default function Episode({ id }: { id: string }) {
         趣味电台 · {shortDate(ep.date)}
       </div>
       <h1 className="ep-head">{ep.title_zh}</h1>
-      <p className="ep-hook">{ep.hook_zh}</p>
       <Earworm ep={ep} />
 
       <div className="player">

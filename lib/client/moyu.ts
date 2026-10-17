@@ -162,17 +162,19 @@ function podcastClips(ep: Episode): Clip[] {
 
 const HOST = RADIO_VOICE;
 
-// The hook in Chinese, the chat straight through in Japanese (each line its own clip, so "再听"
-// lands on it), then three phrases to keep and a question to think about.
+// The hook in Chinese as its own clip, the chat straight through in Japanese (each line its own
+// clip, so "再听" and a tap on the first line skip the Chinese), then three phrases to keep and a
+// question to think about.
 export function radioClips(ep: Radio): Clip[] {
   // Stage directions like （笑） would be read out loud.
   const say = (ja: string) => ja.replace(/[（(][^）)]*[）)]/g, "").replace(/〜/g, "").trim();
-  const talk: Clip[] = ep.lines.filter((l) => say(l.ja)).map((l, i) => ({
+  const intro: Clip = { block: "radio", show: ep.title_zh, sub: ep.hook_zh, parts: [zh(`趣味电台：${ep.title_zh}`, 500), zh(ep.hook_zh, 900)] };
+  const talk: Clip[] = ep.lines.filter((l) => say(l.ja)).map((l) => ({
     block: "radio",
     show: l.ja,
     sub: `${l.who === "A" ? "ハル" : "ケン"} · ${l.zh}`,
     line: { ja: l.ja, zh: l.zh, voice: HOST[l.who] },
-    parts: [...(i ? [] : [zh(`趣味电台：${ep.title_zh}`, 500), zh(ep.hook_zh, 900)]), { voice: HOST[l.who], text: say(l.ja), pauseMs: 350 }],
+    parts: [{ voice: HOST[l.who], text: say(l.ja), pauseMs: 350 }],
   }));
   const keep: Clip[] = ep.phrases.map((ph, i) => ({
     block: "radio",
@@ -187,7 +189,7 @@ export function radioClips(ep: Radio): Clip[] {
     ],
   }));
   const quiz: Clip = { block: "radio", show: ep.title_zh, sub: ep.quiz_zh, parts: [zh(ep.quiz_zh, 2500)] };
-  return [...talk, ...keep, quiz];
+  return [intro, ...talk, ...keep, quiz];
 }
 
 // Round 0 is short so playback starts quickly; later rounds open with a 趣味电台 episode when one is
