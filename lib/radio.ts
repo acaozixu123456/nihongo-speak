@@ -29,6 +29,16 @@ export const RadioSchema = z.object({
     .string()
     .describe("画面に出す中国語の1〜2文。答えを言わずに疑問を投げかけ、続きを聞きたくさせる"),
   lines: z.array(Line).describe("open → letter → main → word の順に、合わせて30〜40行の掛け合い"),
+  story: z
+    .object({
+      keys: z
+        .array(z.object({ ja: z.string().describe("語（表記どおり）"), kana: z.string().describe("読み（ひらがな）") }))
+        .describe("本題を人に話すときの骨組みになる言葉、ちょうど3つ。話の順に：きっかけ・意外な事実・オチ。本題に実際に出た語"),
+      summary: z
+        .array(z.string())
+        .describe("ハルが word の最初に言う、本題のまとめ3文（日本語、それぞれ30字以内）。lines の中のセリフと一字一句同じにする"),
+    })
+    .describe("聞いたあとに、この話を自分で人に話すための骨組み"),
   hitokoto: z
     .object({
       when_ja: z.string().describe("どんな場面で使うか（日本語、短く。例：「温めますか？」って聞かれたら）"),
@@ -61,6 +71,7 @@ export const RadioSchema = z.object({
 
 // Episodes made before the 2026-10 makeover: no parts, gaps or ひとこと, and a question at the end.
 export const OldRadioSchema = RadioSchema.extend({
+  story: RadioSchema.shape.story.optional(),
   lines: z.array(Line.partial({ part: true, gap: true, back: true })),
   hitokoto: RadioSchema.shape.hitokoto.optional(),
   quiz_zh: z.string().optional(),
@@ -105,7 +116,7 @@ const SYSTEM = `あなたは日本語学習者向けラジオ番組「ゆるっ�
 1. open（4〜6行）：今日の曜日や季節の話から入る雑談。ケンが本題のネタを少しだけにおわせて引っぱる。
 2. letter（6〜8行）：ハルが「お便りが来てます！ラジオネーム、通勤ハムスターさん」とお便りを読む。内容は指定されたもの（日本語で失敗した話）。二人で「あるある」と笑って、なぜそう聞こえるかと正しい言い方を短く教える。最後に「通勤ハムスターさん、次は〜で！」と励ます。
 3. main（14〜20行）：日本に関するひとつの意外な事実・冷知識。最初に「えっ、本当？」と思う問いを出し、すぐには答えを言わず、ヒントや脱線を挟んで、後半で答えを明かす。
-4. word（3〜4行）：「今日のひとこと」。hitokoto の一文を、ハルが紹介して、二人でそれぞれ1回ずつ言う。最後に「また来週〜」ではなく「それじゃ、また次回！」のように明るく締める。
+4. word（6〜8行）：まずハルが「今日の話、まとめると…」と言って、本題を3文で振り返る（story.summary の3文をそのまま、1文ずつ別のセリフに。リスナーが誰かにこの話をするとき、そのまま使える言い方で。ケンは短く相づちだけ）。次に「今日のひとこと」。hitokoto の一文を、ハルが紹介して、二人でそれぞれ1回ずつ言う。最後に「また来週〜」ではなく「それじゃ、また次回！」のように明るく締める。
 
 会話を生きたものにする：
 - 一人が長く説明し続けない。2〜3行ごとに相手が反応する（「へえ〜！」「マジで？」「いやいや」「え、なんで？」）。
@@ -120,6 +131,7 @@ const SYSTEM = `あなたは日本語学習者向けラジオ番組「ゆるっ�
 - 全部そのまま読み上げるので、（笑）のようなト書き・記号・絵文字・「〜」は書かない。伸ばす音は「ー」で書く。
 
 最後に、この回の学習ノートも作る（聞き終わったあとの復習用）：
+- story：聞いたあと、リスナーがこの話を同僚や友だちに話す練習をする。そのための骨組みの言葉3つと、まとめ3文。
 - hitokoto：今日のひとこと。お便りの正しい言い方を優先する。
 - phrases（重点句）：会話に実際に出てきた表現から、職場や日常でそのまま使えるもの。「〜」で省略せず、そのまま言える短い文にする。
 - words：覚える価値のある単語。読みと中国語訳をつける。
@@ -127,20 +139,29 @@ const SYSTEM = `あなたは日本語学習者向けラジオ番組「ゆるっ�
 
 const WEEKDAY = ["日", "月", "火", "水", "木", "金", "土"];
 
+// One genre for a whole week (weeks start on Monday, Tokyo time), so the same words and ways of
+// saying things keep coming back from one episode to the next: Krashen's narrow listening.
+function weekTopic(now: Date) {
+  const week = Math.floor((Math.floor(now.getTime() / 86400000) + 3) / 7);
+  return TOPICS[week % TOPICS.length];
+}
+
 // wish: a listener's request (点播), in their own words, usually Chinese. letter: what the learner
-// got wrong lately, read out in お便り.
-function prompt(avoid: string[], wish?: string, letter?: Letter) {
+// got wrong lately, read out in お便り. recent: words taught in the last few episodes, a few of which
+// come back so they are met again.
+function prompt(avoid: string[], wish?: string, letter?: Letter, recent: string[] = []) {
+  const now = new Date(Date.now() + 9 * 3600 * 1000);
   const topic = wish
     ? `リスナーからのリクエスト「${wish}」。このテーマで、日本で暮らす人に身近な話にする（open でハルがリクエストを紹介する）`
-    : TOPICS[Math.floor(Math.random() * TOPICS.length)];
-  const now = new Date(Date.now() + 9 * 3600 * 1000);
+    : `今週のテーマ「${weekTopic(now)}」の中から、ひとつの話（今週は毎回このテーマなので、open で「今週は〜ウィーク」と軽く触れてよい）`;
   const mail = letter
     ? `お便りの中身：通勤ハムスターさん（日本で働く中国人）は${letter.where ? `「${letter.where}」で、` : ""}「${letter.said}」と言ってしまった。正しくは「${letter.better}」。これを本人の失敗談として、少し面白く読む（場面がなければ自然な場面を作る）。`
     : "お便りの中身：日本で働く外国人がよくやる、日本語のちょっとした言い間違い・聞き間違いの失敗談をひとつ作る（コンビニ、職場、電車など）。";
   return `今日：${now.getUTCMonth() + 1}月${now.getUTCDate()}日（${WEEKDAY[now.getUTCDay()]}曜日）、東京
 今回のジャンル：${topic}
 ${mail}
-${avoid.length ? `最近扱ったテーマ（重ならないように）：${avoid.join("、")}` : ""}`;
+${avoid.length ? `最近扱ったテーマ（重ならないように）：${avoid.join("、")}` : ""}
+${recent.length ? `最近の回で覚えた単語：${recent.join("、")}\nこのうち2〜3個を、会話の中で自然にもう一度使う（意味は説明し直さなくてよい。words には入れない）。` : ""}`;
 }
 
 // Same model family as the voices: Gemini 3.8 Flash, global location.
@@ -151,7 +172,7 @@ const linesIn = (text: string) => text.match(/"gap"\s*:/g)?.length ?? 0;
 
 // Streams the show from Gemini so the phone can watch it being written (onLines), and so a request
 // that has stopped moving is noticed: one that sends nothing for a while is dropped.
-async function withGemini(avoid: string[], wish: string | undefined, letter: Letter | undefined, onLines: (n: number) => void): Promise<Radio> {
+async function withGemini(avoid: string[], wish: string | undefined, letter: Letter | undefined, recent: string[], onLines: (n: number) => void): Promise<Radio> {
   const { project, token } = await vertexAccess();
   const { $schema, ...schema } = z.toJSONSchema(RadioSchema) as Record<string, unknown>;
   void $schema;
@@ -170,7 +191,7 @@ async function withGemini(avoid: string[], wish: string | undefined, letter: Let
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: SYSTEM }] },
-          contents: [{ role: "user", parts: [{ text: prompt(avoid, wish, letter) }] }],
+          contents: [{ role: "user", parts: [{ text: prompt(avoid, wish, letter, recent) }] }],
           // Little thinking: the show is long, and with full thinking it sometimes ran past a minute.
           generationConfig: { responseMimeType: "application/json", responseJsonSchema: schema, temperature: 1, thinkingConfig: { thinkingLevel: "low" } },
         }),
@@ -211,18 +232,19 @@ export async function makeRadio(
   avoid: string[],
   wish?: string,
   letter?: Letter,
+  recent: string[] = [],
   onProgress: (m: Making) => void = () => {},
 ): Promise<Radio & { by: "gemini" | "claude" }> {
   if (vertexConfigured()) {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         if (attempt) onProgress({ stage: "retry" });
-        return { ...(await withGemini(avoid, wish, letter, (lines) => onProgress({ stage: "write", lines }))), letter, by: "gemini" };
+        return { ...(await withGemini(avoid, wish, letter, recent, (lines) => onProgress({ stage: "write", lines }))), letter, by: "gemini" };
       } catch (e) {
         console.warn("radio: Gemini failed", e);
       }
     }
   }
   onProgress({ stage: "claude" });
-  return { ...(await makeRadioWithClaude(RadioSchema, SYSTEM, prompt(avoid, wish, letter))), letter, by: "claude" };
+  return { ...(await makeRadioWithClaude(RadioSchema, SYSTEM, prompt(avoid, wish, letter, recent))), letter, by: "claude" };
 }

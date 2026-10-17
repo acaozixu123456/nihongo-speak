@@ -1355,3 +1355,5 @@ button.today-go { width: 100%; border: none; cursor: pointer; }
 .row-link { display: flex; justify-content: space-between; margin-top: 14px; padding: 14px 4px; border-bottom: 1px solid var(--line); color: var(--text); text-decoration: none; font-size: 15px; }
 .row-link span { color: var(--muted); }
 .retell-other { flex: none; align-self: flex-start; margin-left: 10px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--muted); font-size: 13px; white-space: nowrap; cursor: pointer; }
+.retell-reveal { margin-top: 10px; padding: 8px 16px; border: 1px solid var(--accent); border-radius: 999px; background: none; color: var(--accent-ink); font-size: 14px; cursor: pointer; }
+.retell-you { font-size: 13px; margin-bottom: 2px; }

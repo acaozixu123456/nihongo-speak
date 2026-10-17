@@ -556,8 +556,14 @@ const RetellEndSchema = z.object({
   used: z.boolean().describe("3回目で、指摘した点が正しく使えていれば true。その文法を使う場面がなかった場合も、誤りがなければ true"),
   praise_zh: z.string().describe("1回目から3回目で良くなった具体的な一点（中国語、1文）。お世辞ではなく、実際の違いを"),
   natural: z
-    .array(z.object({ ja: z.string(), zh: z.string() }))
-    .describe("3回目の話を、内容を変えずに、学習者がそのまま言える自然な日本語に言い直したもの。3〜5文。N3程度の語彙で、話し言葉で"),
+    .array(
+      z.object({
+        you: z.string().describe("3回目で学習者が実際に言った一節（文字起こしのまま。えっと等は省いてよい）"),
+        ja: z.string().describe("その一節の自然な言い方。内容は変えない。N3程度の語彙で、話し言葉で"),
+        zh: z.string(),
+      }),
+    )
+    .describe("3回目の話を前から順に3〜5か所に区切り、学習者の言い方と自然な言い方を対にしたもの。直すところがない一節は you と ja が同じでよい"),
 });
 export type RetellEnd = z.infer<typeof RetellEndSchema>;
 
@@ -571,6 +577,20 @@ export function retellEnd(a: { topic: string; first: string; last: string; focus
 1回目：${a.first}
 3回目：${a.last}`,
   );
+}
+
+// 三回話す's speed is counted in morae, the unit Japanese speech rate is measured in: the transcript
+// writes the same word as 今日 (2 characters) one time and きょう (3) the next, so characters drift.
+const RetellKanaSchema = z.object({ kana: z.array(z.string().describe("その文字起こしの読み（ひらがなとカタカナと「ー」だけ。記号・数字・ローマ字も読みに直す）")) });
+
+export async function retellKana(texts: string[]): Promise<string[]> {
+  const { kana } = await haikuFirst(
+    RetellKanaSchema,
+    "日本語の文字起こしを、読みのとおりにかなだけで書き直す。入力と同じ数、同じ順で返す。言い直しや「えっと」もそのまま残す。",
+    texts.map((t, i) => `${i + 1}：${t}`).join("\n"),
+    4000,
+  );
+  return kana;
 }
 
 // ---- Readings for the speech model ----

@@ -1,17 +1,29 @@
 import { NextResponse } from "next/server";
-import { retellEnd, retellFix } from "@/lib/claude";
+import { retellEnd, retellFix, retellKana } from "@/lib/claude";
 
 export const maxDuration = 30;
 
 type Body =
   | { kind: "fix"; topic: string; said: string; known?: string[]; carry?: { focus_zh: string; better: string } }
-  | { kind: "end"; topic: string; first: string; last: string; focus?: string };
+  | { kind: "end"; topic: string; first: string; last: string; focus?: string }
+  | { kind: "kana"; texts: string[] };
 
 const text = (s: unknown, n: number): s is string => typeof s === "string" && s.trim().length > 0 && s.length <= n;
 
-// 三回話す: the one point to fix after the first telling, and the wrap-up after the third.
+// 三回話す: the one point to fix after the first telling, the wrap-up after the third, and the
+// readings that speed is counted from.
 export async function POST(request: Request) {
   const b = (await request.json()) as Body;
+  if (b.kind === "kana") {
+    const texts = Array.isArray(b.texts) ? b.texts.filter((t) => text(t, 3000)).slice(0, 4) : [];
+    if (!texts.length) return NextResponse.json({ error: "没有内容" }, { status: 400 });
+    try {
+      return NextResponse.json({ kana: await retellKana(texts) });
+    } catch (e) {
+      console.error(e);
+      return NextResponse.json({ error: e instanceof Error ? e.message : "AI 出错了" }, { status: 502 });
+    }
+  }
   // An episode topic is its title plus the start of its main corner (up to ~620 characters, see Retell.tsx epTopic).
   if (!text(b.topic, 1000)) return NextResponse.json({ error: "缺少话题" }, { status: 400 });
   try {

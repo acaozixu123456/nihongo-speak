@@ -16,8 +16,11 @@ import {
   useProgress,
   wavSeconds,
   type Progress,
+  retellToday,
+  type Retell,
   type RetellPoint,
 } from "@/lib/client/progress";
+import { flowOf, moraRate } from "@/lib/client/fluency";
 import { Recorder, transcribeLong } from "@/lib/client/recorder";
 import { stepDone, todaysEpisode, useOnRoute } from "@/lib/client/route";
 import { useHydrated } from "@/lib/client/hydrated";
@@ -32,8 +35,16 @@ import { Star } from "./FeedbackCard";
 // listener who reacts. The first telling of each day is always a new story, so its speed across days
 // is the honest measure of progress. A point still not said right at the end of a day comes back before
 // the next day's first telling, on a new story, until it is said right there.
+// The radio's ハル retells the story in three sentences before this (a model to notice against, Hanaoka
+// & Izumi), and the keywords are the story's skeleton. The fix is first a prompt to find the better way
+// yourself (Lyster & Saito), then the answer. The end pairs what you said with the natural version
+// (Lynch's reformulation). Speed is morae per second with long pauses counted, and a day after a
+// telling the old story is told once more before the new one (spaced repetition, Bui et al. 2019).
 
 const SECONDS = [90, 75, 60];
+// Yesterday's story, once, before today's: to ゆい, 60 seconds. Only within a week of telling it.
+const AGAIN_SECONDS = 60;
+const AGAIN_DAYS = 7;
 const LISTENERS = ["yamada", "yui", "sato"];
 const REACTIONS: Record<string, string[]> = {
   yamada: ["へえ、そうなんだ。面白いね。", "なるほどね、知らなかったよ。"],
@@ -50,7 +61,7 @@ function epTopic(ep: Progress["episodes"][number]): Topic {
   return {
     title: ep.title_zh,
     about: `${ep.title_zh}\n${(main.length ? main : ep.lines.map((l) => l.ja)).join("").slice(0, 600)}`,
-    keys: (ep.words ?? []).slice(0, 3).map((w) => ({ ja: w.ja, kana: w.kana })),
+    keys: (ep.story?.keys.length ? ep.story.keys : (ep.words ?? [])).slice(0, 3).map((w) => ({ ja: w.ja, kana: w.kana })),
     starters: ["今日ラジオで、〜って話を聞いたんですけど。", "びっくりしたのは、〜ってことです。", "だから、〜らしいですよ。"],
   };
 }
@@ -67,12 +78,22 @@ function topicsFor(p: Progress): Topic[] {
   return ep ? [epTopic(ep), ...life.slice(0, 1), ...eps, ...life.slice(1)] : [life[0], ...eps, ...life.slice(1)];
 }
 
+// An earlier day's story to tell once more, with how its last telling went.
+function againFor(p: Progress): { topic: Topic; last?: number } | null {
+  const past = (p.retells ?? []).filter((r) => r.date !== dayKey());
+  const r = past[past.length - 1];
+  if (!r || (Date.parse(dayKey()) - Date.parse(r.date)) / 86400000 > AGAIN_DAYS) return null;
+  const ep = p.episodes.find((e) => e.title_zh === r.topic);
+  const topic = ep ? epTopic(ep) : LIFE_TOPICS.includes(r.topic) ? lifeTopic(r.topic) : null;
+  return topic && { topic, last: r.mps?.[2] };
+}
+
 const voiceOf = (person: string) => calls.find((c) => c.person === person)?.talk.aiVoice ?? RADIO_VOICE.B;
 const nameOf = (person: string) => people.find((x) => x.id === person)?.name ?? person;
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.max(0, Math.floor(s % 60))).padStart(2, "0")}`;
 const chars = (s: string) => s.replace(/[\s、。，,.!！?？「」…]/g, "").length;
 
-type Take = { text: string; sec: number; cpm: number };
+type Take = { text: string; sec: number; cpm: number; span: number; pauses: number; mps?: number };
 type Phase = "ready" | "starting" | "talk" | "between" | "end";
 
 // The fix as a point to remember. Points the coach can't name by grammar are named by the fixed words,
@@ -113,14 +134,23 @@ export default function Retell() {
   // The point an earlier day left unfixed, and whether today's first telling got it right (null: not judged).
   const [carry, setCarry] = useState<RetellPoint | null>(null);
   const [carried, setCarried] = useState<boolean | null>(null);
+  // An earlier day's story, told once first; null once it is told (or when there is none).
+  const [again, setAgain] = useState<{ topic: Topic; last?: number } | null>(null);
+  const [againTake, setAgainTake] = useState<Take | null>(null);
+  // The answer to the fix stays hidden until the learner has tried to find it.
+  const [shown, setShown] = useState(false);
+  // Readings of each telling, asked for as soon as it is transcribed (index 3: the telling of the old story).
+  const kana = useRef<Promise<string | undefined>[]>([]);
 
   useEffect(() => {
     if (!hydrated || topics.length) return;
     setTopics(topicsFor(p));
     known.current = knownTags(p);
     setCarry(retellCarry(p));
+    if (!retellToday(p)) setAgain(againFor(p));
     const past = (p.retells ?? []).filter((r) => r.date !== dayKey());
-    before.current = past.length ? past[past.length - 1].cpm[0] : null;
+    // Only an earlier day counted the same way (morae) can be compared.
+    before.current = past.length ? (past[past.length - 1].mps?.[0] ?? null) : null;
   }, [hydrated, p, topics]);
 
   useEffect(
@@ -132,7 +162,15 @@ export default function Retell() {
     [],
   );
 
-  const listener = LISTENERS[round];
+  const warming = !!again && !againTake;
+  const listener = warming ? "yui" : LISTENERS[round];
+  const limit = warming ? AGAIN_SECONDS : SECONDS[round];
+  const shownTopic = warming ? again!.topic : topic;
+
+  // Reading → morae per second; undefined when no clean reading came back.
+  async function rated(t: Take, slot: number) {
+    return { ...t, mps: moraRate(t.text, await kana.current[slot], t.span) };
+  }
 
   async function begin() {
     unlock();
@@ -149,10 +187,10 @@ export default function Retell() {
     }
     rec.current = r;
     startedAt.current = Date.now();
-    setLeft(SECONDS[round]);
+    setLeft(limit);
     setPhase("talk");
     timer.current = window.setInterval(() => {
-      const l = SECONDS[round] - (Date.now() - startedAt.current) / 1000;
+      const l = limit - (Date.now() - startedAt.current) / 1000;
       setLeft(l);
       if (l <= 0) finish();
     }, 250);
@@ -165,6 +203,7 @@ export default function Retell() {
     rec.current = null;
     if (!r) return;
     const n = round;
+    const old = warming;
     setPhase("between");
     setBusy("listen");
     let wav: Blob;
@@ -177,7 +216,7 @@ export default function Retell() {
     }
     const sec = wavSeconds(wav);
     // The listener reacts at once, like a person would, while the recording is being read.
-    const who = LISTENERS[n];
+    const who = listener;
     const lines = REACTIONS[who];
     play(ttsUrl(lines[Math.floor(Math.random() * lines.length)], voiceOf(who)), 1).catch(() => {});
     let text = "";
@@ -190,7 +229,18 @@ export default function Retell() {
       return;
     }
     recordSpeech(sec);
-    const take = { text, sec, cpm: Math.round((chars(text) / sec) * 60) };
+    const flow = await flowOf(wav).catch(() => ({ span: sec, pauses: 0 }));
+    const take: Take = { text, sec, cpm: Math.round((chars(text) / sec) * 60), span: flow.span || sec, pauses: flow.pauses };
+    const slot = old ? 3 : n;
+    kana.current[slot] = post<{ kana: string[] }>({ kind: "kana", texts: [text] })
+      .then((r) => r.kana[0])
+      .catch(() => undefined);
+    if (old) {
+      setAgainTake(await rated(take, 3));
+      setBusy("");
+      setPhase("ready");
+      return;
+    }
     const next = takes.map((t, i) => (i === n ? take : t));
     setTakes(next);
     if (n === 0) {
@@ -223,16 +273,26 @@ export default function Retell() {
       return;
     }
     // Third time: done.
-    const cpm = next.map((t) => t?.cpm ?? 0);
+    setBusy("end");
+    const all = await Promise.all(next.map((t, i) => rated(t!, i)));
+    setTakes(all);
+    const cpm = all.map((t) => t.cpm);
+    const mps = all.every((t) => t.mps) ? all.map((t) => t.mps!) : undefined;
     // What tomorrow carries: an older point not yet fixed first, else today's until the third telling
     // shows it right.
     const pt = fix ? pointOf(fix) : null;
     const keep = carry && carried !== true ? carry : pt;
-    const day = { date: dayKey(), topic: topic!.title, cpm };
+    const day: Retell = {
+      date: dayKey(),
+      topic: topic!.title,
+      cpm,
+      ...(mps && { mps }),
+      pauses: all.map((t) => t.pauses),
+      ...(again && againTake && { again: { topic: again.topic.title, mps: againTake.mps, pauses: againTake.pauses } }),
+    };
     recordRetell(keep ? { ...day, next: keep } : day);
     setPhase("end");
     stepDone();
-    setBusy("end");
     try {
       const e = await post<RetellEnd>({ kind: "end", topic: topic!.about, first: next[0]!.text, last: text, focus: fix?.focus_zh });
       setEnd(e);
@@ -257,17 +317,20 @@ export default function Retell() {
 
   // ---- The end: three numbers, what got better, and the story said naturally ----
   if (phase === "end") {
-    const cpm = takes.map((t) => t?.cpm ?? 0);
-    const top = Math.max(...cpm, 1);
-    const gain = cpm[0] ? Math.round(((cpm[2] - cpm[0]) / cpm[0]) * 100) : 0;
+    const all = takes.filter((t): t is Take => !!t);
+    const byMora = all.length === 3 && all.every((t) => t.mps);
+    const speed = all.map((t) => (byMora ? t.mps! : t.cpm));
+    const top = Math.max(...speed, 1);
+    const gain = speed[0] ? Math.round(((speed[2] - speed[0]) / speed[0]) * 100) : 0;
+    const pauses = all.map((t) => t.pauses);
     return (
       <main className="page">
         {back}
         <h1 className="ep-head">三回話す</h1>
         <div className="today retell-end">
-          <span className="kicker">每分钟说出的字数</span>
+          <span className="kicker">{byMora ? "每秒说出的音拍" : "每分钟说出的字数"}</span>
           <div className="retell-bars">
-            {cpm.map((c, i) => (
+            {speed.map((c, i) => (
               <div key={i}>
                 <i style={{ height: `${Math.max(8, (c / top) * 100)}%` }} className={i === 2 ? "now" : ""} />
                 <b>{c}</b>
@@ -277,8 +340,14 @@ export default function Retell() {
           </div>
           <span className="today-zh">
             {gain > 0 ? `第三遍比第一遍快了 ${gain}%。` : "三遍速度差不多，说明第一遍就已经比较顺了。"}
-            {before.current ? ` 第一遍：上次 ${before.current} → 今天 ${cpm[0]}。` : ""}
+            {byMora && before.current ? ` 第一遍：上次 ${before.current} → 今天 ${speed[0]}。` : ""}
           </span>
+          <span className="today-zh">停了 1 秒以上：{pauses.join(" → ")} 次</span>
+          {againTake && (
+            <span className="today-zh">
+              上次的故事又讲了一遍{again?.last && againTake.mps ? `：上次最后一遍 ${again.last} → 今天 ${againTake.mps}` : ""}。
+            </span>
+          )}
         </div>
         {busy === "end" && <p className="muted judge-wait">AI 在听你的第三遍…</p>}
         {end && (
@@ -289,11 +358,12 @@ export default function Retell() {
                 {end.used ? "✓" : "△"} 这次要注意的：{fix.focus_zh}
               </p>
             )}
-            <span className="kicker" style={{ marginTop: 18 }}>你讲的，说得更自然一点</span>
+            <span className="kicker" style={{ marginTop: 18 }}>你讲的 → 更自然的说法</span>
             <div className="card">
               {end.natural.map((x, i) => (
                 <div key={i} className="note">
                   <div className="note-main" onClick={() => hear(x.ja)}>
+                    {x.you && x.you !== x.ja && <div className="muted retell-you">你：{x.you}</div>}
                     <div className="ja">{x.ja}</div>
                     <div className="zh">{x.zh}</div>
                   </div>
@@ -309,6 +379,7 @@ export default function Retell() {
 
   const take0 = takes[0];
   const talking = phase === "talk";
+  const shownT = shownTopic!;
 
   return (
     <main className="page">
@@ -316,20 +387,20 @@ export default function Retell() {
       <h1 className="ep-head">三回話す</h1>
       <div className="today retell">
         <span className="kicker">
-          第 {round + 1} 遍 · 讲给{nameOf(listener)}
+          {warming ? `先把上次的故事再讲一遍 · 讲给${nameOf(listener)}` : `第 ${round + 1} 遍 · 讲给${nameOf(listener)}`}
         </span>
         <span className="today-title">
-          <span className="retell-topic">{topic.title}</span>
-          {round === 0 && phase === "ready" && !onRoute && topics.length > 1 && (
+          <span className="retell-topic">{shownT.title}</span>
+          {!warming && round === 0 && phase === "ready" && !onRoute && topics.length > 1 && (
             <button className="retell-other" onClick={() => setPick((pick + 1) % topics.length)}>
               別の話 ›
             </button>
           )}
           {talking && <span className={`today-big ${left < 10 ? "hurry" : ""}`}>{clock(left)}</span>}
         </span>
-        {topic.keys.length > 0 && (
+        {shownT.keys.length > 0 && (
           <div className="retell-keys">
-            {topic.keys.map((k) => (
+            {shownT.keys.map((k) => (
               <span key={k.ja}>
                 {k.ja}
                 {k.kana && k.kana !== k.ja && <small>{k.kana}</small>}
@@ -338,12 +409,12 @@ export default function Retell() {
           </div>
         )}
         <div className="retell-starters">
-          {topic.starters.map((s) => (
+          {shownT.starters.map((s) => (
             <div key={s}>{s}</div>
           ))}
         </div>
-        {round === 0 && carry && <span className="retell-focus">上次没改过来，这次只注意：{carry.focus_zh}</span>}
-        {round > 0 && fix?.focus_zh && <span className="retell-focus">只注意：{fix.focus_zh}</span>}
+        {!warming && round === 0 && carry && <span className="retell-focus">上次没改过来，这次只注意：{carry.focus_zh}</span>}
+        {round > 0 && fix?.focus_zh && (shown || talking || !fix.fix.better) && <span className="retell-focus">只注意：{fix.focus_zh}</span>}
         {talking ? (
           <button className="today-go retell-stop" onClick={finish}>
             <span className="rec-dot" /> 说完了
@@ -355,8 +426,12 @@ export default function Retell() {
         )}
       </div>
 
-      {round === 0 && !talking && !error && (
+      {warming && !talking && !error && (
+        <p className="muted retell-note">隔一天再讲一遍，记得更牢。只讲一遍，想起多少讲多少，然后再讲今天的。</p>
+      )}
+      {!warming && round === 0 && !talking && !error && (
         <p className="muted retell-note">
+          {againTake ? "上次的故事讲完了。现在讲今天的：" : ""}
           不打分。用上面的开头句起个头，卡住了就说「えっと」接着讲。同一件事讲三遍给三个人，一遍比一遍顺。
         </p>
       )}
@@ -371,12 +446,24 @@ export default function Retell() {
                 <p className="small-text">{carried ? "✓ 上次那一点，这次说对了" : "△ 上次那一点还没改过来，明天再来"}</p>
               )}
               <span className="kicker">下一遍只改这一件事</span>
-              <p className="focus-one">{fix.focus_zh}</p>
-              {fix.fix.better && (
-                <div onClick={() => hear(fix.fix.better)}>
-                  {fix.fix.you_said && <div className="muted">你说：{fix.fix.you_said}</div>}
-                  <div className="ja">→ {fix.fix.better} ▶</div>
-                </div>
+              {fix.fix.better && !shown ? (
+                <>
+                  {fix.fix.you_said && <div className="ja">你说：{fix.fix.you_said}</div>}
+                  <p className="muted">这句可以说得更好。先自己想一想怎么说，再点开看。</p>
+                  <button className="retell-reveal" onClick={() => setShown(true)}>
+                    想好了，看答案
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="focus-one">{fix.focus_zh}</p>
+                  {fix.fix.better && (
+                    <div onClick={() => hear(fix.fix.better)}>
+                      {fix.fix.you_said && <div className="muted">你说：{fix.fix.you_said}</div>}
+                      <div className="ja">→ {fix.fix.better} ▶</div>
+                    </div>
+                  )}
+                </>
               )}
             </>
           ) : take0 ? (

@@ -12,6 +12,7 @@ import {
   quickRound,
   RADIO_VOICE,
   radioLetter,
+  radioRecentWords,
   saveEpisode,
   weakList,
   type RadioEpisode,
@@ -323,7 +324,7 @@ export async function makeRadio(wish?: string): Promise<RadioEpisode> {
     const res = await fetch("/api/podcast", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ kind: "radio", avoid: seen.slice(-30), wish, letter: radioLetter() }),
+      body: JSON.stringify({ kind: "radio", avoid: seen.slice(-30), wish, letter: radioLetter(), recent: radioRecentWords() }),
     });
     if (!res.ok || !res.body) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "生成失败");
     const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
