@@ -4,8 +4,8 @@ import Link from "next/link";
 
 // Two places only: 听 and 说. "我" (records, saved lines) sits behind the small button at the top.
 const TABS = [
-  { key: "listen", href: "/", ja: "聴", label: "听" },
-  { key: "speak", href: "/speak", ja: "話", label: "说" },
+  { key: "listen", href: "/", ja: "聴く", label: "听" },
+  { key: "speak", href: "/speak", ja: "話す", label: "说" },
 ] as const;
 
 export type NavKey = (typeof TABS)[number]["key"] | "me";
@@ -15,9 +15,8 @@ export default function Nav({ on }: { on: NavKey }) {
     <nav className="nav">
       <div className="nav-pill">
         {TABS.map((t) => (
-          <Link key={t.key} href={t.href} className={on === t.key ? "on" : ""}>
+          <Link key={t.key} href={t.href} className={on === t.key ? "on" : ""} aria-label={t.label}>
             <b>{t.ja}</b>
-            {t.label}
           </Link>
         ))}
       </div>

@@ -51,7 +51,7 @@ export default function ListenHome() {
     <main className="page">
       <Top note={date} />
       <h1 className="display">
-        聴く<small>听</small>
+        聴く
       </h1>
 
       {unheard ? (
@@ -70,13 +70,11 @@ export default function ListenHome() {
 
       <div className="rows">
         <Link href="/moyu" className="entry">
-          <span className="entry-ja">流す</span>
-          <span className="entry-text">一直听</span>
+          <span className="entry-text ja-serif">流す</span>
           <span className="chev" aria-hidden>›</span>
         </Link>
         {unheard && (
           <button className="entry" onClick={() => fresh()} disabled={busy}>
-            <span className="entry-ja">新</span>
             <span className="entry-text">{busy ? "AI 正在写这一期…" : "生成新的一期"}</span>
             <span className="chev" aria-hidden>›</span>
           </button>
@@ -89,16 +87,14 @@ export default function ListenHome() {
               if (wish.trim()) fresh(wish.trim());
             }}
           >
-            <span className="entry-ja">頼む</span>
-            <input autoFocus value={wish} maxLength={100} onChange={(e) => setWish(e.target.value)} placeholder="想听什么？比如：日本电车为什么这么准时" />
+            <input autoFocus value={wish} maxLength={100} onChange={(e) => setWish(e.target.value)} placeholder="想听什么？如：日本电车为啥这么准时" />
             <button type="submit" className="small" disabled={busy || !wish.trim()}>
               {busy ? "写着呢…" : "生成"}
             </button>
           </form>
         ) : (
           <button className="entry" onClick={() => setWishing(true)} disabled={busy}>
-            <span className="entry-ja">頼む</span>
-            <span className="entry-text">点播：想听什么就写什么</span>
+            <span className="entry-text ja-serif">リクエスト</span>
             <span className="chev" aria-hidden>›</span>
           </button>
         )}
