@@ -4,7 +4,7 @@ import { retellEnd, retellFix } from "@/lib/claude";
 export const maxDuration = 30;
 
 type Body =
-  | { kind: "fix"; topic: string; said: string; known?: string[] }
+  | { kind: "fix"; topic: string; said: string; known?: string[]; carry?: { focus_zh: string; better: string } }
   | { kind: "end"; topic: string; first: string; last: string; focus?: string };
 
 const text = (s: unknown, n: number): s is string => typeof s === "string" && s.trim().length > 0 && s.length <= n;
@@ -17,7 +17,8 @@ export async function POST(request: Request) {
     if (b.kind === "fix") {
       if (!text(b.said, 3000)) return NextResponse.json({ error: "没有听到内容" }, { status: 400 });
       const known = Array.isArray(b.known) ? b.known.filter((t) => typeof t === "string").slice(0, 40) : [];
-      return NextResponse.json(await retellFix({ topic: b.topic, said: b.said, known }));
+      const carry = b.carry && text(b.carry.focus_zh, 300) && typeof b.carry.better === "string" ? { focus_zh: b.carry.focus_zh, better: b.carry.better.slice(0, 300) } : undefined;
+      return NextResponse.json(await retellFix({ topic: b.topic, said: b.said, known, carry }));
     }
     if (b.kind === "end") {
       if (!text(b.first, 3000) || !text(b.last, 3000)) return NextResponse.json({ error: "没有听到内容" }, { status: 400 });

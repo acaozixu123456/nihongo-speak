@@ -111,7 +111,9 @@ export const MEMORIES_KEPT = 5;
 
 // 三回話す: one day's telling, as characters per minute for each of the three times. The first time is
 // always a new story, so how it moves across days shows real progress, not just repetition.
-export type Retell = { date: string; topic: string; cpm: number[] };
+// `next` is the one point still not said right at the end of the day, shown before the next day's first telling.
+export type RetellPoint = { tag: string; zh: string; focus_zh: string; you_said: string; better: string };
+export type Retell = { date: string; topic: string; cpm: number[]; next?: RetellPoint };
 export const RETELLS_KEPT = 60;
 
 export type Progress = {
