@@ -321,7 +321,7 @@ export default function Episode({ id }: { id: string }) {
         {k ? "ゆるっと日本ラジオ" : "趣味电台"} · {shortDate(ep.date)}
       </div>
       <div className={`radio-cover ${cover ? "drawn" : ""}`} style={cover ? { backgroundImage: `url(${cover})` } : undefined}>
-        <h1 className="radio-title">{ep.title_zh}</h1>
+        {!cover && <h1 className="radio-title">{ep.title_zh}</h1>}
         <div className={`radio-waves ${playingNow ? "on" : ""}`} aria-hidden>
           <i />
           <i />
@@ -332,6 +332,7 @@ export default function Episode({ id }: { id: string }) {
           <span className={`han ${playingNow && who === "B" ? "on" : ""}`}>健</span>
         </div>
       </div>
+      {cover && <h1 className="radio-title under">{ep.title_zh}</h1>}
 
       {done && k ? (
         <div className="hitokoto">
