@@ -12,9 +12,11 @@ import {
   recordPoints,
   recordRetell,
   recordSpeech,
+  retellCarry,
   useProgress,
   wavSeconds,
   type Progress,
+  type RetellPoint,
 } from "@/lib/client/progress";
 import { Recorder, transcribeLong } from "@/lib/client/recorder";
 import { stepDone, todaysEpisode, useOnRoute } from "@/lib/client/route";
@@ -28,7 +30,8 @@ import { Star } from "./FeedbackCard";
 // grow with fluency (Tran & Saito); three times, not six, or it turns into reciting (Suzuki & Hanzawa).
 // Easier to start: keywords and ready-made opening lines on screen, no score while speaking, and a
 // listener who reacts. The first telling of each day is always a new story, so its speed across days
-// is the honest measure of progress.
+// is the honest measure of progress. A point still not said right at the end of a day comes back before
+// the next day's first telling, on a new story, until it is said right there.
 
 const SECONDS = [90, 75, 60];
 const LISTENERS = ["yamada", "yui", "sato"];
@@ -72,6 +75,13 @@ const chars = (s: string) => s.replace(/[\s、。，,.!！?？「」…]/g, "").
 type Take = { text: string; sec: number; cpm: number };
 type Phase = "ready" | "starting" | "talk" | "between" | "end";
 
+// The fix as a point to remember. Points the coach can't name by grammar are named by the fixed words,
+// so they still reach 苦手.
+function pointOf(f: RetellFix): RetellPoint | null {
+  if (!f.fix.better) return null;
+  return { tag: f.point.tag || f.fix.better.slice(0, 16), zh: f.point.zh || f.focus_zh, focus_zh: f.focus_zh, you_said: f.fix.you_said, better: f.fix.better };
+}
+
 async function post<T>(body: unknown): Promise<T> {
   const res = await fetch("/api/retell", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const data = await res.json();
@@ -100,11 +110,15 @@ export default function Retell() {
   const known = useRef<string[]>([]);
   // The first telling on an earlier day, to compare with today's first.
   const before = useRef<number | null>(null);
+  // The point an earlier day left unfixed, and whether today's first telling got it right (null: not judged).
+  const [carry, setCarry] = useState<RetellPoint | null>(null);
+  const [carried, setCarried] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!hydrated || topics.length) return;
     setTopics(topicsFor(p));
     known.current = knownTags(p);
+    setCarry(retellCarry(p));
     const past = (p.retells ?? []).filter((r) => r.date !== dayKey());
     before.current = past.length ? past[past.length - 1].cpm[0] : null;
   }, [hydrated, p, topics]);
@@ -182,9 +196,20 @@ export default function Retell() {
     if (n === 0) {
       setBusy("fix");
       try {
-        const f = await post<RetellFix>({ kind: "fix", topic: topic!.about, said: text, known: known.current });
+        const f = await post<RetellFix>({
+          kind: "fix",
+          topic: topic!.about,
+          said: text,
+          known: known.current,
+          carry: carry ? { focus_zh: carry.focus_zh, better: carry.better } : undefined,
+        });
         setFix(f);
-        if (f.point.tag) recordPoints([{ tag: f.point.tag, zh: f.point.zh, ok: false }], f.fix.better ? [f.fix] : []);
+        if (carry) {
+          setCarried(f.carried);
+          recordPoints([{ tag: carry.tag, zh: carry.zh, ok: f.carried }], f.carried ? [] : [carry]);
+        }
+        const pt = pointOf(f);
+        if (pt && pt.tag !== carry?.tag) recordPoints([{ tag: pt.tag, zh: pt.zh, ok: false }], [pt]);
       } catch {
         // The tellings still work without the one point.
       }
@@ -199,14 +224,20 @@ export default function Retell() {
     }
     // Third time: done.
     const cpm = next.map((t) => t?.cpm ?? 0);
-    recordRetell({ date: dayKey(), topic: topic!.title, cpm });
+    // What tomorrow carries: an older point not yet fixed first, else today's until the third telling
+    // shows it right.
+    const pt = fix ? pointOf(fix) : null;
+    const keep = carry && carried !== true ? carry : pt;
+    const day = { date: dayKey(), topic: topic!.title, cpm };
+    recordRetell(keep ? { ...day, next: keep } : day);
     setPhase("end");
     stepDone();
     setBusy("end");
     try {
       const e = await post<RetellEnd>({ kind: "end", topic: topic!.about, first: next[0]!.text, last: text, focus: fix?.focus_zh });
       setEnd(e);
-      if (fix?.point.tag && e.used) recordPoints([{ tag: fix.point.tag, zh: fix.point.zh, ok: true }], []);
+      if (pt) recordPoints([{ tag: pt.tag, zh: pt.zh, ok: e.used }], e.used ? [] : [pt]);
+      if (pt && e.used && keep === pt) recordRetell(day);
     } catch {}
     setBusy("");
   }
@@ -311,6 +342,7 @@ export default function Retell() {
             <div key={s}>{s}</div>
           ))}
         </div>
+        {round === 0 && carry && <span className="retell-focus">上次没改过来，这次只注意：{carry.focus_zh}</span>}
         {round > 0 && fix?.focus_zh && <span className="retell-focus">只注意：{fix.focus_zh}</span>}
         {talking ? (
           <button className="today-go retell-stop" onClick={finish}>
@@ -335,6 +367,9 @@ export default function Retell() {
             <p className="muted judge-wait">AI 在听你的第一遍…</p>
           ) : fix ? (
             <>
+              {carry && carried !== null && (
+                <p className="small-text">{carried ? "✓ 上次那一点，这次说对了" : "△ 上次那一点还没改过来，明天再来"}</p>
+              )}
               <span className="kicker">下一遍只改这一件事</span>
               <p className="focus-one">{fix.focus_zh}</p>
               {fix.fix.better && (

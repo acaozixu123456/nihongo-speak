@@ -28,6 +28,7 @@ import {
   type Progress,
   type RadioEpisode,
   type Retell,
+  type RetellPoint,
   type ScenarioProgress,
   type StuckLine,
   type WeakPoint,
@@ -35,7 +36,7 @@ import {
 } from "@/lib/progress-model";
 
 export { dayKey, level, streak, totalXp };
-export type { AskedItem, Skill, Card, CustomScenario, DiaryEntry, DrillItem, Learned, PersonMemory, Progress, RadioEpisode, Retell, StuckLine, WeakPoint };
+export type { AskedItem, Skill, Card, CustomScenario, DiaryEntry, DrillItem, Learned, PersonMemory, Progress, RadioEpisode, Retell, RetellPoint, StuckLine, WeakPoint };
 
 // The phone's localStorage is the working copy; it is synced to the server
 // (when storage is set up) so nothing is lost if Safari data is cleared.
@@ -602,6 +603,12 @@ export const memories = (p: Progress, person: string) => p.people[person] ?? [];
 export function recordRetell(r: Retell) {
   const p = read();
   write({ ...p, retells: [...(p.retells ?? []).filter((x) => !(x.date === r.date && x.topic === r.topic)), r].slice(-RETELLS_KEPT) });
+}
+
+// The point an earlier day's telling left unfixed, to carry into today's first telling.
+export function retellCarry(p: Progress): RetellPoint | null {
+  const past = (p.retells ?? []).filter((r) => r.date !== dayKey());
+  return past[past.length - 1]?.next ?? null;
 }
 
 export const retellToday = (p: Progress) => (p.retells ?? []).some((r) => r.date === dayKey());

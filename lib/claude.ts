@@ -530,21 +530,23 @@ const RetellFixSchema = z.object({
   }),
   focus_zh: z.string().describe("次の2回で気をつける、たった一つのこと（中国語、1文、具体的に）。直すところがなければ、もっと話を広げるための一言"),
   point: z.object({
-    tag: z.string().describe("その文法・表現の名前（日本語、短く）。文法・表現で言えないなら空文字"),
+    tag: z.string().describe("その文法・表現の名前（日本語、短く）。文法の名前で言えなければ、直した言葉そのもの（例：「〜てしまう」「おいしかった」）。you_said が空なら空文字"),
     zh: z.string().describe("その文法・表現が何か（中国語、1文）。tag が空なら空文字"),
   }),
+  carried: z.boolean().describe("前の日から持ち越した注意点が、1回目で正しく使えていれば true。使う場面がなく誤りもなければ true。持ち越しがなければ true"),
 });
 export type RetellFix = z.infer<typeof RetellFixSchema>;
 
-export function retellFix(a: { topic: string; said: string; known?: string[] }) {
+export function retellFix(a: { topic: string; said: string; known?: string[]; carry?: { focus_zh: string; better: string } }) {
   return haikuFirst(
     RetellFixSchema,
     `${COACH}
 学習者はラジオで聞いた話を、自分の言葉で人に話しています（同じ話をあと2回、別の人に話します）。
 1回目の録音の文字起こしを見て、次の2回で直すべきことを1つだけ選んでください。意味が通じなくなる誤り ＞ 何度も出る誤り ＞ 不自然さ の順。
-話の中身や長さは評価しない。言い直し・えっと・繰り返しは誤りとして扱わない。${knownLine(a.known)}`,
+話の中身や長さは評価しない。言い直し・えっと・繰り返しは誤りとして扱わない。
+前の日から持ち越した注意点があれば、それが正しく使えたかも見る。まだ直っていなければ、それを今日の1つに選んでよい。${knownLine(a.known)}`,
     `話のテーマ：${a.topic}
-1回目：${a.said}`,
+${a.carry ? `前の日から持ち越した注意点：${a.carry.focus_zh}（正しい形の例：${a.carry.better}）\n` : ""}1回目：${a.said}`,
   );
 }
 
