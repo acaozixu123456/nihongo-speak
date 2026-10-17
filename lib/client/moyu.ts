@@ -10,6 +10,7 @@ import {
   dueCards,
   quickRound,
   RADIO_VOICE,
+  radioLetter,
   saveEpisode,
   weakList,
   type RadioEpisode,
@@ -38,7 +39,14 @@ export type Clip = {
   sub?: string;
   line?: StuckLine; // what "再听一遍" keeps for saying out loud later
   parts: Part[];
+  // 趣味电台 only, for the mixed version on its page (radio-mix.ts); joined end to end elsewhere.
+  part?: RadioPart; // which corner of the show it belongs to
+  gap?: number; // seconds after the clip before it ends; below zero it cuts in
+  back?: Part; // the other host's quiet aizuchi part way through
+  with?: Part; // said at the same time by the other host
 };
+
+export type RadioPart = "open" | "letter" | "main" | "word" | "song";
 
 const ZH = ZH_VOICE;
 const JA = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-NanamiNeural";
@@ -162,20 +170,51 @@ function podcastClips(ep: Episode): Clip[] {
 
 const HOST = RADIO_VOICE;
 
-// The hook in Chinese as its own clip, the chat straight through in Japanese (each line its own
-// clip, so "再听" and a tap on the first line skip the Chinese), then three phrases to keep and a
-// question to think about.
-export function radioClips(ep: Radio): Clip[] {
-  // Stage directions like （笑） would be read out loud.
-  const say = (ja: string) => ja.replace(/[（(][^）)]*[）)]/g, "").replace(/〜/g, "").trim();
+// Stage directions like （笑） would be read out loud.
+const sayable = (ja: string) => ja.replace(/[（(][^）)]*[）)]/g, "").replace(/〜/g, "ー").trim();
+
+// The show as clips, one per line. Episodes since the makeover open with the title call and carry
+// their own corners, gaps and aizuchi, and end with the line to keep (ひとこと); older ones are the
+// hook in Chinese, the chat, three phrases to keep and a question. narrate: open with the Chinese
+// title and hook, for 摸鱼模式, where the show comes in between other blocks.
+export function radioClips(ep: Radio, narrate = true): Clip[] {
   const intro: Clip = { block: "radio", show: ep.title_zh, sub: ep.hook_zh, parts: [zh(`趣味电台：${ep.title_zh}`, 500), zh(ep.hook_zh, 900)] };
-  const talk: Clip[] = ep.lines.filter((l) => say(l.ja)).map((l) => ({
-    block: "radio",
-    show: l.ja,
-    sub: `${l.who === "A" ? "ハル" : "ケン"} · ${l.zh}`,
-    line: { ja: l.ja, zh: l.zh, voice: HOST[l.who] },
-    parts: [{ voice: HOST[l.who], text: say(l.ja), pauseMs: 350 }],
-  }));
+  const talk: Clip[] = ep.lines.filter((l) => sayable(l.ja)).map((l) => {
+    const other = HOST[l.who === "A" ? "B" : "A"];
+    return {
+      block: "radio",
+      show: l.ja,
+      sub: `${l.who === "A" ? "ハル" : "ケン"} · ${l.zh}`,
+      line: { ja: l.ja, zh: l.zh, voice: HOST[l.who] },
+      parts: [{ voice: HOST[l.who], text: sayable(l.ja), pauseMs: 350 }],
+      part: l.part,
+      gap: l.gap,
+      back: l.back && sayable(l.back) ? { voice: other, text: sayable(l.back) } : undefined,
+    };
+  });
+  const k = ep.hitokoto;
+  if (k) {
+    const call = (who: "A" | "B", ja: string, gap: number, both = false): Clip => ({
+      block: "radio",
+      show: ja,
+      sub: who === "A" ? "ハル" : "ケン",
+      parts: [{ voice: HOST[who], text: ja, pauseMs: 300 }],
+      part: "open",
+      gap,
+      with: both ? { voice: HOST.B, text: ja } : undefined,
+    });
+    const titleCall = [call("A", "ハルと！", 0), call("B", "ケンの！", 0.05), call("A", "ゆるっと日本ラジオ！", 0.15, true)];
+    const keep: Clip = {
+      block: "radio",
+      show: k.ja,
+      sub: `${k.when_ja} · ${k.zh}`,
+      line: { ja: k.ja, zh: k.zh, voice: HOST.A },
+      parts: [{ voice: HOST.A, text: sayable(k.ja), pauseMs: 1800 }, { voice: HOST.B, text: sayable(k.ja), pauseMs: 600 }],
+      part: "word",
+      gap: 0.9,
+    };
+    return [...(narrate ? [intro] : []), ...titleCall, ...talk, keep];
+  }
   const keep: Clip[] = ep.phrases.map((ph, i) => ({
     block: "radio",
     show: ph.ja,
@@ -183,13 +222,13 @@ export function radioClips(ep: Radio): Clip[] {
     line: { ja: ph.ja, zh: ph.zh, voice: HOST.A },
     parts: [
       ...(i ? [] : [zh(NARRATION.radioKeep, 600)]),
-      { voice: HOST.A, text: say(ph.ja), pauseMs: 700 },
+      { voice: HOST.A, text: sayable(ph.ja), pauseMs: 700 },
       zh(ph.zh, 700),
-      { voice: HOST.A, text: say(ph.ja), pauseMs: 1500 },
+      { voice: HOST.A, text: sayable(ph.ja), pauseMs: 1500 },
     ],
   }));
-  const quiz: Clip = { block: "radio", show: ep.title_zh, sub: ep.quiz_zh, parts: [zh(ep.quiz_zh, 2500)] };
-  return [intro, ...talk, ...keep, quiz];
+  const quiz: Clip[] = ep.quiz_zh ? [{ block: "radio", show: ep.title_zh, sub: ep.quiz_zh, parts: [zh(ep.quiz_zh, 2500)] }] : [];
+  return [intro, ...talk, ...keep, ...quiz];
 }
 
 // Round 0 is short so playback starts quickly; later rounds open with a 趣味电台 episode when one is
@@ -251,7 +290,7 @@ export async function makeRadio(wish?: string): Promise<RadioEpisode> {
   const res = await fetch("/api/podcast", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ kind: "radio", avoid: seen.slice(-30), wish }),
+    body: JSON.stringify({ kind: "radio", avoid: seen.slice(-30), wish, letter: radioLetter() }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? "生成失败");
@@ -281,7 +320,7 @@ export type ClipState =
   | { at: "fail" };
 type Report = (s: ClipState) => void;
 
-async function fetchAudio(url: string, report: Report = () => {}): Promise<{ buf: ArrayBuffer; fallback: boolean }> {
+export async function fetchAudio(url: string, report: Report = () => {}): Promise<{ buf: ArrayBuffer; fallback: boolean }> {
   let cache: Cache | null = null;
   try {
     cache = await caches.open(CACHE);
