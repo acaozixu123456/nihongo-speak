@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { calls, type Call as CallDef } from "@/content/calls";
+import { calls, callTalk, type Call as CallDef } from "@/content/calls";
 import type { Feedback, Turn } from "@/lib/claude";
 import { play, stop, ttsUrl, unlock } from "@/lib/client/player";
 import { liveReply, stopLive, unlockLive } from "@/lib/client/live";
 import { transcribe } from "@/lib/client/recorder";
-import { recordFeedback, recordSpeech, recordTalkTurn, wavSeconds } from "@/lib/client/progress";
+import { knownTags, memories, recordFeedback, recordPoints, recordSpeech, recordTalkTurn, remember, useProgress, wavSeconds } from "@/lib/client/progress";
 import FeedbackCard from "./FeedbackCard";
 import HoldButton from "./HoldButton";
 import Nav from "./Nav";
@@ -56,7 +56,9 @@ export function CallList() {
 
 // One phone call: the other side is a voice; subtitles cost a tap and are counted.
 export default function Call({ call }: { call: CallDef }) {
-  const { talk } = call;
+  const p = useProgress();
+  // The character's personality and what they remember from earlier calls go along with every request.
+  const talk = callTalk(call, call.person ? memories(p, call.person) : []);
   const scenarioId = `call:${call.id}`;
   const [phase, setPhase] = useState<Phase>("ready");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -183,8 +185,11 @@ export default function Call({ call }: { call: CallDef }) {
     if (!said) return;
     setBusy("feedback");
     try {
-      setFeedback(await post<Feedback>("/api/feedback", { scenarioId, talk, history: history(messages) }));
+      const f = await post<Feedback>("/api/feedback", { scenarioId, talk, history: history(messages), known: knownTags(p) });
+      setFeedback(f);
       recordFeedback(scenarioId);
+      if (f.point.tag) recordPoints([{ ...f.point, ok: false }], f.fix.better ? [f.fix] : []);
+      if (call.person) remember(call.person, f.memory_ja);
     } catch (e) {
       setError(e instanceof Error ? e.message : "点评失败");
     } finally {

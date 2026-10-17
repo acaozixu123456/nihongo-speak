@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { Feedback } from "@/lib/claude";
 import { play, ttsUrl, unlock } from "@/lib/client/player";
 import { hasCard, toggleCard, useProgress, type Progress } from "@/lib/client/progress";
@@ -17,7 +18,7 @@ export function Star({ p, ja, zh, reading, voice, scenarioId }: { p: Progress; j
   );
 }
 
-// The end-of-conversation review: overall comment, lines to say better, phrases worth keeping.
+// The end-of-conversation review: one thing to fix next time, the line that shows it, and one phrase to keep.
 export default function FeedbackCard({
   feedback,
   voice,
@@ -35,35 +36,43 @@ export default function FeedbackCard({
     unlock();
     play(ttsUrl(text, voice), 1).catch(() => {});
   };
+  const { fix, point } = feedback;
+  const phrase = feedback.phrases[0];
   return (
     <div className="card">
-      <h2 style={{ marginTop: 0 }}>点评</h2>
-      <p>{feedback.overall_zh}</p>
-      {feedback.corrections.length > 0 && <h2>可以说得更好</h2>}
-      {feedback.corrections.map((c, i) => (
-        <div key={i} style={{ marginBottom: 12 }}>
-          <div className="muted">你说：{c.you_said}</div>
-          <div className="ja">→ {c.better}</div>
-          <div className="zh">{c.why_zh}</div>
+      <p className="muted" style={{ marginTop: 0 }}>{feedback.overall_zh}</p>
+      <span className="kicker">下次只改这一件事</span>
+      <p className="focus-one">{feedback.focus_zh}</p>
+      {fix.better && (
+        <div style={{ marginBottom: 12 }}>
+          {fix.you_said && <div className="muted">你说：{fix.you_said}</div>}
+          <div className="ja">→ {fix.better}</div>
+          <div className="zh">{fix.why_zh}</div>
           <div className="row">
-            <button className="small" onClick={() => say(c.better)}>听一下</button>
-            <Star {...card} ja={c.better} zh={`换个更自然的说法：${c.you_said}`} />
+            <button className="small" onClick={() => say(fix.better)}>听一下</button>
+            <Star {...card} ja={fix.better} zh={fix.you_said ? `换个更自然的说法：${fix.you_said}` : fix.why_zh} />
           </div>
         </div>
-      ))}
-      <h2>值得记住的表达</h2>
-      {feedback.phrases.map((x, i) => (
-        <div key={i} style={{ marginBottom: 10 }}>
-          <div className="ja">{x.ja}</div>
-          <div className="kana">{x.reading}</div>
-          <div className="zh">{x.zh}</div>
-          <div className="row">
-            <button className="small" onClick={() => say(x.ja)}>听一下</button>
-            <Star {...card} ja={x.ja} zh={x.zh} reading={x.reading} />
+      )}
+      {point.tag && (
+        <p className="small-text">
+          已记进薄弱点「{point.tag}」，明天的练一练会出题。<Link href="/weak">看看 →</Link>
+        </p>
+      )}
+      {phrase && (
+        <>
+          <span className="kicker">记住这一句</span>
+          <div style={{ marginBottom: 10 }}>
+            <div className="ja">{phrase.ja}</div>
+            <div className="kana">{phrase.reading}</div>
+            <div className="zh">{phrase.zh}</div>
+            <div className="row">
+              <button className="small" onClick={() => say(phrase.ja)}>听一下</button>
+              <Star {...card} ja={phrase.ja} zh={phrase.zh} reading={phrase.reading} />
+            </div>
           </div>
-        </div>
-      ))}
-      <p className="muted">收藏的句子会进入复习，隔几天提醒你说一遍。</p>
+        </>
+      )}
       {children && <div className="row">{children}</div>}
     </div>
   );

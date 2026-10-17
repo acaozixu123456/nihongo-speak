@@ -7,7 +7,9 @@ import { play, ttsUrl, unlock } from "@/lib/client/player";
 import { transcribe } from "@/lib/client/recorder";
 import Link from "next/link";
 import {
+  knownTags,
   recordFeedback,
+  recordPoints,
   recordSpeech,
   recordTalkTurn,
   useProgress,
@@ -130,8 +132,10 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
     setError("");
     setBusy("feedback");
     try {
-      setFeedback(await post<Feedback>("/api/feedback", { scenarioId: scenario.id, talk, history: history(messages) }));
+      const f = await post<Feedback>("/api/feedback", { scenarioId: scenario.id, talk, history: history(messages), known: knownTags(progress) });
+      setFeedback(f);
       recordFeedback(scenario.id);
+      if (f.point.tag) recordPoints([{ ...f.point, ok: false }], f.fix.better ? [f.fix] : []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "点评失败");
     } finally {

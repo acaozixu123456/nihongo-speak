@@ -104,6 +104,11 @@ export type Skill = {
   miss: number; // sessions it was missed in
 };
 
+// What a recurring phone-call character (課長, a client, a friend) remembers from earlier calls:
+// a line or two per call, newest last, so the next call can pick up where the last one left off.
+export type PersonMemory = { date: string; ja: string };
+export const MEMORIES_KEPT = 5;
+
 export type Progress = {
   goal: number;
   days: Record<string, number>; // YYYY-MM-DD -> xp
@@ -117,6 +122,7 @@ export type Progress = {
   quick: Record<string, QuickStat>;
   weak: Record<string, WeakPoint>;
   skills: Record<string, Skill>; // keyed by the Japanese without spaces or punctuation
+  people: Record<string, PersonMemory[]>; // keyed by the character's id in content/calls.ts
   freezes: number; // streak protectors in hand
   frozen: string[]; // days covered by a protector
   freezeAwardDay?: string;
@@ -139,6 +145,7 @@ export const EMPTY: Progress = {
   quick: {},
   weak: {},
   skills: {},
+  people: {},
   freezes: 0,
   frozen: [],
   bonusDays: [],
@@ -236,6 +243,12 @@ export function merge(a: Progress, b: Progress): Progress {
     if (!o || v.seen > o.seen || (v.seen === o.seen && v.due > o.due)) skills[k] = v;
   }
 
+  const people: Record<string, PersonMemory[]> = { ...(a.people ?? {}) };
+  for (const [k, v] of Object.entries(b.people ?? {})) {
+    const all = [...(people[k] ?? []), ...v];
+    people[k] = [...new Map(all.map((m) => [`${m.date} ${m.ja}`, m])).values()].sort((x, y) => (x.date < y.date ? -1 : 1)).slice(-MEMORIES_KEPT);
+  }
+
   const byId = <T extends { id: string }>(x: T[], y: T[]) => [...new Map([...x, ...y].map((i) => [i.id, i])).values()];
 
   return {
@@ -258,6 +271,7 @@ export function merge(a: Progress, b: Progress): Progress {
     quick,
     weak,
     skills,
+    people,
     freezes: newer.freezes,
     frozen: [...new Set([...a.frozen, ...b.frozen])],
     freezeAwardDay: newer.freezeAwardDay,
