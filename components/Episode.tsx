@@ -2,11 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import type { Explain } from "@/lib/claude";
 import { radioClips, type Clip, type ClipState, type RadioPart } from "@/lib/client/moyu";
 import { mixRadio, type Mixed } from "@/lib/client/radio-mix";
 import { play, preload, SILENCE, ttsUrl, unlock } from "@/lib/client/player";
-import { findEpisode, markHeard, RADIO_VOICE, saveAsked, useProgress } from "@/lib/client/progress";
+import { findEpisode, markHeard, RADIO_VOICE, useProgress } from "@/lib/client/progress";
 import { setAudioSession } from "@/lib/client/recorder";
 import { useHydrated } from "@/lib/client/hydrated";
 import Earworm from "./Earworm";
@@ -34,9 +33,6 @@ const RATES = [1, 0.85, 0.7];
 // Cover pictures being drawn, so opening the page twice doesn't ask twice.
 const drawing: Record<string, Promise<boolean>> = {};
 
-// What the learner selected, with the line it sits in, for 问 AI.
-type Pick = { text: string; line: string; before?: string };
-
 // One 趣味电台 episode: play it straight through (the line being spoken lights up in the transcript),
 // then the notes the AI wrote with it: key sentences (already in review), words and grammar.
 export default function Episode({ id }: { id: string }) {
@@ -58,8 +54,6 @@ export default function Episode({ id }: { id: string }) {
   const [made, setMade] = useState<{ clips: Clip[]; at: ClipState[] } | null>(null);
   const notes = useRef<HTMLDivElement>(null);
   const touched = useRef(0);
-  const [pick, setPick] = useState<Pick | null>(null);
-  const [ask, setAsk] = useState<{ pick: Pick; answer?: Explain; error?: string } | null>(null);
 
   useEffect(() => {
     try {
@@ -71,28 +65,9 @@ export default function Episode({ id }: { id: string }) {
     const hand = () => (touched.current = Date.now());
     window.addEventListener("touchmove", hand, { passive: true });
     window.addEventListener("wheel", hand, { passive: true });
-    // Selecting text anywhere in the notes offers 问 AI about it. Tapping the button can clear the
-    // selection first, so the offer stays up a moment after it goes.
-    let clear: ReturnType<typeof setTimeout> | undefined;
-    const onSelect = () => {
-      const sel = document.getSelection();
-      const text = sel?.toString().trim() ?? "";
-      const node = sel?.anchorNode;
-      const el = node ? (node instanceof Element ? node : node.parentElement)?.closest<HTMLElement>("[data-line]") : null;
-      if (text && el && notes.current?.contains(el)) {
-        clearTimeout(clear);
-        setPick({ text: text.slice(0, 300), line: el.dataset.line!, before: el.dataset.before || undefined });
-      } else {
-        clearTimeout(clear);
-        clear = setTimeout(() => setPick(null), 1500);
-      }
-    };
-    document.addEventListener("selectionchange", onSelect);
     return () => {
       window.removeEventListener("touchmove", hand);
       window.removeEventListener("wheel", hand);
-      document.removeEventListener("selectionchange", onSelect);
-      clearTimeout(clear);
       audio.current?.pause();
       if (prep.current) URL.revokeObjectURL(prep.current.url);
     };
@@ -148,12 +123,6 @@ export default function Episode({ id }: { id: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [epId]);
 
-  // The example in an AI answer, ready for when it's tapped.
-  const example = ask?.answer?.example.ja;
-  useEffect(() => {
-    if (example) preload([ttsUrl(example, RADIO_VOICE.A)]);
-  }, [example]);
-
   if (!hydrated) return <main className="page" />;
   if (!ep) {
     return (
@@ -204,26 +173,6 @@ export default function Episode({ id }: { id: string }) {
       ms.setActionHandler("previoustrack", () => jump(-1));
       ms.setActionHandler("nexttrack", () => jump(1));
     } catch {}
-  }
-
-  async function askAi(p: Pick) {
-    setAsk({ pick: p });
-    setPick(null);
-    document.getSelection()?.removeAllRanges();
-    try {
-      const res = await fetch("/api/explain", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ pick: p.text, line: p.line, before: p.before, topic: episode.title_zh.slice(0, 80) }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "AI 出错了");
-      setAsk((a) => (a?.pick === p ? { pick: p, answer: data as Explain } : a));
-      // Kept with the episode so 练一练 can practise it.
-      saveAsked(episode.id, { text: p.text, meaning_zh: (data as Explain).meaning_zh });
-    } catch (e) {
-      setAsk((a) => (a?.pick === p ? { pick: p, error: e instanceof Error ? e.message : "AI 出错了" } : a));
-    }
   }
 
   async function toggle() {
@@ -314,7 +263,7 @@ export default function Episode({ id }: { id: string }) {
   const playingNow = phase === "playing";
 
   return (
-    <main className="page">
+    <main className="page" data-ask-topic={episode.title_zh} data-ask-ep={episode.id}>
       <Link href="/" className="back">← 今日</Link>
       <div className="kicker">
         {k ? "ゆるっと日本ラジオ" : "趣味电台"} · {shortDate(ep.date)}
@@ -553,13 +502,6 @@ export default function Episode({ id }: { id: string }) {
       </div>
       )}
 
-      {pick && !ask && (
-        <button className="ask-bar" onClick={() => askAi(pick)}>
-          <b>问 AI</b>
-          <span>{pick.text}</span>
-        </button>
-      )}
-      {ask && <AskSheet ask={ask} onClose={() => setAsk(null)} onSay={say} />}
 
       <audio
         ref={audio}
@@ -581,49 +523,6 @@ export default function Episode({ id }: { id: string }) {
         }}
       />
     </main>
-  );
-}
-
-function AskSheet({
-  ask,
-  onClose,
-  onSay,
-}: {
-  ask: { pick: Pick; answer?: Explain; error?: string };
-  onClose: () => void;
-  onSay: (ja: string) => void;
-}) {
-  const a = ask.answer;
-  return (
-    <div className="sheet-back" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-grip" />
-        <div className="kicker">问 AI</div>
-        <div className="sheet-pick">{ask.pick.text}</div>
-        {a?.reading && a.reading !== ask.pick.text && <div className="kana">{a.reading}</div>}
-        {!a && !ask.error && <p className="muted sheet-wait">AI 正在看这一句…</p>}
-        {ask.error && <p className="error">{ask.error}</p>}
-        {a && (
-          <>
-            <p className="sheet-meaning">{a.meaning_zh}</p>
-            {a.points.map((pt) => (
-              <div key={pt.ja} className="sheet-point">
-                <b>{pt.ja}</b>
-                <span>{pt.zh}</span>
-              </div>
-            ))}
-            {a.nuance_zh && <p className="sheet-nuance">{a.nuance_zh}</p>}
-            <div className="sheet-ex" onClick={() => onSay(a.example.ja)}>
-              <div className="ja">{a.example.ja}</div>
-              <div className="zh">{a.example.zh}</div>
-            </div>
-          </>
-        )}
-        <button className="cta" onClick={onClose}>
-          知道了
-        </button>
-      </div>
-    </div>
   );
 }
 

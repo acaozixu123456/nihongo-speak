@@ -3,7 +3,7 @@ import { explainSelection } from "@/lib/claude";
 
 const str = (s: unknown, n: number): s is string => typeof s === "string" && s.length <= n;
 
-// 问 AI on a 趣味电台 transcript: whatever the learner selected, explained in its line's context.
+// 问 AI, on any page: whatever the learner selected, explained in its line's context.
 export async function POST(request: Request) {
   const b = (await request.json()) as { pick?: unknown; line?: unknown; before?: unknown; topic?: unknown };
   if (!str(b.pick, 300) || !b.pick.trim() || !str(b.line, 400) || !str(b.topic, 80)) {
