@@ -31,6 +31,9 @@ const RATE_KEY = "nihongo-speak:ep-rate";
 // Slower speeds for when the hosts run too fast to follow.
 const RATES = [1, 0.85, 0.7];
 
+// Cover pictures being drawn, so opening the page twice doesn't ask twice.
+const drawing: Record<string, Promise<boolean>> = {};
+
 // What the learner selected, with the line it sits in, for 问 AI.
 type Pick = { text: string; line: string; before?: string };
 
@@ -117,6 +120,31 @@ export default function Episode({ id }: { id: string }) {
   useEffect(() => {
     if (epId) prefetchGame(p, findEpisode(p, epId)!);
     // Once per episode: later changes (a new 问 AI) are picked up by the round itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [epId]);
+
+  // The cover picture: already drawn, or drawn now (once; it takes a little while).
+  const [cover, setCover] = useState<string | null>(null);
+  useEffect(() => {
+    if (!epId) return;
+    let gone = false;
+    const url = `/api/earworm/${epId}/cover.png`;
+    (async () => {
+      try {
+        if (!(await fetch(url)).ok) {
+          drawing[epId] ??= fetch("/api/cover", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ id: epId, episode: findEpisode(p, epId) }),
+          }).then((r) => r.ok);
+          if (!(await drawing[epId])) return;
+        }
+        if (!gone) setCover(url);
+      } catch {}
+    })();
+    return () => {
+      gone = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [epId]);
 
@@ -292,7 +320,7 @@ export default function Episode({ id }: { id: string }) {
       <div className="kicker">
         {k ? "ゆるっと日本ラジオ" : "趣味电台"} · {shortDate(ep.date)}
       </div>
-      <div className="radio-cover">
+      <div className={`radio-cover ${cover ? "drawn" : ""}`} style={cover ? { backgroundImage: `url(${cover})` } : undefined}>
         <h1 className="radio-title">{ep.title_zh}</h1>
         <div className={`radio-waves ${playingNow ? "on" : ""}`} aria-hidden>
           <i />

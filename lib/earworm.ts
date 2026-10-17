@@ -308,3 +308,46 @@ export async function step(id: string, ep: Radio | null): Promise<Job | null> {
   await writeJob(id, j);
   return j;
 }
+
+// The picture at the top of an episode's page: one wide cartoon of what the show is about, with
+// Haru and Ken in it, drawn once (about 7 cents) and kept with the 洗脑歌 files as cover.png.
+export async function drawCover(id: string, ep: Radio) {
+  const have = await readFile(id, "cover.png");
+  if (have) return true;
+  const talk = ep.lines
+    .filter((l) => !l.part || l.part === "main")
+    .slice(0, 14)
+    .map((l) => l.ja)
+    .join("\n");
+  const prompt = `Draw the cover illustration for one episode of a cheerful Japanese radio talk show for learners.
+Episode title (Chinese): ${ep.title_zh}
+Teaser: ${ep.hook_zh}
+What the hosts talk about:
+${talk}
+
+Show the single most surprising or funny moment of this topic as one scene, set in Japan, with the two hosts Haru and Ken in it reacting to it. Wide 16:9 composition, the main subject a little right of center, calm space along the bottom edge.
+
+Style: ${STYLE.replace(/Vertical 9:16 composition[^.]*\./, "")}`;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const parts = await vertex(
+        PAINTER,
+        {
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: "16:9", imageSize: "1K" } },
+        },
+        50000,
+      );
+      const img = parts.find((p) => p.inlineData)?.inlineData;
+      if (img) {
+        await save(id, "cover.png", Buffer.from(img.data, "base64"), img.mimeType);
+        return true;
+      }
+    } catch (e) {
+      // The image model often refuses for a moment (a few pictures a minute on this account).
+      console.warn("cover: drawing failed", id, e);
+      await new Promise((r) => setTimeout(r, 8000));
+    }
+  }
+  return false;
+}
