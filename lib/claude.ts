@@ -549,3 +549,55 @@ ${a.before ? `直前のセリフ：${a.before}\n` : ""}選ばれた部分を含�
 選ばれた部分：${a.pick}`,
   );
 }
+
+// ---- 三回話す: tell today's episode three times, to three people ----
+
+// After the first telling: the one point to fix in the next two, from what the learner actually said.
+// Corrected between the first and second telling only, and on one form, as in Tran & Saito's 4/3/2 + delayed CF.
+const RetellFixSchema = z.object({
+  fix: z.object({
+    you_said: z.string().describe("学習者が実際に言った日本語（その一節だけ）。直すところがなければ空文字"),
+    better: z.string().describe("その一節の自然な言い方。you_said が空なら空文字"),
+  }),
+  focus_zh: z.string().describe("次の2回で気をつける、たった一つのこと（中国語、1文、具体的に）。直すところがなければ、もっと話を広げるための一言"),
+  point: z.object({
+    tag: z.string().describe("その文法・表現の名前（日本語、短く）。文法・表現で言えないなら空文字"),
+    zh: z.string().describe("その文法・表現が何か（中国語、1文）。tag が空なら空文字"),
+  }),
+});
+export type RetellFix = z.infer<typeof RetellFixSchema>;
+
+export function retellFix(a: { topic: string; said: string; known?: string[] }) {
+  return haikuFirst(
+    RetellFixSchema,
+    `${COACH}
+学習者はラジオで聞いた話を、自分の言葉で人に話しています（同じ話をあと2回、別の人に話します）。
+1回目の録音の文字起こしを見て、次の2回で直すべきことを1つだけ選んでください。意味が通じなくなる誤り ＞ 何度も出る誤り ＞ 不自然さ の順。
+話の中身や長さは評価しない。言い直し・えっと・繰り返しは誤りとして扱わない。${knownLine(a.known)}`,
+    `話のテーマ：${a.topic}
+1回目：${a.said}`,
+  );
+}
+
+// After the third telling: whether the point stuck, and the learner's own story said naturally, to hear
+// as "this is you, a little further on" rather than as a correction.
+const RetellEndSchema = z.object({
+  used: z.boolean().describe("3回目で、指摘した点が正しく使えていれば true。その文法を使う場面がなかった場合も、誤りがなければ true"),
+  praise_zh: z.string().describe("1回目から3回目で良くなった具体的な一点（中国語、1文）。お世辞ではなく、実際の違いを"),
+  natural: z
+    .array(z.object({ ja: z.string(), zh: z.string() }))
+    .describe("3回目の話を、内容を変えずに、学習者がそのまま言える自然な日本語に言い直したもの。3〜5文。N3程度の語彙で、話し言葉で"),
+});
+export type RetellEnd = z.infer<typeof RetellEndSchema>;
+
+export function retellEnd(a: { topic: string; first: string; last: string; focus: string }) {
+  return haikuFirst(
+    RetellEndSchema,
+    `${COACH}
+学習者はラジオで聞いた話を、同じ内容で3回、別の人に話しました。1回目と3回目の文字起こしを見てください。`,
+    `話のテーマ：${a.topic}
+1回目のあとに伝えた注意：${a.focus || "（なし）"}
+1回目：${a.first}
+3回目：${a.last}`,
+  );
+}

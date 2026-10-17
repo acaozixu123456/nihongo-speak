@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import { calls } from "@/content/calls";
 import { makeRadio } from "./moyu";
-import { dayKey, dueCards, dueSkillCount, weakItems, weakList, type Progress } from "./progress";
+import { dayKey, dueCards, dueSkillCount, retellToday, weakItems, weakList, type Progress } from "./progress";
 
 // 今日のルート: one fixed line of stops for today (listen → practise → a song to unwind → speak → call), so opening the app
 // never asks what to do. Each page calls stepDone() when its part is over; the bar on top then moves
 // on to the next stop by itself.
 
-export type StopKey = "listen" | "game" | "song" | "skills" | "review" | "quick" | "call" | "flow";
+export type StopKey = "listen" | "game" | "song" | "retell" | "skills" | "review" | "quick" | "call" | "flow";
 export type Stop = { key: StopKey; ja: string; meta: string; href: string; min: number };
 export type Route = { day: string; quiet: boolean; stops: Stop[]; at: number };
 
@@ -66,7 +66,7 @@ export function useOnRoute(): boolean {
 }
 
 // Today's episode: the newest one not heard yet, or the one heard today.
-function todaysEpisode(p: Progress) {
+export function todaysEpisode(p: Progress) {
   const e = p.episodes[0];
   return e && (!e.heard || e.date === dayKey()) ? e : null;
 }
@@ -89,14 +89,23 @@ export function plan(p: Progress, quiet: boolean): Stop[] {
   const pool = calls.filter((c) => c.person);
   const call = (pool.length ? pool : calls)[day % (pool.length || calls.length)];
   const episode: Stop[] = [listen, { key: "game", ja: "練習", meta: "今の話", href: `${epHref}/game`, min: 3 }, song];
+  // 話す is 三回話す (today's story, three times) once a day; the saved sentences come back as their own
+  // short stop when due, and 瞬間 only once the day's telling is done.
+  const speak: Stop[] = retellToday(p)
+    ? [cards > 0 ? { key: "review", ja: "話す", meta: `復習 ${cards}文`, href: "/review", min: 3 } : { key: "quick", ja: "話す", meta: `瞬間 ${QUICK_N}問`, href: "/quick", min: 3 }]
+    : [
+        { key: "retell", ja: "話す", meta: "三回", href: "/retell", min: 5 },
+        ...(cards > 0 ? [{ key: "review" as const, ja: "文", meta: `${cards}文`, href: "/review", min: 2 }] : []),
+      ];
   const rest: Stop[] = [
     ...(skills > 0 ? [{ key: "skills" as const, ja: "復習", meta: `${Math.min(skills, 12)}個`, href: "/practice", min: 3 }] : []),
-    cards > 0
-      ? { key: "review", ja: "話す", meta: `復習 ${cards}文`, href: "/review", min: 3 }
-      : { key: "quick", ja: "話す", meta: `瞬間 ${QUICK_N}問`, href: "/quick", min: 3 },
+    ...speak,
     { key: "call", ja: "電話", meta: call.who, href: `/call/${call.id}`, min: 3 },
   ];
-  return ep ? [...episode, ...rest] : [rest[0], ...episode, ...rest.slice(1)];
+  if (!ep) return [rest[0], ...episode, ...rest.slice(1)];
+  // Tell the story while it is fresh: right after the song, before 復習.
+  const retell = rest.filter((s) => s.key === "retell");
+  return [...episode, ...retell, ...rest.filter((s) => s.key !== "retell")];
 }
 
 export const minutes = (stops: Stop[]) => stops.reduce((a, s) => a + s.min, 0);

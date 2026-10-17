@@ -109,6 +109,11 @@ export type Skill = {
 export type PersonMemory = { date: string; ja: string };
 export const MEMORIES_KEPT = 5;
 
+// 三回話す: one day's telling, as characters per minute for each of the three times. The first time is
+// always a new story, so how it moves across days shows real progress, not just repetition.
+export type Retell = { date: string; topic: string; cpm: number[] };
+export const RETELLS_KEPT = 60;
+
 export type Progress = {
   goal: number;
   days: Record<string, number>; // YYYY-MM-DD -> xp
@@ -122,7 +127,8 @@ export type Progress = {
   quick: Record<string, QuickStat>;
   weak: Record<string, WeakPoint>;
   skills: Record<string, Skill>; // keyed by the Japanese without spaces or punctuation
-  people: Record<string, PersonMemory[]>; // keyed by the character's id in content/calls.ts
+  people: Record<string, PersonMemory[]>;
+  retells: Retell[]; // newest last // keyed by the character's id in content/calls.ts
   freezes: number; // streak protectors in hand
   frozen: string[]; // days covered by a protector
   freezeAwardDay?: string;
@@ -146,6 +152,7 @@ export const EMPTY: Progress = {
   weak: {},
   skills: {},
   people: {},
+  retells: [],
   freezes: 0,
   frozen: [],
   bonusDays: [],
@@ -249,6 +256,10 @@ export function merge(a: Progress, b: Progress): Progress {
     people[k] = [...new Map(all.map((m) => [`${m.date} ${m.ja}`, m])).values()].sort((x, y) => (x.date < y.date ? -1 : 1)).slice(-MEMORIES_KEPT);
   }
 
+  const retells = [...new Map([...(a.retells ?? []), ...(b.retells ?? [])].map((r) => [`${r.date} ${r.topic}`, r])).values()]
+    .sort((x, y) => (x.date < y.date ? -1 : 1))
+    .slice(-RETELLS_KEPT);
+
   const byId = <T extends { id: string }>(x: T[], y: T[]) => [...new Map([...x, ...y].map((i) => [i.id, i])).values()];
 
   return {
@@ -272,6 +283,7 @@ export function merge(a: Progress, b: Progress): Progress {
     weak,
     skills,
     people,
+    retells,
     freezes: newer.freezes,
     frozen: [...new Set([...a.frozen, ...b.frozen])],
     freezeAwardDay: newer.freezeAwardDay,
