@@ -581,16 +581,21 @@ export function retellEnd(a: { topic: string; first: string; last: string; focus
 
 // 三回話す's speed is counted in morae, the unit Japanese speech rate is measured in: the transcript
 // writes the same word as 今日 (2 characters) one time and きょう (3) the next, so characters drift.
-const RetellKanaSchema = z.object({ kana: z.array(z.string().describe("その文字起こしの読み（ひらがなとカタカナと「ー」だけ。記号・数字・ローマ字も読みに直す）")) });
+const RetellKanaSchema = z.object({ kana: z.string().describe("文字起こし全体の読み。ひらがなとカタカナと「ー」だけで、ひと続きに書く") });
 
+// One call per text: asked for several at once (as a list), Haiku split the reading into single kana.
 export async function retellKana(texts: string[]): Promise<string[]> {
-  const { kana } = await haikuFirst(
-    RetellKanaSchema,
-    "日本語の文字起こしを、読みのとおりにかなだけで書き直す。入力と同じ数、同じ順で返す。言い直しや「えっと」もそのまま残す。",
-    texts.map((t, i) => `${i + 1}：${t}`).join("\n"),
-    4000,
+  return Promise.all(
+    texts.map(async (t) => {
+      const { kana } = await haikuFirst(
+        RetellKanaSchema,
+        "日本語の文字起こしを、読みのとおりにかなだけで書き直す。漢字・数字・ローマ字は読みに直し、句読点や記号は書かない（読み上げない）。言い直しや「えっと」もそのまま残す。",
+        t,
+        3000,
+      );
+      return kana;
+    }),
   );
-  return kana;
 }
 
 // ---- Readings for the speech model ----
