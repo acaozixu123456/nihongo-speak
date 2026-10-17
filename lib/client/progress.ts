@@ -6,6 +6,7 @@ import type { Radio } from "@/lib/radio";
 import {
   EMPTY,
   EPISODES_KEPT,
+  MEMORIES_KEPT,
   active,
   addDays,
   dayKey,
@@ -22,6 +23,7 @@ import {
   type DiaryEntry,
   type DrillItem,
   type Learned,
+  type PersonMemory,
   type Progress,
   type RadioEpisode,
   type ScenarioProgress,
@@ -31,7 +33,7 @@ import {
 } from "@/lib/progress-model";
 
 export { dayKey, level, streak, totalXp };
-export type { AskedItem, Skill, Card, CustomScenario, DiaryEntry, DrillItem, Learned, Progress, RadioEpisode, StuckLine, WeakPoint };
+export type { AskedItem, Skill, Card, CustomScenario, DiaryEntry, DrillItem, Learned, PersonMemory, Progress, RadioEpisode, StuckLine, WeakPoint };
 
 // The phone's localStorage is the working copy; it is synced to the server
 // (when storage is set up) so nothing is lost if Safari data is cleared.
@@ -475,6 +477,38 @@ export function weakList(p: Progress) {
     .sort((x, y) => weakness(y) - weakness(x) || (x.last < y.last ? 1 : -1));
 }
 
+// The shakiest points not practised today, as items for the daily 练一练 round: the pattern (or the
+// tag) with the latest mistake as its example, pitched so the exercises make the learner use the form.
+export const WEAK_EP = "weak:";
+export function weakItems(p: Progress, n: number): SkillItem[] {
+  const today = dayKey();
+  return weakList(p)
+    .filter((w) => w.last !== today)
+    .slice(0, n)
+    .map((w) => ({
+      ja: w.pattern ?? w.tag,
+      zh: w.zh,
+      kind: "weak",
+      note: w.examples[0] ? `言った：${w.examples[0].said} → 正しくは：${w.examples[0].better}`.slice(0, 180) : undefined,
+      ep: `${WEAK_EP}${w.tag}`,
+    }));
+}
+
+// Every question in the round on a weak point counts as one use of it, right or wrong.
+export function recordWeakRound(results: { tag: string; ok: boolean }[]) {
+  const p = read();
+  const today = dayKey();
+  const weak = { ...p.weak };
+  const noted: Learned[] = [];
+  for (const { tag, ok } of results) {
+    const o = weak[tag];
+    if (!o) continue;
+    weak[tag] = { ...o, hit: o.hit + (ok ? 1 : 0), miss: o.miss + (ok ? 0 : 1), last: today, lastMiss: ok ? o.lastMiss : today };
+    noted.push({ ja: o.pattern ?? o.tag, zh: o.zh, src: "weak", miss: !ok });
+  }
+  write(learn({ ...p, weak }, noted));
+}
+
 // Tags the coach has used before, so it names the same point the same way next time.
 export const knownTags = (p: Progress) =>
   Object.values(p.weak)
@@ -536,6 +570,19 @@ export function recordTalkTurn() {
 export function recordFeedback(id: string) {
   write(gainXp(updateScenario(read(), id, (s) => ({ ...s, talked: (s.talked ?? 0) + 1 })), XP.feedback, "scene"));
 }
+
+// ---- Phone-call characters ----
+
+// What a character learned about the learner in this call, for the next one.
+export function remember(person: string, ja: string) {
+  const line = ja.trim();
+  if (!line) return;
+  const p = read();
+  const notes = [...(p.people[person] ?? []), { date: dayKey(), ja: line }].slice(-MEMORIES_KEPT);
+  write({ ...p, people: { ...p.people, [person]: notes } });
+}
+
+export const memories = (p: Progress, person: string) => p.people[person] ?? [];
 
 // ---- Saved expressions ----
 
@@ -699,7 +746,7 @@ export function quests(p: Progress): Quest[] {
 const SKILL_DAYS = [1, 2, 4, 7, 15, 30]; // next practice after a clean session at each level
 export const skillKey = (ja: string) => ja.replace(/[\s、。，,.!！?？「」『』・〜~…]/g, "");
 
-export type SkillItem = Pick<Skill, "ja" | "zh" | "kind" | "note" | "ep">;
+export type SkillItem = Pick<Skill, "ja" | "zh" | "note" | "ep"> & { kind: Skill["kind"] | "weak" };
 
 // Everything an episode teaches, plus what was asked about on its page.
 export function episodeItems(ep: RadioEpisode): SkillItem[] {
@@ -741,6 +788,7 @@ export function recordSkills(results: { item: SkillItem; ok: boolean }[], replay
     const level = o ? (ok ? Math.min(o.level + 1, SKILL_DAYS.length - 1) : Math.max(o.level - 1, 0)) : ok ? 1 : 0;
     skills[k] = {
       ...item,
+      kind: item.kind === "weak" ? "grammar" : item.kind,
       ...(o ? { ep: o.ep } : {}),
       level,
       due: addDays(dayKey(), ok ? SKILL_DAYS[o ? o.level : 0] : 1),

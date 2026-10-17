@@ -1232,3 +1232,5 @@ body.in-route .back { display: none; }
 .me-stats b.accent { color: var(--accent); }
 .me-stats small { font-size: 12px; color: var(--muted); }
 .entry-n { color: var(--muted); font-size: 13px; }
+/* 点评: the one thing to fix next time */
+.focus-one { font-size: 17px; font-weight: 600; line-height: 1.6; margin: 6px 0 14px; }

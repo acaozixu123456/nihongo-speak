@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { calls } from "@/content/calls";
 import { makeRadio } from "./moyu";
-import { dayKey, dueCards, dueSkillCount, weakList, type Progress } from "./progress";
+import { dayKey, dueCards, dueSkillCount, weakItems, weakList, type Progress } from "./progress";
 
 // 今日のルート: one fixed line of stops for today (listen → practise → speak → call), so opening the app
 // never asks what to do. Each page calls stepDone() when its part is over; the bar on top then moves
@@ -79,10 +79,13 @@ export function plan(p: Progress, quiet: boolean): Stop[] {
   const listen: Stop = { key: "listen", ja: "聴く", meta: ep ? ep.title_zh : "新しい回", href: epHref, min: 6 };
   if (quiet) return [listen, { key: "flow", ja: "流す", meta: "心の中で", href: "/moyu", min: 10 }];
 
-  const skills = dueSkillCount(p);
+  // 練習's daily set: what is due, plus questions made from the points missed when speaking.
+  const skills = dueSkillCount(p) + weakItems(p, 3).length;
   const cards = dueCards(p).length;
   const day = Number(dayKey().replace(/-/g, ""));
-  const call = calls[day % calls.length];
+  // The people who remember earlier calls come first.
+  const pool = calls.filter((c) => c.person);
+  const call = (pool.length ? pool : calls)[day % (pool.length || calls.length)];
   const episode: Stop[] = [listen, { key: "game", ja: "練習", meta: "今の話", href: `${epHref}/game`, min: 3 }];
   const rest: Stop[] = [
     ...(skills > 0 ? [{ key: "skills" as const, ja: "復習", meta: `${Math.min(skills, 12)}個`, href: "/practice", min: 3 }] : []),
