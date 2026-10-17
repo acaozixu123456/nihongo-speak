@@ -311,7 +311,7 @@ export default function Quick({ drill }: { drill?: string }) {
             )}
           </div>
         )}
-        <Nav on="today" />
+        <Nav on="speak" />
       </main>
     );
   }
@@ -323,7 +323,7 @@ export default function Quick({ drill }: { drill?: string }) {
     const mastered = quickMastered(p);
     return (
       <main>
-        <Link href="/" className="back">← 今天</Link>
+        <Link href="/speak" className="back">← 说</Link>
         <header className="page-mast">
           <div>
             <h1>瞬间说</h1>
@@ -356,7 +356,7 @@ export default function Quick({ drill }: { drill?: string }) {
           </div>
           <button className="primary next-cta" onClick={() => begin()}>开始</button>
         </div>
-        <Nav on="today" />
+        <Nav on="speak" />
       </main>
     );
   }
@@ -439,9 +439,9 @@ export default function Quick({ drill }: { drill?: string }) {
           <button className="primary next-cta" onClick={() => begin()}>再来一轮</button>
         )}
         <p style={{ textAlign: "center" }}>
-          <Link href="/" className="muted">回到今天</Link>
+          <Link href="/speak" className="muted">回到说</Link>
         </p>
-        <Nav on="today" />
+        <Nav on="speak" />
       </main>
     );
   }

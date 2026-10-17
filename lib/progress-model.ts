@@ -1,4 +1,5 @@
 import type { Scenario } from "@/content/scenarios";
+import type { Radio } from "@/lib/radio";
 
 // The learner's progress. Shared by the browser (which keeps it in localStorage)
 // and the server (which keeps a synced copy for backup and reminders).
@@ -53,6 +54,10 @@ export type DiaryEntry = {
   corrections: { you_said: string; better: string; why_zh: string }[];
 };
 
+// One 趣味电台 episode, kept with its notes (transcript, key sentences, words, grammar) to look back on.
+export type RadioEpisode = Radio & { id: string; date: string; heard?: boolean };
+export const EPISODES_KEPT = 50;
+
 export type CustomScenario = Scenario & { createdAt: number };
 
 // The latest quick-response attempt at one sentence, keyed by the sentence text.
@@ -86,6 +91,7 @@ export type Progress = {
   removedCards: string[];
   custom: CustomScenario[];
   diary: DiaryEntry[];
+  episodes: RadioEpisode[]; // newest first
   quick: Record<string, QuickStat>;
   weak: Record<string, WeakPoint>;
   freezes: number; // streak protectors in hand
@@ -106,6 +112,7 @@ export const EMPTY: Progress = {
   removedCards: [],
   custom: [],
   diary: [],
+  episodes: [],
   quick: {},
   weak: {},
   freezes: 0,
@@ -210,6 +217,10 @@ export function merge(a: Progress, b: Progress): Progress {
     removedCards: removedCards.filter((id) => !live.some((c) => c.id === id)),
     custom: byId(a.custom, b.custom).sort((x, y) => y.createdAt - x.createdAt),
     diary: byId(a.diary, b.diary).sort((x, y) => (x.id < y.id ? 1 : -1)),
+    episodes: byId(a.episodes ?? [], b.episodes ?? [])
+      .map((e) => ({ ...e, heard: e.heard || [...(a.episodes ?? []), ...(b.episodes ?? [])].some((o) => o.id === e.id && o.heard) }))
+      .sort((x, y) => (x.id < y.id ? 1 : -1))
+      .slice(0, EPISODES_KEPT),
     quick,
     weak,
     freezes: newer.freezes,

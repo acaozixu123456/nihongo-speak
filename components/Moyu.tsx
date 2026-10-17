@@ -4,9 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { Podcast as Episode } from "@/lib/claude";
 import { BLOCK_LABEL, buildRound, makeEpisode, makeRadio, prepare, pruneCache, todayEpisode, type Clip, type Prepared } from "@/lib/client/moyu";
-import type { Radio } from "@/lib/radio";
 import { SILENCE } from "@/lib/client/player";
-import { recordMoyu, recordStuck, todayStats, useProgress, type Progress } from "@/lib/client/progress";
+import { markHeard, recordMoyu, recordStuck, todayStats, useProgress, type Progress, type RadioEpisode } from "@/lib/client/progress";
 import { setAudioSession } from "@/lib/client/recorder";
 import Nav from "./Nav";
 
@@ -34,7 +33,7 @@ export default function Moyu() {
     idx: -1,
     episode: null as Episode | null,
     podcastQueued: false,
-    radio: null as Radio | null,
+    radio: null as RadioEpisode | null,
     radioAsk: null as Promise<unknown> | null,
     tick: 0,
     pendingSec: 0,
@@ -87,6 +86,7 @@ export default function Moyu() {
     const radio = r > 0 ? s.radio : null;
     if (radio) {
       s.radio = null;
+      markHeard(radio.id);
       askRadio();
     }
     return prepare(buildRound(pRef.current, r, s.used, ep, radio));
@@ -226,7 +226,7 @@ export default function Moyu() {
 
   return (
     <main className="moyu">
-      <Link href="/" className="back">← 今天</Link>
+      <Link href="/" className="back">← 听</Link>
       <header className="page-mast">
         <div>
           <h1>摸鱼模式</h1>
@@ -295,7 +295,7 @@ export default function Moyu() {
           if (s.cur && audio.current?.src === s.cur.url && !audio.current.ended) setPhase("paused");
         }}
       />
-      <Nav on="today" />
+      <Nav on="listen" />
     </main>
   );
 }

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-// Today's training is the home page now.
+// Today's training lives on 说 now.
 export default function TrainPage() {
-  redirect("/");
+  redirect("/speak");
 }

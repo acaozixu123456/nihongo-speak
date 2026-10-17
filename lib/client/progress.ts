@@ -2,8 +2,10 @@
 
 import { useSyncExternalStore } from "react";
 import { scenarios, type Scenario } from "@/content/scenarios";
+import type { Radio } from "@/lib/radio";
 import {
   EMPTY,
+  EPISODES_KEPT,
   active,
   addDays,
   dayKey,
@@ -18,6 +20,7 @@ import {
   type DiaryEntry,
   type DrillItem,
   type Progress,
+  type RadioEpisode,
   type ScenarioProgress,
   type StuckLine,
   type WeakPoint,
@@ -25,7 +28,7 @@ import {
 } from "@/lib/progress-model";
 
 export { dayKey, level, streak, totalXp };
-export type { Card, CustomScenario, DiaryEntry, DrillItem, Progress, StuckLine, WeakPoint };
+export type { Card, CustomScenario, DiaryEntry, DrillItem, Progress, RadioEpisode, StuckLine, WeakPoint };
 
 // The phone's localStorage is the working copy; it is synced to the server
 // (when storage is set up) so nothing is lost if Safari data is cleared.
@@ -564,6 +567,32 @@ export function addDiary(entry: DiaryEntry) {
 }
 
 export const diaryToday = (p: Progress) => p.diary.some((d) => d.date === dayKey());
+
+// ---- 趣味电台 episodes ----
+
+// The two hosts: Aoi and Keita map to bright Gemini voices and fall back to Azure's free ones.
+export const RADIO_VOICE = { A: "ja-JP-AoiNeural", B: "ja-JP-KeitaNeural" } as const;
+
+// Keep a new episode with its notes, and put its key sentences into review right away.
+export function saveEpisode(radio: Radio): RadioEpisode {
+  const p = read();
+  const ep: RadioEpisode = { ...radio, id: `r${Date.now()}`, date: dayKey() };
+  const skip = new Set([...p.cards.map((c) => c.id), ...p.removedCards]);
+  const fresh = new Map<string, Card>();
+  for (const ph of radio.phrases) {
+    const id = cardId(ph.ja);
+    if (!skip.has(id)) fresh.set(id, { id, ja: ph.ja, zh: ph.zh, voice: RADIO_VOICE.A, scenarioId: `radio:${ep.id}`, due: dayKey(), step: 0 });
+  }
+  write({ ...p, episodes: [ep, ...p.episodes].slice(0, EPISODES_KEPT), cards: [...p.cards, ...fresh.values()] });
+  return ep;
+}
+
+export function markHeard(id: string) {
+  const p = read();
+  if (p.episodes.some((e) => e.id === id && !e.heard)) write({ ...p, episodes: p.episodes.map((e) => (e.id === id ? { ...e, heard: true } : e)) });
+}
+
+export const findEpisode = (p: Progress, id: string) => p.episodes.find((e) => e.id === id);
 
 // ---- Custom scenarios ----
 
