@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { Explain } from "@/lib/claude";
 import { prepare, radioClips, type Clip, type ClipState, type Prepared } from "@/lib/client/moyu";
-import { play, SILENCE, ttsUrl, unlock } from "@/lib/client/player";
+import { play, preload, SILENCE, ttsUrl, unlock } from "@/lib/client/player";
 import { findEpisode, markHeard, RADIO_VOICE, useProgress } from "@/lib/client/progress";
 import { setAudioSession } from "@/lib/client/recorder";
 import { useHydrated } from "@/lib/client/hydrated";
@@ -96,6 +96,20 @@ export default function Episode({ id }: { id: string }) {
     if (!speaking || Date.now() - touched.current < 4000) return;
     notes.current?.querySelector<HTMLElement>(".sline.now")?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [speaking]);
+
+  // Opening a notes tab fetches its sentences and words, so a tap plays at once.
+  useEffect(() => {
+    if (!ep || tab === "script") return;
+    const lines =
+      tab === "phrases" ? ep.phrases.map((x) => x.ja) : tab === "words" ? (ep.words ?? []).map((x) => x.ja) : (ep.grammar ?? []).map((x) => x.ja);
+    preload(lines.map((ja) => ttsUrl(ja, RADIO_VOICE.A)));
+  }, [ep, tab]);
+
+  // The example in an AI answer, ready for when it's tapped.
+  const example = ask?.answer?.example.ja;
+  useEffect(() => {
+    if (example) preload([ttsUrl(example, RADIO_VOICE.A)]);
+  }, [example]);
 
   if (!hydrated) return <main className="page" />;
   if (!ep) {

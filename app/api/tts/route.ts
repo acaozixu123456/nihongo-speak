@@ -21,13 +21,16 @@ export async function GET(request: Request) {
         : await speak(text, voice);
     // A Japanese line that fell back to Azure sounds noticeably worse: don't let the phone keep it,
     // so the next play asks Gemini again.
-    const fallback = engine === "azure" && gemini;
+    // The ?engine= check is never kept either, so it always reaches Vertex.
+    const fallback = (engine === "azure" && gemini) || url.searchParams.has("engine");
     return new Response(audio, {
       headers: {
         "Content-Type": "audio/mpeg",
         "X-TTS-Engine": engine,
-        // Same text + voice gives the same audio, so let the phone keep it.
-        "Cache-Control": fallback ? "no-store" : "private, max-age=31536000, immutable",
+        // Same text + voice gives the same audio, so let the phone keep it, and Vercel's CDN too: a line
+        // asked for before then comes back in a few dozen ms instead of being synthesized again.
+        "Cache-Control": fallback ? "no-store" : "public, max-age=31536000, immutable",
+        ...(fallback ? {} : { "CDN-Cache-Control": "max-age=31536000" }),
       },
     });
   } catch (e) {

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { play, ttsUrl, unlock } from "@/lib/client/player";
+import { useEffect, useState } from "react";
+import { play, preload, ttsUrl, unlock } from "@/lib/client/player";
 import { transcribe } from "@/lib/client/recorder";
 import { dueCards, findEpisode, findScenario, recordSpeech, reviewCard, useProgress, wavSeconds, type Card } from "@/lib/client/progress";
 import AiJudge, { type Verdict } from "./AiJudge";
@@ -44,6 +44,12 @@ export default function Review() {
       : card
         ? { zh: card.zh, ja: card.ja, reading: card.reading }
         : null);
+
+  // The sentence on screen is fetched while the learner reads it, so 听 plays at once.
+  const askJa = queue && card && ask ? ttsUrl(ask.ja, card.voice) : null;
+  useEffect(() => {
+    if (askJa) preload([askJa]);
+  }, [askJa]);
 
   function begin() {
     unlock();

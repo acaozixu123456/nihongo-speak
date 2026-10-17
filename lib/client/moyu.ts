@@ -3,7 +3,7 @@
 import type { Podcast as Episode } from "@/lib/claude";
 import type { Radio } from "@/lib/radio";
 import { listenIntro, NARRATION, ZH_VOICE } from "@/content/narration";
-import { ttsUrl } from "./player";
+import { AUDIO_CACHE, ttsUrl } from "./player";
 import {
   allScenarios,
   dayKey,
@@ -263,8 +263,8 @@ export async function makeRadio(): Promise<RadioEpisode> {
 
 // Each part is played from its own recording (pre-made ones ship with the site, see ttsUrl), so a
 // sentence is only synthesized once however many clips it turns up in.
-// v2: v1 kept lines that had fallen back to Azure's flatter voice forever.
-const CACHE = "nihongo-speak-moyu-v2";
+// v2: v1 kept lines that had fallen back to Azure's flatter voice forever. (Taps in player.ts share it.)
+const CACHE = AUDIO_CACHE;
 const MAX_CACHED = 600;
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
