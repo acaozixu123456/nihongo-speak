@@ -47,9 +47,64 @@ export function ttsUrl(text: string, voice: string) {
   return `/api/tts?${new URLSearchParams({ text, voice, v: "2" })}`;
 }
 
+// Every recording played here is also kept: in memory as a ready blob for instant replays, and in the
+// same Cache Storage 趣味电台 fills while it makes an episode, so a sentence heard there (or tapped
+// once) plays straight away next time, even after the app was closed.
+export const AUDIO_CACHE = "nihongo-speak-moyu-v2";
+const ready = new Map<string, Promise<string>>();
+
+const cacheable = (src: string) => src.startsWith("/api/tts") || src.startsWith("/voice/");
+
+async function fetchBlob(src: string): Promise<{ blob: Blob; keep: boolean }> {
+  let cache: Cache | null = null;
+  try {
+    cache = await caches.open(AUDIO_CACHE);
+    const hit = await cache.match(src);
+    if (hit) return { blob: await hit.blob(), keep: true };
+  } catch {}
+  const res = await fetch(src);
+  if (!res.ok) throw new Error("音频加载失败");
+  const blob = await res.blob();
+  // The server marks a fallback voice no-store: ask again next time instead of keeping it.
+  const keep = !res.headers.get("cache-control")?.includes("no-store");
+  if (cache && keep && src.startsWith("/api/tts")) {
+    cache.put(src, new Response(blob, { headers: { "Content-Type": "audio/mpeg" } })).catch(() => {});
+  }
+  return { blob, keep };
+}
+
+// A blob: URL holding the recording, fetched once.
+function load(src: string): Promise<string> {
+  if (!cacheable(src)) return Promise.resolve(src);
+  let p = ready.get(src);
+  if (!p) {
+    p = fetchBlob(src).then(({ blob, keep }) => {
+      if (!keep) ready.delete(src);
+      return URL.createObjectURL(blob);
+    });
+    p.catch(() => ready.delete(src));
+    ready.set(src, p);
+  }
+  return p;
+}
+
+// Fetch recordings ahead of the tap, a couple at a time so the server isn't asked for a dozen at once.
+export function preload(srcs: string[]) {
+  const todo = srcs.filter((s) => cacheable(s) && !ready.has(s));
+  const next = (): Promise<void> | undefined => {
+    const s = todo.shift();
+    if (s) return load(s).then(next, next);
+  };
+  next();
+  next();
+}
+
 let finish: (() => void) | null = null;
+// Bumped by every stop(), so a recording still loading when another tap comes in never starts.
+let turn = 0;
 
 export function stop() {
+  turn++;
   const a = el();
   a.pause();
   finish?.();
@@ -59,6 +114,7 @@ export function stop() {
 // Resolves when playback ends or is stopped.
 export function play(src: string, playbackRate = rate): Promise<void> {
   stop();
+  const mine = turn;
   // A recording that never closed properly leaves iPhone in call mode, where sound
   // goes to the quiet earpiece. Playback always switches back to the speaker.
   if (!isRecording()) setAudioSession("playback");
@@ -69,22 +125,23 @@ export function play(src: string, playbackRate = rate): Promise<void> {
       resolve();
     };
     finish = done;
-    a.onended = done;
-    a.onerror = () => {
+    const fail = (e: unknown) => {
       finish = null;
       a.onended = a.onerror = a.onplaying = null;
-      reject(new Error("音频加载失败"));
-    };
-    // Safari resets playbackRate when the source changes.
-    a.onplaying = () => {
-      a.playbackRate = playbackRate;
-    };
-    a.src = src;
-    a.defaultPlaybackRate = playbackRate;
-    a.playbackRate = playbackRate;
-    a.play().catch((e) => {
-      finish = null;
       reject(e);
-    });
+    };
+    load(src).then((url) => {
+      if (mine !== turn) return;
+      a.onended = done;
+      a.onerror = () => fail(new Error("音频加载失败"));
+      // Safari resets playbackRate when the source changes.
+      a.onplaying = () => {
+        a.playbackRate = playbackRate;
+      };
+      a.src = url;
+      a.defaultPlaybackRate = playbackRate;
+      a.playbackRate = playbackRate;
+      a.play().catch(fail);
+    }, (e) => mine === turn && fail(e));
   });
 }
