@@ -16,7 +16,7 @@ export default function Bag() {
 
   return (
     <main>
-      <Link href="/me" className="back">← 我</Link>
+      <Link href="/" className="back">← 今日</Link>
       <header className="page-mast">
         <div>
           <h1>フレーズ帳</h1>

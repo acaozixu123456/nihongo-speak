@@ -1,57 +1,75 @@
 "use client";
 
 import Link from "next/link";
-import { dueCards, useProgress, weakList } from "@/lib/client/progress";
+import { dueCards, dueSkillCount, useProgress, weakList } from "@/lib/client/progress";
+import { todaysEpisode } from "@/lib/client/route";
 import { useHydrated } from "@/lib/client/hydrated";
-import { calls } from "@/content/calls";
 import { scenarios } from "@/content/scenarios";
 
-// Every place to pick by hand, as tiles. Shown on 我, and on 今日 once today's route is done,
-// so a finished day still leads somewhere.
+type Place = { href: string; ja: string; zh: string; n?: string | number | false };
+
+// Every feature, always under 今日: three groups (listen, speak, remember), each with one grey line
+// in Chinese, so someone opening the app for the first time can see what is in it. The numbers on
+// the right only show what is waiting.
 export default function Places() {
   const p = useProgress();
   const hydrated = useHydrated();
-  const due = dueCards(p).length;
-  const weak = weakList(p).length;
-  const latest = p.episodes[0];
-  const told = (p.retells ?? []).length;
+  const ep = hydrated ? (todaysEpisode(p) ?? p.episodes[0]) : undefined;
+  const fresh = hydrated && p.episodes[0] && !p.episodes[0].heard;
+  const skills = hydrated ? dueSkillCount(p) : 0;
+  const weak = hydrated ? weakList(p).length : 0;
+  const cards = hydrated ? dueCards(p).length : 0;
+
+  const groups: { ja: string; zh: string; places: Place[] }[] = [
+    {
+      ja: "聴く",
+      zh: "听",
+      places: [
+        { href: "/episodes", ja: "ラジオ", zh: "每天一期 AI 电台", n: fresh && "新" },
+        ...(ep ? [{ href: `/ep/${ep.id}/song`, ja: "洗脳歌", zh: "把这期唱成歌" }] : []),
+        { href: "/moyu", ja: "流す", zh: "不能出声时只听" },
+      ],
+    },
+    {
+      ja: "話す",
+      zh: "说",
+      places: [
+        { href: "/retell", ja: "三回話す", zh: "同一件事讲三遍" },
+        { href: "/call", ja: "電話", zh: "和熟人打电话" },
+        { href: "/scenes", ja: "場面", zh: `${scenarios.length} 个工作生活场景` },
+        { href: "/quick", ja: "瞬間", zh: "看中文马上说日语" },
+      ],
+    },
+    {
+      ja: "覚える",
+      zh: "记住",
+      places: [
+        { href: "/practice", ja: "練習", zh: "该复习的题", n: skills > 0 && skills },
+        { href: "/weak", ja: "苦手", zh: "我常错的地方", n: weak > 0 && weak },
+        { href: "/bag", ja: "フレーズ帳", zh: "收藏的句子", n: cards > 0 && cards },
+      ],
+    },
+  ];
 
   return (
-    <div className="tiles">
-      <Link href="/episodes" className="tile wide">
-        <span className="tile-mark" aria-hidden>聴</span>
-        <span className="tile-name ja-serif">ラジオ</span>
-        <span className="tile-sub">{hydrated && latest ? latest.title_zh : " "}</span>
-        {hydrated && p.episodes.length > 0 && <span className="tile-n">{p.episodes.length}</span>}
-      </Link>
-      <Link href="/retell" className="tile wide">
-        <span className="tile-mark" aria-hidden>三</span>
-        <span className="tile-name ja-serif">三回話す</span>
-        <span className="tile-sub">同じ話を三人に</span>
-        {hydrated && told > 0 && <span className="tile-n">{told}</span>}
-      </Link>
-      <Link href="/scenes" className="tile">
-        <span className="tile-mark" aria-hidden>場</span>
-        <span className="tile-name ja-serif">場面</span>
-        <span className="tile-n">{scenarios.length}</span>
-      </Link>
-      <Link href="/call" className="tile">
-        <span className="tile-mark" aria-hidden>話</span>
-        <span className="tile-name ja-serif">電話</span>
-        <span className="tile-n">{calls.length}</span>
-      </Link>
-      <Link href="/weak" className="tile">
-        <span className="tile-mark" aria-hidden>苦</span>
-        <span className="tile-name ja-serif">苦手</span>
-        {hydrated && weak > 0 && <span className="tile-n">{weak}</span>}
-      </Link>
-      <Link href="/bag" className={`tile${hydrated && due > 0 ? " hot" : ""}`}>
-        <span className="tile-mark" aria-hidden>帳</span>
-        <span className="tile-name ja-serif">フレーズ帳</span>
-        {hydrated && p.cards.length > 0 && (
-          <span className="tile-n">{due > 0 ? `${due} / ${p.cards.length}` : p.cards.length}</span>
-        )}
-      </Link>
+    <div className="places">
+      {groups.map((g) => (
+        <section key={g.ja}>
+          <h2 className="pl-head">
+            {g.ja}
+            <small>{g.zh}</small>
+          </h2>
+          <div className="pl-grid">
+            {g.places.map((x) => (
+              <Link key={x.href} href={x.href} className="pl">
+                <b>{x.ja}</b>
+                <span>{x.zh}</span>
+                {x.n ? <em>{x.n}</em> : null}
+              </Link>
+            ))}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }

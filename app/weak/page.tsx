@@ -4,7 +4,7 @@ import { WeakList } from "@/components/WeakList";
 export default function WeakPage() {
   return (
     <main>
-      <Link href="/me" className="back">← 我</Link>
+      <Link href="/" className="back">← 今日</Link>
       <header className="page-mast">
         <h1>苦手</h1>
       </header>
