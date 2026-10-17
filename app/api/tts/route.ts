@@ -26,6 +26,8 @@ export async function GET(request: Request) {
     // A Japanese line that fell back to Azure sounds noticeably worse: don't let the phone keep it,
     // so the next play asks Gemini again.
     // The ?engine= check is never kept either, so it always reaches Vertex.
+    const readings = heard.get(text);
+    heard.delete(text);
     const fallback = (engine === "azure" && gemini) || url.searchParams.has("engine");
     return new Response(audio, {
       headers: {
@@ -33,6 +35,7 @@ export async function GET(request: Request) {
         "X-TTS-Engine": engine,
         // What Gemini was given when it wasn't the text itself (a kanji word's reading), to check it.
         ...(said && said !== text ? { "X-TTS-Said": encodeURIComponent(said) } : {}),
+        ...(readings ? { "X-TTS-Readings": encodeURIComponent(readings) } : {}),
         // Same text + voice gives the same audio, so let the phone keep it, and Vercel's CDN too: a line
         // asked for before then comes back in a few dozen ms instead of being synthesized again.
         "Cache-Control": fallback ? "no-store" : "public, max-age=31536000, immutable",
@@ -95,9 +98,12 @@ async function hedgedVertex(text: string, voice: string) {
 // Gemini's reading and Haiku's, asked together. Either can fail now and then, and either can be
 // wrong (Gemini gave 木炭 as たんざん), so when both answer they must agree; when they don't,
 // null sends the word to Azure, which reads kanji in Japanese.
+// Gemini's/Haiku's readings of a word, for the X-TTS-Readings header.
+const heard = new Map<string, string>();
 async function reading(text: string): Promise<string | null> {
   const plain = (r: string | null) => r?.replace(/[\s、。！？・]/g, "") || null;
   const [a, b] = await Promise.all([readingOf(text), kanaReading(text)].map((p) => p.catch(() => null)));
+  heard.set(text, `${a ?? "-"}/${b ?? "-"}`);
   if (a && b) return plain(a) === plain(b) ? a : (console.warn(`readings differ for ${text}: ${a} / ${b}`), null);
   return a ?? b;
 }

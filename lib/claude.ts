@@ -575,19 +575,9 @@ export function retellEnd(a: { topic: string; first: string; last: string; focus
 
 // The kana reading of text written only in kanji (細菌 → さいきん), so Gemini TTS doesn't read it
 // in Chinese. Backs up Gemini's own answer in /api/tts. Null when no clean reading comes back.
+const ReadingSchema = z.object({ kana: z.string().describe("読み方（ひらがなだけ）") });
+
 export async function kanaReading(text: string): Promise<string | null> {
-  const res = await client.messages.create(
-    {
-      model: MODEL,
-      max_tokens: 200,
-      system: "日本語の読み方をひらがなだけで答える。記号や数字も読みに直す。説明は書かない。",
-      messages: [{ role: "user", content: text }],
-    },
-    { timeout: 8000 },
-  );
-  const out = res.content
-    .map((b) => (b.type === "text" ? b.text : ""))
-    .join("")
-    .trim();
-  return /^[぀-ヿ\s、。！？・ー]+$/.test(out) ? out : null;
+  const { kana } = await haikuFirst(ReadingSchema, "日本語の読み方をひらがなだけで答える。記号や数字も読みに直す。", text, 300);
+  return /^[぀-ヿ\s、。！？・ー]+$/.test(kana.trim()) ? kana.trim() : null;
 }
