@@ -55,7 +55,8 @@ export function CallList() {
 }
 
 // One phone call: the other side is a voice; subtitles cost a tap and are counted.
-export default function Call({ call }: { call: CallDef }) {
+// back: where the call was started from (a 趣味电台 episode, or the list of calls).
+export default function Call({ call, back = { href: "/call", label: "← 打电话" } }: { call: CallDef; back?: { href: string; label: string } }) {
   const { talk } = call;
   const scenarioId = `call:${call.id}`;
   const [phase, setPhase] = useState<Phase>("ready");
@@ -204,7 +205,7 @@ export default function Call({ call }: { call: CallDef }) {
 
   return (
     <main className="call">
-      {phase !== "live" && <Link href="/call" className="back">← 打电话</Link>}
+      {phase !== "live" && <Link href={back.href} className="back">{back.label}</Link>}
       <header className="call-head">
         <div className="call-avatar" aria-hidden>{call.incoming ? "受" : "電"}</div>
         <div className="call-who">{call.who}</div>

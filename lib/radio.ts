@@ -87,8 +87,11 @@ const SYSTEM = `あなたは日本語学習者向けポッドキャストの放�
 - words：覚える価値のある単語。読みと中国語訳をつける。
 - grammar：会話で使われた文型と、その実際の文。`;
 
-function prompt(avoid: string[]) {
-  const topic = TOPICS[Math.floor(Math.random() * TOPICS.length)];
+// wish: a listener's request (点播), in their own words, usually Chinese.
+function prompt(avoid: string[], wish?: string) {
+  const topic = wish
+    ? `リスナーからのリクエスト「${wish}」。このテーマで、日本で暮らす人に身近な話にする（冒頭でハルがリクエストを紹介する）`
+    : TOPICS[Math.floor(Math.random() * TOPICS.length)];
   return `今回のジャンル：${topic}
 ${avoid.length ? `最近扱ったテーマ（重ならないように）：${avoid.join("、")}` : ""}`;
 }
@@ -96,7 +99,7 @@ ${avoid.length ? `最近扱ったテーマ（重ならないように）：${avo
 // Same model family as the voices: Gemini 3.8 Flash, global location.
 const MODEL = "gemini-3.8-flash";
 
-async function withGemini(avoid: string[]): Promise<Radio> {
+async function withGemini(avoid: string[], wish?: string): Promise<Radio> {
   const { project, token } = await vertexAccess();
   const { $schema, ...schema } = z.toJSONSchema(RadioSchema) as Record<string, unknown>;
   void $schema;
@@ -107,7 +110,7 @@ async function withGemini(avoid: string[]): Promise<Radio> {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: SYSTEM }] },
-        contents: [{ role: "user", parts: [{ text: prompt(avoid) }] }],
+        contents: [{ role: "user", parts: [{ text: prompt(avoid, wish) }] }],
         generationConfig: { responseMimeType: "application/json", responseJsonSchema: schema, temperature: 1 },
       }),
       signal: AbortSignal.timeout(50000),
@@ -123,13 +126,13 @@ async function withGemini(avoid: string[]): Promise<Radio> {
   return RadioSchema.parse(JSON.parse(text));
 }
 
-export async function makeRadio(avoid: string[]): Promise<Radio & { by: "gemini" | "claude" }> {
+export async function makeRadio(avoid: string[], wish?: string): Promise<Radio & { by: "gemini" | "claude" }> {
   if (vertexConfigured()) {
     try {
-      return { ...(await withGemini(avoid)), by: "gemini" };
+      return { ...(await withGemini(avoid, wish)), by: "gemini" };
     } catch (e) {
       console.warn("radio: Gemini failed, using Claude", e);
     }
   }
-  return { ...(await makeRadioWithClaude(RadioSchema, SYSTEM, prompt(avoid))), by: "claude" };
+  return { ...(await makeRadioWithClaude(RadioSchema, SYSTEM, prompt(avoid, wish))), by: "claude" };
 }
