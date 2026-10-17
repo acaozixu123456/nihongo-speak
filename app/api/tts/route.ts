@@ -92,12 +92,12 @@ async function hedgedVertex(text: string, voice: string) {
   return Promise.any([first, second]);
 }
 
-// Gemini's reading and Haiku's, asked together: whichever gives a clean one first. Each failed now
-// and then on its own, and one that fails used to leave the word to be read in Chinese.
-function reading(text: string): Promise<string | null> {
-  const asks = [readingOf(text), kanaReading(text)].map((p) => p.catch(() => null));
-  return new Promise((done) => {
-    let left = asks.length;
-    for (const p of asks) p.then((r) => (r ? done(r) : --left || done(null)));
-  });
+// Gemini's reading and Haiku's, asked together. Either can fail now and then, and either can be
+// wrong (Gemini gave 木炭 as たんざん), so when both answer they must agree; when they don't,
+// null sends the word to Azure, which reads kanji in Japanese.
+async function reading(text: string): Promise<string | null> {
+  const plain = (r: string | null) => r?.replace(/[\s、。！？・]/g, "") || null;
+  const [a, b] = await Promise.all([readingOf(text), kanaReading(text)].map((p) => p.catch(() => null)));
+  if (a && b) return plain(a) === plain(b) ? a : (console.warn(`readings differ for ${text}: ${a} / ${b}`), null);
+  return a ?? b;
 }
