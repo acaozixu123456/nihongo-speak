@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import type { Game as GameData } from "@/lib/claude";
+import type { Game as GameData } from "@/lib/game";
 import { play, preload, ttsUrl, unlock } from "@/lib/client/player";
 import {
   dueSkills,

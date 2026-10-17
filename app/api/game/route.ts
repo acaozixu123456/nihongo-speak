@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { makeGame, type GameItem } from "@/lib/claude";
+import { makeGame, type GameItem } from "@/lib/game";
 
 export const maxDuration = 60;
 
