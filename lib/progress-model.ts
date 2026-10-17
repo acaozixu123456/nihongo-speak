@@ -113,7 +113,17 @@ export const MEMORIES_KEPT = 5;
 // always a new story, so how it moves across days shows real progress, not just repetition.
 // `next` is the one point still not said right at the end of the day, shown before the next day's first telling.
 export type RetellPoint = { tag: string; zh: string; focus_zh: string; you_said: string; better: string };
-export type Retell = { date: string; topic: string; cpm: number[]; next?: RetellPoint };
+// mps: morae per second over the stretch actually spoken; pauses: silences of a second or more inside
+// it, per telling. again: that day's one telling of an earlier day's story first, in the same units.
+export type Retell = {
+  date: string;
+  topic: string;
+  cpm: number[];
+  mps?: number[];
+  pauses?: number[];
+  again?: { topic: string; mps?: number; pauses: number };
+  next?: RetellPoint;
+};
 export const RETELLS_KEPT = 60;
 
 export type Progress = {

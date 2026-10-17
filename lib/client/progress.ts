@@ -482,6 +482,11 @@ export function weakList(p: Progress) {
 
 // The listener's letter for the next 趣味电台 episode: the newest mistake, unless the last
 // episode already read it out.
+// Words the last three episodes taught, so the next one can use a few of them again.
+export function radioRecentWords(): string[] {
+  return [...new Set(read().episodes.slice(0, 3).flatMap((e) => (e.words ?? []).map((w) => w.ja)))].slice(0, 24);
+}
+
 export function radioLetter(): { said: string; better: string } | undefined {
   const p = read();
   const last = p.episodes[0]?.letter?.said;

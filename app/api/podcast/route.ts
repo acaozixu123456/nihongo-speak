@@ -12,7 +12,7 @@ const str = (s: unknown, n: number): s is string => typeof s === "string" && s.l
 // on the learner's own topic when they asked for one (点播), with one of their recent mistakes as
 // the listener's letter (お便り).
 export async function POST(request: Request) {
-  const body = (await request.json()) as { kind: "script" | "radio"; weak?: unknown; cards?: unknown; scenes?: unknown; avoid?: unknown; wish?: unknown; letter?: { said?: unknown; better?: unknown; where?: unknown } };
+  const body = (await request.json()) as { kind: "script" | "radio"; weak?: unknown; cards?: unknown; scenes?: unknown; avoid?: unknown; wish?: unknown; recent?: unknown; letter?: { said?: unknown; better?: unknown; where?: unknown } };
   try {
     if (body.kind === "script") {
       const weak = (Array.isArray(body.weak) ? body.weak : []).slice(0, 3).filter((w) => str(w?.tag, 80) && str(w?.zh, 200));
@@ -35,6 +35,7 @@ export async function POST(request: Request) {
     if (body.kind === "radio") {
       const avoid = (Array.isArray(body.avoid) ? body.avoid : []).slice(-30).filter((t) => str(t, 60));
       const wish = str(body.wish, 100) && body.wish.trim() ? body.wish.trim() : undefined;
+      const recent = (Array.isArray(body.recent) ? body.recent : []).slice(0, 24).filter((w): w is string => str(w, 20) && w.trim().length > 0);
       const l = body.letter;
       const letter =
         l && str(l.said, 200) && str(l.better, 200) && l.said && l.better
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
         async start(c) {
           const send = (o: object) => c.enqueue(enc.encode(JSON.stringify(o) + "\n"));
           try {
-            send({ episode: await makeRadio(avoid, wish, letter, (m) => send({ making: m })) });
+            send({ episode: await makeRadio(avoid, wish, letter, recent, (m) => send({ making: m })) });
           } catch (e) {
             console.error(e);
             send({ error: e instanceof Error ? e.message : "生成失败" });
