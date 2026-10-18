@@ -26,6 +26,7 @@ import {
 } from "@/lib/client/progress";
 import { flowOf, moraRate, runClips, wavSlice, type Flow } from "@/lib/client/fluency";
 import { Recorder, transcribeLong } from "@/lib/client/recorder";
+import SayAlong from "@/components/SayAlong";
 import { stepDone, todaysEpisode, useOnRoute } from "@/lib/client/route";
 import { useHydrated } from "@/lib/client/hydrated";
 import { Star } from "./FeedbackCard";
@@ -204,8 +205,8 @@ export default function Retell() {
   const [stall, setStall] = useState<Stall | null>(null);
   const firstWav = useRef<Blob | null>(null);
   const texts = useRef<string[]>([]);
-  // Which natural sentence is playing while saying it along; -1 when not.
-  const [along, setAlong] = useState(-1);
+  // The end's natural version is being said along with (SayAlong).
+  const [along, setAlong] = useState(false);
   // The answer to the fix stays hidden until the learner has tried to find it.
   const [shown, setShown] = useState(false);
   // Readings of each telling, asked for as soon as it is transcribed (index 3: the telling of the old story).
@@ -434,21 +435,6 @@ export default function Retell() {
       .finally(() => URL.revokeObjectURL(url));
   }
 
-  // Shadowing: the natural version line by line, said along with it, nothing recorded or scored.
-  async function sayAlong(lines: string[]) {
-    unlock();
-    for (let i = 0; i < lines.length; i++) {
-      setAlong(i);
-      try {
-        await play(ttsUrl(lines[i], RADIO_VOICE.A), 0.9);
-      } catch {
-        break;
-      }
-      await new Promise((r) => setTimeout(r, 600));
-    }
-    setAlong(-1);
-  }
-
   if (!hydrated || !topic) return <main className="page" />;
 
   const back = !onRoute && (
@@ -508,7 +494,7 @@ export default function Retell() {
             <span className="kicker" style={{ marginTop: 18 }}>你讲的 → 更自然的说法</span>
             <div className="card">
               {end.natural.map((x, i) => (
-                <div key={i} className={`note ${along === i ? "along" : ""}`}>
+                <div key={i} className="note">
                   <div className="note-main" onClick={() => hear(x.ja)}>
                     {x.you && x.you !== x.ja && <div className="muted retell-you">你：{x.you}</div>}
                     <div className="ja">{x.ja}</div>
@@ -518,10 +504,22 @@ export default function Retell() {
                 </div>
               ))}
             </div>
-            <button className="today-go retell-along" onClick={() => sayAlong(end.natural.map((x) => x.ja))} disabled={along >= 0}>
-              {along >= 0 ? "一緒に言ってる…" : "一緒に言う"}
-            </button>
-            <p className="muted retell-note">跟着说一遍，不打分。</p>
+            {along ? (
+              <SayAlong lines={end.natural.map((x) => ({ ja: x.ja, zh: x.zh }))} voice={RADIO_VOICE.A} onClose={() => setAlong(false)} />
+            ) : (
+              <>
+                <button
+                  className="today-go retell-along"
+                  onClick={() => {
+                    unlock();
+                    setAlong(true);
+                  }}
+                >
+                  一緒に言う
+                </button>
+                <p className="muted retell-note">一句一句：先听，再跟着说，最后自己说。不打分。</p>
+              </>
+            )}
           </>
         )}
       </main>

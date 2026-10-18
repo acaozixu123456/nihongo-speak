@@ -1371,7 +1371,23 @@ button.today-go { width: 100%; border: none; cursor: pointer; }
 .retell-reveal { margin-top: 10px; padding: 8px 16px; border: 1px solid var(--accent); border-radius: 999px; background: none; color: var(--accent-ink); font-size: 14px; cursor: pointer; }
 .retell-you { font-size: 13px; margin-bottom: 2px; }
 .retell-along { margin-top: 16px; }
-.note.along .ja { color: var(--accent-ink); }
+/* 一緒に言う */
+.along-card { margin-top: 16px; }
+.along-steps { display: flex; gap: 6px; margin-top: 12px; }
+.along-steps span { padding: 3px 10px; border-radius: 999px; font-size: 12px; color: var(--muted); border: 1px solid var(--line); }
+.along-steps span.now { color: #fff; background: var(--accent); border-color: var(--accent); }
+.along-steps span.past { color: var(--accent-ink); border-color: var(--accent-soft); }
+.along-ja { margin-top: 18px; font-size: 24px; line-height: 1.6; min-height: 2.4em; transition: opacity 0.3s; }
+.along-ja .lit { color: var(--accent-ink); }
+.along-ja.faded { opacity: 0.18; }
+.along-zh { margin-top: 6px; font-size: 13px; color: var(--muted); }
+.along-hint { position: relative; margin-top: 16px; font-size: 14px; color: var(--muted); padding-bottom: 8px; }
+.along-hint i { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; border-radius: 3px; background: var(--accent); animation: along-out linear forwards; }
+@keyframes along-out { from { width: 100%; } to { width: 0; } }
+.along-row { display: flex; gap: 8px; margin-top: 16px; }
+.along-row button { flex: 1; padding: 10px 0; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--text); font-size: 14px; cursor: pointer; }
+.along-done { margin: 14px 0 18px; font-size: 18px; }
+.along-quit { display: block; margin: 12px auto 0; background: none; border: 0; color: var(--muted); font-size: 14px; cursor: pointer; }
 
 /* 予行演習 */
 .rehearse textarea { margin-top: 16px; width: 100%; }
