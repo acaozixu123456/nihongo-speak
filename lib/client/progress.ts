@@ -7,6 +7,7 @@ import {
   EMPTY,
   EPISODES_KEPT,
   MEMORIES_KEPT,
+  REHEARSALS_KEPT,
   RETELLS_KEPT,
   active,
   addDays,
@@ -27,6 +28,7 @@ import {
   type PersonMemory,
   type Progress,
   type RadioEpisode,
+  type Rehearsal,
   type Retell,
   type RetellPoint,
   type ScenarioProgress,
@@ -36,7 +38,7 @@ import {
 } from "@/lib/progress-model";
 
 export { dayKey, level, streak, totalXp };
-export type { AskedItem, Skill, Card, CustomScenario, DiaryEntry, DrillItem, Learned, PersonMemory, Progress, RadioEpisode, Retell, RetellPoint, StuckLine, WeakPoint };
+export type { AskedItem, Skill, Card, CustomScenario, DiaryEntry, DrillItem, Learned, PersonMemory, Progress, RadioEpisode, Rehearsal, Retell, RetellPoint, StuckLine, WeakPoint };
 
 // The phone's localStorage is the working copy; it is synced to the server
 // (when storage is set up) so nothing is lost if Safari data is cleared.
@@ -617,6 +619,27 @@ export function retellCarry(p: Progress): RetellPoint | null {
 }
 
 export const retellToday = (p: Progress) => (p.retells ?? []).some((r) => r.date === dayKey());
+
+// ---- 予行演習 ----
+
+export function saveRehearsal(r: Rehearsal) {
+  const p = read();
+  write({ ...p, rehearsals: [...(p.rehearsals ?? []).filter((x) => x.id !== r.id), r].slice(-REHEARSALS_KEPT) });
+}
+
+// The latest rehearsal from an earlier day that was played at least once and not reported on yet,
+// within the last week: asked about before anything new.
+export function rehearsalToReport(p: Progress): Rehearsal | null {
+  const today = dayKey();
+  const r = [...(p.rehearsals ?? [])].reverse().find((x) => x.date < today && x.rounds > 0 && !x.debrief);
+  return r && r.date >= addDays(today, -7) ? r : null;
+}
+
+// The shakiest point, for a call partner to slip into their own lines first (structural priming).
+export function primePoint(p: Progress): { tag: string; pattern?: string; better?: string } | null {
+  const w = weakList(p)[0];
+  return w ? { tag: w.tag, pattern: w.pattern, better: w.examples[0]?.better } : null;
+}
 
 // ---- Saved expressions ----
 

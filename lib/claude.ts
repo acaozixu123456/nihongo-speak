@@ -632,3 +632,58 @@ export async function sungKana(lines: string[]): Promise<string[]> {
   const kana = /^[぀-ヿ\s、。！？!?…〜ー・,.「」]+$/;
   return out.map((k, i) => (kana.test(k.trim()) ? k.trim() : lines[i]));
 }
+
+// ---- 予行演習: rehearse a real conversation that is coming up ----
+
+const RehearsePlanSchema = z.object({
+  titleZh: z.string().describe("この会話の短い名前（中国語、10字以内）。例：跟课长请假"),
+  person: z
+    .enum(["yamada", "tanaka", "yui", "sato", "none"])
+    .describe("相手がいつもの人物なら：yamada＝山田課長（上司）、tanaka＝取引先の田中様、yui＝友達のゆい、sato＝同僚の佐藤さん。ほかの相手なら none"),
+  who: z.string().describe("相手の呼び名（日本語、短く）。例：山田課長、区役所の窓口、美容師さん"),
+  gender: z.enum(["male", "female"]).describe("相手の性別"),
+  aiRole: z.string().describe("AI が演じる相手の役と話し方（日本語、1〜2文）"),
+  userRole: z.string().describe("学習者の役（日本語、短く）"),
+  goalZh: z.string().describe("学習者がこの会話で言えるようになること（中国語、1〜2文）"),
+  setup: z.string().describe("場面の説明と、相手がどう進めるか（日本語、2〜4文）。対面か電話かも書く"),
+  opening: z.object({ ja: z.string(), zh: z.string() }).describe("会話の最初の一言。学習者から話しかける場面なら、相手の短い呼びかけ（例：「はい、どうしました？」）"),
+  twists: z
+    .array(z.string())
+    .describe("3つ。各回の相手の反応（日本語、1〜2文）。1回目：スムーズに受け入れる。2回目：理由や詳しいことを追加で質問する。3回目：小さな問題が起きる（都合が悪い、書類が足りない、など）が、話し合えば解決できる"),
+  lines: z
+    .array(z.object({ ja: z.string(), kana: z.string().describe("ja の全文をひらがなで"), zh: z.string() }))
+    .describe("この会話で学習者がそのまま使える自然な言い方を3つ。短く（25字以内）、実際の日本でよく使う言い方"),
+});
+
+export type RehearsePlan = z.infer<typeof RehearsePlanSchema>;
+
+export function rehearsePlan(askZh: string) {
+  return haikuFirst(
+    RehearsePlanSchema,
+    `あなたは日本語の会話練習の作者です。学習者は日本に住んでIT企業で働いている中国人で、日本語レベルはJLPT N4〜N3です。
+学習者が「これから実際にする会話」を書いてきます。その会話を、AI が相手役になって3回練習できるように設定を作ってください。
+- 本当にその場で起きそうな、自然な日本の職場・生活の会話にする。
+- 3回とも同じ用件で、相手の反応だけが変わる（twists）。
+- 語彙と文法は N3 程度。ただし実際によく使う表現はそのまま使う。`,
+    `これからする会話：${askZh}`,
+    3000,
+  );
+}
+
+const RehearseDebriefSchema = z.object({
+  noteZh: z.string().describe("一言（中国語、1文）。まず実際に話せたことを認める"),
+  missed: z
+    .array(z.object({ ja: z.string(), kana: z.string().describe("ja の全文をひらがなで"), zh: z.string() }))
+    .describe("学習者が実際の会話で言えなかったこと・うまく言えなかったことを、その場で使える自然な日本語にしたもの。0〜2個、短く（25字以内）"),
+});
+
+export type RehearseDebrief = z.infer<typeof RehearseDebriefSchema>;
+
+export function rehearseDebrief(a: { askZh: string; report: string }) {
+  return haikuFirst(
+    RehearseDebriefSchema,
+    `学習者（日本に住む中国人、日本語 N4〜N3）が、前もって練習した会話を実際にしてきました。どうだったかの報告（中国語か日本語）を読んで、言えなかったことを次に言えるようにする。報告に言えなかったことが無ければ missed は空配列。`,
+    `練習した会話：${a.askZh}\n報告：${a.report}`,
+    2000,
+  );
+}

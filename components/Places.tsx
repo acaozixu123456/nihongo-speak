@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { dueCards, dueSkillCount, useProgress, weakList } from "@/lib/client/progress";
+import { dueCards, dueSkillCount, rehearsalToReport, useProgress, weakList } from "@/lib/client/progress";
 import { todaysEpisode } from "@/lib/client/route";
 import { useHydrated } from "@/lib/client/hydrated";
 import { scenarios } from "@/content/scenarios";
@@ -19,6 +19,7 @@ export default function Places() {
   const skills = hydrated ? dueSkillCount(p) : 0;
   const weak = hydrated ? weakList(p).length : 0;
   const cards = hydrated ? dueCards(p).length : 0;
+  const report = hydrated && !!rehearsalToReport(p);
 
   const groups: { ja: string; zh: string; places: Place[] }[] = [
     {
@@ -35,6 +36,7 @@ export default function Places() {
       zh: "说",
       places: [
         { href: "/retell", ja: "三回話す", zh: "同一件事讲三遍" },
+        { href: "/rehearse", ja: "予行演習", zh: "明天要说的话先演三遍", n: report && "1" },
         { href: "/call", ja: "電話", zh: "和熟人打电话" },
         { href: "/scenes", ja: "場面", zh: `${scenarios.length} 个工作生活场景` },
         { href: "/quick", ja: "瞬間", zh: "看中文马上说日语" },

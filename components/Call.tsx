@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { stepDone } from "@/lib/client/route";
 import { useEffect, useRef, useState } from "react";
-import { calls, callTalk, type Call as CallDef } from "@/content/calls";
+import { calls, callTalk, type Call as CallDef, type Prime } from "@/content/calls";
 import type { Feedback, Turn } from "@/lib/claude";
 import { play, stop, ttsUrl, unlock } from "@/lib/client/player";
 import { liveReply, stopLive, unlockLive } from "@/lib/client/live";
 import { transcribe } from "@/lib/client/recorder";
-import { knownTags, memories, recordFeedback, recordPoints, recordSpeech, recordTalkTurn, remember, useProgress, wavSeconds } from "@/lib/client/progress";
+import { knownTags, memories, primePoint, recordFeedback, recordPoints, recordSpeech, recordTalkTurn, remember, useProgress, wavSeconds } from "@/lib/client/progress";
 import FeedbackCard from "./FeedbackCard";
 import HoldButton from "./HoldButton";
 
@@ -53,11 +53,24 @@ export function CallList() {
   );
 }
 
+// When the call is one round of 予行演習: the useful lines to show before it, and what comes after it.
+export type RoundProps = {
+  round: number;
+  total: number;
+  lines: { ja: string; zh: string }[];
+  next?: string; // what the other side will do in the next round, on its button
+  back: string;
+  onHangUp: () => void;
+  onNext: () => void;
+};
+
 // One phone call: the other side is a voice; subtitles cost a tap and are counted.
-export default function Call({ call }: { call: CallDef }) {
+export default function Call({ call, round }: { call: CallDef; round?: RoundProps }) {
   const p = useProgress();
-  // The character's personality and what they remember from earlier calls go along with every request.
-  const talk = callTalk(call, call.person ? memories(p, call.person) : []);
+  // The character's personality, what they remember from earlier calls, and the learner's shakiest point
+  // (which they slip into their own lines) go along with every request. Picked when the call starts.
+  const [prime, setPrime] = useState<Prime | null>(null);
+  const talk = callTalk(call, call.person ? memories(p, call.person) : [], prime);
   const scenarioId = `call:${call.id}`;
   const [phase, setPhase] = useState<Phase>("ready");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -106,6 +119,7 @@ export default function Call({ call }: { call: CallDef }) {
     unlock();
     unlockLive();
     liveOn.current = true;
+    setPrime(primePoint(p));
     const first: Message = { role: "assistant", text: talk.opening.ja, zh: talk.opening.zh };
     setMessages([first]);
     setPhase("live");
@@ -181,7 +195,8 @@ export default function Call({ call }: { call: CallDef }) {
     stopLive();
     setEndedAt(Date.now());
     setPhase("ended");
-    stepDone();
+    if (round) round.onHangUp();
+    else stepDone();
     if (!said) return;
     setBusy("feedback");
     try {
@@ -209,7 +224,7 @@ export default function Call({ call }: { call: CallDef }) {
 
   return (
     <main className="call">
-      {phase !== "live" && <Link href="/call" className="back">← 打电话</Link>}
+      {phase !== "live" && <Link href={round?.back ?? "/call"} className="back">← {round ? "予行演習" : "打电话"}</Link>}
       <header className="call-head">
         <div className="call-avatar" aria-hidden>{call.incoming ? "受" : "電"}</div>
         <div className="call-who">{call.who}</div>
@@ -223,6 +238,17 @@ export default function Call({ call }: { call: CallDef }) {
             <div>{talk.goalZh}</div>
             <div className="small-text" style={{ marginTop: 6 }}>你是：{talk.userRole}</div>
           </div>
+          {round && (
+            <div className="card">
+              <div className="label">第 {round.round} 遍 / {round.total} · 可能用到</div>
+              {round.lines.map((l) => (
+                <div key={l.ja} style={{ marginTop: 6 }}>
+                  <div className="ja" style={{ fontSize: 16 }}>{l.ja}</div>
+                  <div className="zh">{l.zh}</div>
+                </div>
+              ))}
+            </div>
+          )}
           <p className="muted" style={{ textAlign: "center" }}>接通后只有声音。点下面的按钮说话，说完再点一下就发给对方。</p>
           <button className="primary call-go" onClick={pickUp}>
             {call.incoming ? "接听" : "拨打"}
@@ -312,7 +338,15 @@ export default function Call({ call }: { call: CallDef }) {
               </div>
             ))}
           </div>
-          <button className="primary next-cta" onClick={pickUp}>再打一次</button>
+          {round ? (
+            round.round < round.total ? (
+              <button className="primary next-cta" onClick={round.onNext}>第 {round.round + 1} 遍{round.next ? ` · ${round.next}` : ""}</button>
+            ) : (
+              <button className="primary next-cta" onClick={round.onNext}>演完了</button>
+            )
+          ) : (
+            <button className="primary next-cta" onClick={pickUp}>再打一次</button>
+          )}
         </>
       )}
 
