@@ -89,7 +89,7 @@ export function reelOrder(items: RecapItem[]) {
 // A grammar point is shown and said as one short sentence: the learner's own corrected sentence (with
 // a translation from the AI), else one the AI writes. Kept on this device, keyed by the point.
 
-const EX_KEY = "nihongo-speak:point-examples";
+const EX_KEY = "nihongo-speak:point-examples:v2";
 const exKey = (pt: NonNullable<RecapItem["point"]>) => `${pt.pattern}|${pt.seed ?? ""}`;
 
 function readEx(): Record<string, Example> {
@@ -126,7 +126,10 @@ export async function loadExamples(items: RecapItem[]): Promise<Record<string, E
     const next = { ...known };
     need.forEach((pt, i) => {
       const e = got[i];
-      if (e?.ja && e.zh && !/[／〜]|^[NV]/.test(e.ja)) next[exKey(pt)] = { ja: e.ja, zh: e.zh };
+      // The learner's own sentence stays as it is; only its translation comes from the AI.
+      if (!e?.ja || !e.zh || /[／〜]|^[NV]/.test(e.ja)) return;
+      if (pt.seed && e.ja.replace(/[。、\s]/g, "") !== pt.seed.replace(/[。、\s]/g, "")) return;
+      next[exKey(pt)] = { ja: pt.seed ?? e.ja, zh: e.zh };
     });
     try {
       const keys = Object.keys(next);
