@@ -23,6 +23,7 @@ export function RatePicker({ rate, onChange }: { rate: number; onChange: (r: num
 export default function Listen({ scenario, active, onNext }: { scenario: Scenario; active: boolean; onNext: () => void }) {
   const [rate, setRateState] = useState(1);
   const [showJa, setShowJa] = useState(false);
+  const [tools, setTools] = useState(false);
   const [showKana, setShowKana] = useState(false);
   const [showZh, setShowZh] = useState(false);
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
@@ -92,27 +93,26 @@ export default function Listen({ scenario, active, onNext }: { scenario: Scenari
 
   return (
     <div>
-      <div className="card">
-        <p className="muted" style={{ marginTop: 0 }}>
-          建议：第一遍关掉字幕整段听；第二遍点句子逐句听，听不出的再点「看字」；最后打开字幕确认。
-        </p>
-        <RatePicker rate={rate} onChange={changeRate} />
-        <div className="row" style={{ marginTop: 8 }}>
-          <span className="muted">字幕</span>
-          <button className={`small ${showJa ? "on" : ""}`} onClick={() => setShowJa(!showJa)}>日文</button>
-          <button className={`small ${showKana ? "on" : ""}`} onClick={() => setShowKana(!showKana)}>读音</button>
-          <button className={`small ${showZh ? "on" : ""}`} onClick={() => setShowZh(!showZh)}>中文</button>
-          <button className={`small ${loop ? "on" : ""}`} onClick={() => setLoop(!loop)}>单句循环</button>
-        </div>
-        <div className="row" style={{ marginTop: 10 }}>
-          {current === null ? (
-            <button className="primary" onClick={() => playFrom(0, false)}>通して聞く</button>
-          ) : (
-            <button onClick={halt}>■ 止める</button>
-          )}
-        </div>
-        {error && <p className="error">{error}</p>}
+      {/* One line of advice; speed and subtitles wait behind 設定 so the first listen needs no decisions. */}
+      <div className="listen-bar">
+        <span>字幕なしで一回通して聞く</span>
+        <button className="text-btn" onClick={() => setTools(!tools)}>
+          {rate}× · 字幕 {tools ? "‹" : "›"}
+        </button>
       </div>
+      {tools && (
+        <div className="listen-tools">
+          <RatePicker rate={rate} onChange={changeRate} />
+          <div className="row" style={{ marginTop: 8 }}>
+            <span className="muted">字幕</span>
+            <button className={`small ${showJa ? "on" : ""}`} onClick={() => setShowJa(!showJa)}>日文</button>
+            <button className={`small ${showKana ? "on" : ""}`} onClick={() => setShowKana(!showKana)}>读音</button>
+            <button className={`small ${showZh ? "on" : ""}`} onClick={() => setShowZh(!showZh)}>中文</button>
+            <button className={`small ${loop ? "on" : ""}`} onClick={() => setLoop(!loop)}>单句循环</button>
+          </div>
+        </div>
+      )}
+      {error && <p className="error">{error}</p>}
 
       {finished && (
         <div className="card">
@@ -127,11 +127,11 @@ export default function Listen({ scenario, active, onNext }: { scenario: Scenari
       {scenario.lines.map((line, i) => {
         const visible = showJa || revealed.has(i);
         return (
-          <div key={i} className={`card line ${current === i ? "current" : ""}`} onClick={() => playFrom(i, true)}>
+          <div key={i} className={`listen-line line ${current === i ? "current" : ""}`} onClick={() => playFrom(i, true)}>
             <div className="row spread">
               <span className="speaker">{line.speaker}</span>
               <button
-                className="small"
+                className="text-btn"
                 onClick={(e) => {
                   e.stopPropagation();
                   toggleReveal(i);
@@ -146,6 +146,16 @@ export default function Listen({ scenario, active, onNext }: { scenario: Scenari
           </div>
         );
       })}
+
+      {!finished && (
+        <div className="sticky-cta">
+          {current === null ? (
+            <button className="primary" onClick={() => playFrom(0, false)}>▶ 通して聞く</button>
+          ) : (
+            <button onClick={halt}>■ 止める</button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

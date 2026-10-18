@@ -12,9 +12,9 @@ import Shadow from "./Shadow";
 import Talk from "./Talk";
 
 const TABS = [
-  { key: "listen", label: "听" },
-  { key: "shadow", label: "跟读" },
-  { key: "talk", label: "对话" },
+  { key: "listen", label: "① 聞く" },
+  { key: "shadow", label: "② まねる" },
+  { key: "talk", label: "③ 会話" },
 ] as const;
 
 export default function ScenarioView({ scenario, step }: { scenario: Scenario; step?: Step }) {
@@ -36,8 +36,8 @@ export default function ScenarioView({ scenario, step }: { scenario: Scenario; s
         <div className="scene-where">
           {BUILDINGS[b].label} · 和{npc(scenario).name}
         </div>
-        <h1>{scenario.titleZh}</h1>
-        <div className="scene-ja">{scenario.title}</div>
+        <h1>{scenario.title}</h1>
+        <div className="scene-ja">{scenario.titleZh}</div>
       </header>
       <div className="tabs steps">
         {TABS.map((t) => (
