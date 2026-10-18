@@ -152,6 +152,8 @@ export type Progress = {
   scenarios: Record<string, ScenarioProgress>;
   cards: Card[];
   removedCards: string[];
+  // Ids of 重来一次 scenarios deleted on some copy, so merging with another copy doesn't bring them back.
+  removedCustom?: string[];
   custom: CustomScenario[];
   diary: DiaryEntry[];
   episodes: RadioEpisode[]; // newest first
@@ -257,6 +259,7 @@ export function merge(a: Progress, b: Progress): Progress {
   }
 
   const removedCards = [...new Set([...a.removedCards, ...b.removedCards])];
+  const removedCustom = [...new Set([...(a.removedCustom ?? []), ...(b.removedCustom ?? [])])];
   const cards = new Map<string, Card>();
   for (const c of [...a.cards, ...b.cards]) {
     const prev = cards.get(c.id);
@@ -313,7 +316,10 @@ export function merge(a: Progress, b: Progress): Progress {
     scenarios,
     cards: live,
     removedCards: removedCards.filter((id) => !live.some((c) => c.id === id)),
-    custom: byId(a.custom, b.custom).sort((x, y) => y.createdAt - x.createdAt),
+    custom: byId(a.custom, b.custom)
+      .filter((s) => !removedCustom.includes(s.id))
+      .sort((x, y) => y.createdAt - x.createdAt),
+    removedCustom,
     diary: byId(a.diary, b.diary).sort((x, y) => (x.id < y.id ? 1 : -1)),
     episodes: byId(a.episodes ?? [], b.episodes ?? [])
       .map((e) => {

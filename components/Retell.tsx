@@ -178,14 +178,16 @@ export default function Retell() {
     setError("");
     setPhase("starting");
     const r = new Recorder();
+    // Set before the mic opens, so leaving the page meanwhile still shuts it.
+    rec.current = r;
     try {
       await r.start();
     } catch {
+      rec.current = null;
       setPhase(round === 0 ? "ready" : "between");
       setError("麦克风打不开，请允许使用麦克风");
       return;
     }
-    rec.current = r;
     startedAt.current = Date.now();
     setLeft(limit);
     setPhase("talk");

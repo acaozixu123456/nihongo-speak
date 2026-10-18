@@ -7,6 +7,7 @@ import { BLOCK_LABEL, buildRound, makeEpisode, makeRadio, prepare, pruneCache, t
 import { SILENCE } from "@/lib/client/player";
 import { markHeard, recordMoyu, recordStuck, todayStats, useProgress, type Progress, type RadioEpisode } from "@/lib/client/progress";
 import { setAudioSession } from "@/lib/client/recorder";
+import { stepDone } from "@/lib/client/route";
 
 const RATES = [0.9, 1, 1.1];
 const RATE_KEY = "nihongo-speak:moyu-rate";
@@ -136,6 +137,8 @@ export default function Moyu() {
 
   async function onEnded() {
     flush();
+    // A whole round heard is the day's 流す stop done (it keeps playing; the route just ends here).
+    stepDone();
     if (!s.next) return;
     setPhase("loading");
     try {

@@ -48,7 +48,7 @@ export default function ScenarioView({ scenario, step }: { scenario: Scenario; s
         ))}
       </div>
       {/* Keep every tab mounted so switching back doesn't lose progress. */}
-      <div hidden={tab !== "listen"}><Listen scenario={scenario} onNext={() => go("shadow")} /></div>
+      <div hidden={tab !== "listen"}><Listen scenario={scenario} active={tab === "listen"} onNext={() => go("shadow")} /></div>
       <div hidden={tab !== "shadow"}>
         <Shadow scenario={scenario} active={tab === "shadow"} onNext={() => go("talk")} />
       </div>

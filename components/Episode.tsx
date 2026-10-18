@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { radioClips, type Clip, type ClipState, type RadioPart } from "@/lib/client/moyu";
+import { makingText, radioClips, useRadioMaking, type Clip, type ClipState, type RadioPart } from "@/lib/client/moyu";
 import { mixRadio, type Mixed } from "@/lib/client/radio-mix";
 import { play, preload, SILENCE, ttsUrl, unlock } from "@/lib/client/player";
 import { findEpisode, markHeard, RADIO_VOICE, useProgress } from "@/lib/client/progress";
@@ -12,7 +13,7 @@ import Earworm from "./Earworm";
 import { hasSavedSet, prefetchGame } from "./Game";
 import { Star } from "./FeedbackCard";
 import { shortDate } from "./Episodes";
-import { stepDone } from "@/lib/client/route";
+import { nextHref, stepDone } from "@/lib/client/route";
 
 type Tab = "script" | "phrases" | "words" | "grammar";
 const TABS: { key: Tab; label: string }[] = [
@@ -32,6 +33,28 @@ const RATES = [1, 0.85, 0.7];
 
 // Cover pictures being drawn, so opening the page twice doesn't ask twice.
 const drawing: Record<string, Promise<boolean>> = {};
+
+// /ep/new: today's route started before its episode was written. Waits for it, then opens it
+// (or, if it can't be written, the route's next stop).
+export function NewEpisode() {
+  const router = useRouter();
+  const making = useRadioMaking();
+  useEffect(() => {
+    let gone = false;
+    nextHref().then((h) => !gone && router.replace(h));
+    return () => {
+      gone = true;
+    };
+  }, [router]);
+  return (
+    <main className="page">
+      <Link href="/" className="back">← 今日</Link>
+      <p className="muted game-wait">
+        <span className="spin" /> {making ? makingText(making) : "新しい回を作っています"}
+      </p>
+    </main>
+  );
+}
 
 // One 趣味电台 episode: play it straight through (the line being spoken lights up in the transcript),
 // then the notes the AI wrote with it: key sentences (already in review), words and grammar.
@@ -54,8 +77,11 @@ export default function Episode({ id }: { id: string }) {
   const [made, setMade] = useState<{ clips: Clip[]; at: ClipState[] } | null>(null);
   const notes = useRef<HTMLDivElement>(null);
   const touched = useRef(0);
+  // Set once the page is left, so audio still being mixed then isn't played anywhere.
+  const left = useRef(false);
 
   useEffect(() => {
+    left.current = false;
     try {
       setShowZhState(localStorage.getItem(ZH_KEY) === "1");
       const r = Number(localStorage.getItem(RATE_KEY));
@@ -68,6 +94,7 @@ export default function Episode({ id }: { id: string }) {
     return () => {
       window.removeEventListener("touchmove", hand);
       window.removeEventListener("wheel", hand);
+      left.current = true;
       audio.current?.pause();
       if (prep.current) URL.revokeObjectURL(prep.current.url);
     };
@@ -191,6 +218,7 @@ export default function Episode({ id }: { id: string }) {
       const ready = await mixRadio(episode, (i, st) =>
         setMade((m) => (m && m.clips === clips ? { clips, at: m.at.map((x, j) => (j === i ? st : x)) } : m)),
       );
+      if (left.current) return URL.revokeObjectURL(ready.url);
       prep.current = ready;
       a.src = ready.url;
       a.playbackRate = a.defaultPlaybackRate = rate;

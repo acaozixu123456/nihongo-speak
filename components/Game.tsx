@@ -231,6 +231,11 @@ export default function Game({ id }: { id: string }) {
       .catch((e) => setError(e instanceof Error ? e.message : "AI 出错了"));
   }, [hydrated, daily, ep, p, round, replay, id]);
 
+  // Nothing due today: the route moves on rather than waiting on an empty stop.
+  useEffect(() => {
+    if (queue && !total) stepDone();
+  }, [queue, total]);
+
   // Reschedule every item once the round is over, by how it went the first time through.
   useEffect(() => {
     if (!queue || queue.length || !total || saved.current === round) return;

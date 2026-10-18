@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Scenario } from "@/content/scenarios";
 import { play, setRate, stop, ttsUrl, unlock } from "@/lib/client/player";
 import { markListened } from "@/lib/client/progress";
@@ -20,7 +20,7 @@ export function RatePicker({ rate, onChange }: { rate: number; onChange: (r: num
   );
 }
 
-export default function Listen({ scenario, onNext }: { scenario: Scenario; onNext: () => void }) {
+export default function Listen({ scenario, active, onNext }: { scenario: Scenario; active: boolean; onNext: () => void }) {
   const [rate, setRateState] = useState(1);
   const [showJa, setShowJa] = useState(false);
   const [showKana, setShowKana] = useState(false);
@@ -31,6 +31,14 @@ export default function Listen({ scenario, onNext }: { scenario: Scenario; onNex
   const [error, setError] = useState("");
   const [finished, setFinished] = useState(false);
   const runId = useRef(0);
+
+  // Another tab, or another page: the run stops there instead of carrying on to the next line.
+  useEffect(() => {
+    if (active) return;
+    runId.current++;
+    setCurrent(null);
+  }, [active]);
+  useEffect(() => () => void runId.current++, []);
 
   function changeRate(r: number) {
     setRateState(r);
