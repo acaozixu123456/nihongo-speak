@@ -129,6 +129,8 @@ export type Retell = {
   stalls?: number[];
   texts?: string[];
   natural?: string[];
+  // Expressions praised that day (said well, word for word), never praised again.
+  good?: string[];
   again?: { topic: string; mps?: number; pauses: number; stalls?: number; uptake?: string[] };
   next?: RetellPoint;
 };

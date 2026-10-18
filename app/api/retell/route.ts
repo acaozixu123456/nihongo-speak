@@ -5,7 +5,7 @@ import { hearRuns } from "@/lib/gemini-hear";
 export const maxDuration = 60;
 
 type Body =
-  | { kind: "hear"; clips: string[]; listener: string; topic: string }
+  | { kind: "hear"; clips: string[]; listener: string; topic: string; avoid?: string[] }
   | { kind: "fix"; topic: string; said: string; known?: string[]; carry?: { focus_zh: string; better: string }; stall?: { before: string; after: string; secs: number } }
   | { kind: "uptake"; natural: string[]; said: string }
   | { kind: "end"; topic: string; first: string; last: string; focus?: string }
@@ -24,7 +24,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "录音不对" }, { status: 400 });
     }
     try {
-      return NextResponse.json(await hearRuns({ clips, listener: String(b.listener ?? ""), topic: String(b.topic ?? "").slice(0, 200) }));
+      const avoid = Array.isArray(b.avoid) ? b.avoid.filter((t) => text(t, 40)).slice(0, 30) : [];
+      return NextResponse.json(await hearRuns({ clips, listener: String(b.listener ?? ""), topic: String(b.topic ?? "").slice(0, 200), avoid }));
     } catch (e) {
       console.error(e);
       // why: the first words of the failure, to tell a refusal from a timeout without the logs.

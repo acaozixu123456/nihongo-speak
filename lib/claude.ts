@@ -664,14 +664,19 @@ export async function retellUptake(a: { natural: string[]; said: string }) {
 const RetellReadSchema = z.object({
   cut: z.array(z.boolean()).describe("各部分について順に：文の途中で止まっていれば true、文や節の切れ目なら false"),
   reaction: z.string().describe("聞き手が話を聞き終わってすぐ言う一言（日本語、15〜30字）"),
+  good: z.string().describe("学習者の発話からそのまま抜き出した、うまく言えた日本語の表現一つ（3〜15字）。なければ空文字"),
 });
 
-export async function retellRead(a: { pieces: string[]; topic: string; listener: string }) {
+// good: one thing said well, word for word from the telling, so the learner knows what to keep saying
+// (praise of a specific act, not of the person). Nothing when nothing stands out; never one already
+// praised on an earlier day.
+export async function retellRead(a: { pieces: string[]; topic: string; listener: string; avoid?: string[] }) {
   return haikuFirst(
     RetellReadSchema,
     `日本語学習者がテーマ「${a.topic}」について人に話しました。1秒以上黙ったところで区切った文字起こしです（間違いもそのまま）。
 cut：各部分（${a.pieces.length} 個、順に）について、その部分が文の途中で止まっている（言葉に詰まった、次の部分で同じ文が続く）なら true、文や節の切れ目（〜です。〜ました。〜て、〜けど、〜から、〜ので、〜たら などのあと）で止まったなら false。最後は false。
-reaction：聞き手（${a.listener}）が、話を聞き終わってすぐ言う一言の日本語。学習者がはっきり言った内容に具体的に触れる驚きや感想。15〜30字。質問で終わらない。`,
+reaction：聞き手（${a.listener}）が、話を聞き終わってすぐ言う一言の日本語。学習者がはっきり言った内容に具体的に触れる驚きや感想。15〜30字。質問で終わらない。
+good：学習者がうまく言えた日本語の表現を一つ、文字起こしからそのまま（一字も変えずに）抜き出す。自然な口語の言い回し、正しく使えた接続や文型、学習者には難しめの語を優先。間違いを含むもの、「えっと」、単語一つだけのもの、テーマや要点の語をそのまま言っただけのものは選ばない。${a.avoid?.length ? `次はもう褒めたので選ばない：${a.avoid.join("、")}。` : ""}ふさわしいものがなければ空文字。`,
     a.pieces.map((t, i) => `【${i + 1}】${t}`).join("\n"),
     1000,
   );

@@ -1381,6 +1381,9 @@ button.today-go { width: 100%; border: none; cursor: pointer; }
 .wait-dots i { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--accent); }
 .wait-dots i.on { background: var(--accent); }
 
+.good-line { margin: 4px 0 14px; font-size: 20px; line-height: 1.5; cursor: pointer; }
+.good-line b { margin-right: 4px; color: var(--accent); font-weight: 600; }
+
 /* 一緒に言う */
 .along-card { margin-top: 16px; }
 .along-steps { display: flex; gap: 6px; margin-top: 12px; }
