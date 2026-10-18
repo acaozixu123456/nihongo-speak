@@ -27,7 +27,8 @@ export async function POST(request: Request) {
       return NextResponse.json(await hearRuns({ clips, listener: String(b.listener ?? ""), topic: String(b.topic ?? "").slice(0, 200) }));
     } catch (e) {
       console.error(e);
-      return NextResponse.json({ error: "Gemini 没听清" }, { status: 502 });
+      // why: the first words of the failure, to tell a refusal from a timeout without the logs.
+      return NextResponse.json({ error: "Gemini 没听清", why: String(e).slice(0, 300) }, { status: 502 });
     }
   }
   if (b.kind === "uptake") {
