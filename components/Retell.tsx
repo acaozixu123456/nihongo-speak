@@ -112,7 +112,7 @@ const chars = (s: string) => s.replace(/[\s、。，,.!！?？「」…]/g, "").
 
 // perMin: long silences per minute; stalls: those in the middle of a sentence, per minute (only when
 // Gemini wrote the telling down).
-type Take = { text: string; sec: number; cpm: number; span: number; pauses: number; perMin: number; stalls?: number; mps?: number };
+type Take = { text: string; sec: number; cpm: number; span: number; pauses: number; perMin: number; stalls?: number; mps?: number; good?: string };
 // The longest silence in the middle of a sentence in the first telling, where it is in the recording.
 type Stall = { before: string; after: string; secs: number; from: number; to: number };
 const STALL_MIN_S = 1.5;
@@ -170,13 +170,20 @@ function secondNote(a: Take | null, b: Take, text: string | undefined, better: s
   return out;
 }
 
-// The wait while a telling is written down (~18s), used for the next one: one thing only. Before the
-// friend, the plain form to switch to; before the last telling, the one fix said under the breath three
-// times; after the last, the long pauses per minute across the three, counted on the phone.
-const PLAIN = { ja: "〜たんだ。でもさ、〜。", say: "昨日ね、友達と出かけたんだ。でもさ、雨だったの。" };
+// The wait while a telling is written down (~18s): one thing only, or just the bar. Before the last
+// telling, the one fix said under the breath three times; after the last, the long pauses per minute
+// across the three, counted on the phone. (A plain-form hint before the friend was noise, the user said.)
+
+// One thing said well, in the learner's own words (tap: hear it said by a native voice).
+function Good({ ja, onHear }: { ja: string; onHear: (ja: string) => void }) {
+  return (
+    <div className="good-line" onClick={() => onHear(ja)}>
+      <b>✓</b>「{ja}」
+    </div>
+  );
+}
 function WaitCard(a: {
   round: number;
-  next?: string;
   phrase: string;
   murmurs: number;
   onMurmur: () => void;
@@ -184,16 +191,7 @@ function WaitCard(a: {
   pauses: (number | null | undefined)[];
 }) {
   let body: React.ReactNode = null;
-  if (a.round === 0 && a.next === "yui") {
-    body = (
-      <>
-        <div className="wait-ja" onClick={() => a.onHear(PLAIN.say)}>
-          {PLAIN.ja} ▶
-        </div>
-        <div className="wait-zh">下一遍讲给朋友，用普通形</div>
-      </>
-    );
-  } else if (a.round === 1 && a.phrase) {
+  if (a.round === 1 && a.phrase) {
     body = (
       <>
         <div className="wait-ja" onClick={() => a.onHear(a.phrase)}>
@@ -354,7 +352,9 @@ export default function Retell() {
     if (flow.runs.length) {
       try {
         const clips = await runClips(wav, flow.runs);
-        heard = await post<Heard>({ kind: "hear", clips, listener: who, topic: shownTopic!.title });
+        // Expressions praised on earlier days or earlier today aren't praised again.
+        const avoid = [...(p.retells ?? []).slice(-14).flatMap((r) => r.good ?? []), ...takes.flatMap((t) => (t?.good ? [t.good] : []))];
+        heard = await post<Heard>({ kind: "hear", clips, listener: who, topic: shownTopic!.title, avoid });
       } catch {}
     }
     let text = heard ? heard.runs.map((r) => r.text).join("") : "";
@@ -382,6 +382,7 @@ export default function Retell() {
       pauses: flow.pauses,
       perMin: perMinute(flow.pauses, span),
       ...(heard && { stalls: perMinute(heard.runs.filter((r) => r.cut).length, span) }),
+      ...(heard?.good && { good: heard.good }),
     };
     const slot = old ? 3 : n;
     kana.current[slot] = heard
@@ -463,6 +464,7 @@ export default function Retell() {
       perMin: all.map((t) => t.perMin),
       ...(stalls && { stalls }),
       texts: texts.current.slice(0, 3),
+      ...(all.some((t) => t.good) && { good: all.flatMap((t) => (t.good ? [t.good] : [])) }),
       ...(again &&
         againTake && { again: { topic: again.topic.title, mps: againTake.mps, pauses: againTake.pauses, stalls: againTake.stalls, ...(uptake.length && { uptake }) } }),
     };
@@ -544,7 +546,7 @@ export default function Retell() {
         {busy === "end" && <p className="muted judge-wait">AI 在听你的第三遍…</p>}
         {end && (
           <>
-            <p className="focus-one">{end.praise_zh}</p>
+            {all[2]?.good ? <Good ja={all[2].good} onHear={hear} /> : <p className="focus-one">{end.praise_zh}</p>}
             {fix?.focus_zh && !stall && end.used !== "unused" && (
               <p className="small-text">
                 {end.used === "right" ? "✓" : "△"} 这次要注意的：{fix.focus_zh}
@@ -644,7 +646,6 @@ export default function Retell() {
       {!warming && !talking && !error && (busy === "listen" || busy === "fix") && (
         <WaitCard
           round={round}
-          next={LISTENERS[round + 1]}
           phrase={round === 1 ? (stall && fix?.stall.better) || fix?.fix.better || "" : ""}
           murmurs={murmurs}
           onMurmur={() => setMurmurs((m) => Math.min(3, m + 1))}
@@ -669,6 +670,7 @@ export default function Retell() {
               {nameOf(said.who)}：{said.text}
             </div>
           )}
+          {takes[1]?.good && <Good ja={takes[1].good} onHear={hear} />}
           {secondNote(takes[0], takes[1], texts.current[1], stall && fix?.stall.better ? fix.stall.better : fix?.fix.better, !!focus).map((l) => (
             <p key={l} className="small-text">
               {l}
@@ -688,6 +690,7 @@ export default function Retell() {
                   {carried === "right" ? "✓ 上次那一点，这次说对了" : carried === "wrong" ? "△ 上次那一点还没改过来，明天再来" : "上次那一点这次没用到，明天接着留意"}
                 </p>
               )}
+              {take0?.good && <Good ja={take0.good} onHear={hear} />}
               <span className="kicker">下一遍只改这一件事</span>
               {stall && fix.stall.better ? (
                 <>

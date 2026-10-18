@@ -13,7 +13,8 @@ import { vertexAccess } from "@/lib/vertex-tts";
 
 export type HeardRun = { text: string; kana: string; cut: boolean };
 // ms: how long writing down and reading took, to watch the wait after a telling.
-export type Heard = { runs: HeardRun[]; reaction: string; ms: [number, number] };
+// good: one expression said well, word for word from the telling ("" when none).
+export type Heard = { runs: HeardRun[]; reaction: string; good: string; ms: [number, number] };
 
 const MODEL = "gemini-3.8-flash";
 // Pieces written down at once; a telling has up to a few dozen. 16 at once ran into 429s.
@@ -121,7 +122,7 @@ const styleOf = (id: string) => {
   return p ? `${p.name}。${p.persona.split("話し方：")[1] ?? ""}` : "友達。くだけた話し方";
 };
 
-export async function hearRuns(a: { clips: string[]; listener: string; topic: string }): Promise<Heard> {
+export async function hearRuns(a: { clips: string[]; listener: string; topic: string; avoid?: string[] }): Promise<Heard> {
   const t0 = Date.now();
   // A piece that still has no answer after 35s (or failed twice) is left out rather than losing the
   // whole telling to Azure; only when more than a quarter are missing does the telling fail.
@@ -149,14 +150,20 @@ export async function hearRuns(a: { clips: string[]; listener: string; topic: st
     pieces: got.map((p) => p.text),
     topic: a.topic,
     listener: styleOf(a.listener),
+    avoid: a.avoid,
   }).catch((e) => {
     console.warn("hear read, Haiku failed:", e);
-    return { cut: [] as boolean[], reaction: "" };
+    return { cut: [] as boolean[], reaction: "", good: "" };
   });
   const runs = got.map((p, i) => ({
     text: p.text,
     kana: p.kana,
     cut: i < got.length - 1 && !!read.cut?.[i],
   }));
-  return { runs, reaction: read.reaction ?? "", ms: [t1 - t0, Date.now() - t1] };
+  // Only words really said (the model sometimes tidies them up), and not one praised before.
+  const plain = (t: string) => t.replace(/[\s、。！？!?,.・「」]/g, "");
+  const said = plain(got.map((p) => p.text).join(""));
+  const good = (read.good ?? "").trim();
+  const ok = good && plain(good).length >= 3 && said.includes(plain(good)) && !a.avoid?.some((x) => plain(x) === plain(good));
+  return { runs, reaction: read.reaction ?? "", good: ok ? good : "", ms: [t1 - t0, Date.now() - t1] };
 }
