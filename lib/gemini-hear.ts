@@ -28,9 +28,9 @@ type Reply = {
   }[];
 };
 
-async function ask<T>(parts: object[], schema: object, timeoutMs: number, model = MODEL): Promise<T> {
+async function ask<T>(parts: object[], schema: object, timeoutMs: number): Promise<T> {
   const { project, token } = await vertexAccess();
-  const url = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/${model}:generateContent`;
+  const url = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/${MODEL}:generateContent`;
   const send = (t: object | null) =>
     fetch(url, {
       method: "POST",
@@ -105,9 +105,9 @@ function hedged<T>(go: () => Promise<T>, after: number): Promise<T> {
   });
 }
 
-function piece(clip: string, model?: string): Promise<{ text: string; kana: string }> {
+function piece(clip: string): Promise<{ text: string; kana: string }> {
   const parts = [{ text: PIECE }, { inlineData: { mimeType: "audio/mp3", data: clip } }];
-  return hedged(() => ask(parts, pieceSchema, 25000, model), 9000);
+  return hedged(() => ask(parts, pieceSchema, 25000), 9000);
 }
 
 const styleOf = (id: string) => {
@@ -115,12 +115,7 @@ const styleOf = (id: string) => {
   return p ? `${p.name}。${p.persona.split("話し方：")[1] ?? ""}` : "友達。くだけた話し方";
 };
 
-export async function hearRuns(a: {
-  clips: string[];
-  listener: string;
-  topic: string;
-  model?: string;
-}): Promise<Heard> {
+export async function hearRuns(a: { clips: string[]; listener: string; topic: string }): Promise<Heard> {
   const t0 = Date.now();
   const pieces: { text: string; kana: string }[] = new Array(a.clips.length);
   let next = 0;
@@ -128,7 +123,7 @@ export async function hearRuns(a: {
     Array.from({ length: Math.min(PARALLEL, a.clips.length) }, async () => {
       while (next < a.clips.length) {
         const i = next++;
-        pieces[i] = await piece(a.clips[i], a.model);
+        pieces[i] = await piece(a.clips[i]);
       }
     }),
   );
