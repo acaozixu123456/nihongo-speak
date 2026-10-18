@@ -542,7 +542,9 @@ const RetellFixSchema = z.object({
     you_said: z.string().describe("学習者が実際に言った日本語（その一節だけ）。直すところがなければ空文字"),
     better: z.string().describe("その一節の自然な言い方。you_said が空なら空文字"),
   }),
-  focus_zh: z.string().describe("次の2回で気をつける、たった一つのこと（中国語、1文、具体的に）。直すところがなければ、もっと話を広げるための一言"),
+  focus_zh: z
+    .string()
+    .describe("次の2回で気をつける、たった一つのこと。簡体字の中国語で1文、30字以内（例：「下一遍把动词说完整，用「〜ました」结尾。」）。日本語は「」で引く語だけ。直すところがなければ、もっと話を広げるための一言（これも中国語）"),
   point: z.object({
     tag: z.string().describe("その文法・表現の名前（日本語、短く）。文法の名前で言えなければ、直した言葉そのもの（例：「〜てしまう」「おいしかった」）。you_said が空なら空文字"),
     zh: z.string().describe("その文法・表現が何か（中国語、1文）。tag が空なら空文字"),
@@ -551,14 +553,34 @@ const RetellFixSchema = z.object({
 });
 export type RetellFix = z.infer<typeof RetellFixSchema>;
 
-export function retellFix(a: { topic: string; said: string; known?: string[]; carry?: { focus_zh: string; better: string } }) {
+// Chinese with the Japanese it quotes taken out: a line still full of kana was written in Japanese.
+const inJapanese = (s: string) => (s.replace(/「[^」]*」/g, "").match(/[ぁ-んァ-ヶ]/g)?.length ?? 0) >= 5;
+
+export async function retellFix(a: { topic: string; said: string; known?: string[]; carry?: { focus_zh: string; better: string } }) {
+  // Haiku sometimes writes the tip in Japanese anyway (the learner saw a long Japanese paragraph);
+  // ask again once, then fall back to a plain Chinese line around the corrected words.
+  for (let i = 0; i < 2; i++) {
+    const f = await retellFixOnce(a, i > 0);
+    if (!inJapanese(f.focus_zh) && !inJapanese(f.point.zh)) return f;
+    if (i === 1)
+      return {
+        ...f,
+        focus_zh: f.fix.better ? `下一遍这样说：「${f.fix.better}」` : "下一遍多讲一点细节。",
+        point: { ...f.point, zh: inJapanese(f.point.zh) ? "" : f.point.zh },
+      };
+  }
+  throw new Error("unreachable");
+}
+
+function retellFixOnce(a: { topic: string; said: string; known?: string[]; carry?: { focus_zh: string; better: string } }, again: boolean) {
   return haikuFirst(
     RetellFixSchema,
     `${COACH}
 学習者はラジオで聞いた話を、自分の言葉で人に話しています（同じ話をあと2回、別の人に話します）。
 1回目の録音の文字起こしを見て、次の2回で直すべきことを1つだけ選んでください。意味が通じなくなる誤り ＞ 何度も出る誤り ＞ 不自然さ の順。
 話の中身や長さは評価しない。言い直し・えっと・繰り返しは誤りとして扱わない。
-前の日から持ち越した注意点があれば、それが正しく使えたかも見る。まだ直っていなければ、それを今日の1つに選んでよい。${knownLine(a.known)}`,
+前の日から持ち越した注意点があれば、それが正しく使えたかも見る。まだ直っていなければ、それを今日の1つに選んでよい。
+focus_zh と point.zh は学習者が画面で読む説明なので、必ず簡体字の中国語で、短く書く。${again ? "\n前回の答えは focus_zh が日本語になっていた。今度は必ず中国語で書くこと。" : ""}${knownLine(a.known)}`,
     `話のテーマ：${a.topic}
 ${a.carry ? `前の日から持ち越した注意点：${a.carry.focus_zh}（正しい形の例：${a.carry.better}）\n` : ""}1回目：${a.said}`,
   );
