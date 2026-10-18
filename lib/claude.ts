@@ -707,8 +707,8 @@ export function rehearseDebrief(a: { askZh: string; report: string }) {
 const ExamplesSchema = z.object({
   items: z.array(
     z.object({
-      ja: z.string().describe("短く自然な日本語の例文（1文、20字以内が目安、N4〜N3）。seed があればそれを使う（長ければ要の部分だけに縮める）"),
-      zh: z.string().describe("その例文の中国語訳（1文、説明は書かない）"),
+      ja: z.string().describe("「訳すだけ」の項目はその文をそのまま。「作る」の項目は、その文法を使った短く自然な例文（1文、20字以内が目安、N4〜N3）"),
+      zh: z.string().describe("ja の中国語訳（1文、説明は書かない）"),
     }),
   ),
 });
@@ -717,9 +717,11 @@ export async function pointExamples(points: { pattern: string; zh: string; seed?
   const r = await haikuFirst(
     ExamplesSchema,
     `${COACH}
-学習者が覚える文法・表現ごとに、そのまま声に出して真似できる例文を1つずつ作ってください。職場や日常生活で実際に言う場面の文。記号（N、V、／、〜）や括弧書きの説明は例文に入れない。
-seed（学習者が言い間違えた文の正しい言い方）があれば、それを例文にする。入力と同じ順番、同じ数で返す。`,
-    points.map((p, i) => `${i + 1}. ${p.pattern}（${p.zh}）${p.seed ? ` seed：${p.seed}` : ""}`).join("\n"),
+学習者が声に出して真似する例文のリストを作ります。項目は2種類：
+- 「作る」：その文法・表現を必ず使った例文を1つ作る。職場や日常生活で実際に言う文。記号（N、V、／、〜）や括弧書きの説明は入れない。
+- 「訳すだけ」：書かれた日本語の文を一字も変えずに ja に写し、zh に訳を書く。
+入力と同じ順番、同じ数で返す。`,
+    points.map((p, i) => (p.seed ? `${i + 1}. 訳すだけ：${p.seed}` : `${i + 1}. 作る：${p.pattern}（${p.zh}）`)).join("\n"),
     1500,
   );
   return r.items.slice(0, points.length);
