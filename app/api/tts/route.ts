@@ -5,8 +5,9 @@ import { kanaReading } from "@/lib/claude";
 import { burst } from "@/lib/quota";
 
 // "HD|fallback" voice lists as the scenarios write them; Chinese is for 摸鱼模式's narration.
-// Has kanji but no kana at all, e.g. 主食 or 確認.
-const KANJI_ONLY = /^(?=.*[\u4e00-\u9fff])[^\u3040-\u30ff]+$/;
+// Has kanji but no kana at all, e.g. 主食, 確認 or 報・連・相 (・, ー and ヶ sit in the katakana block
+// but say nothing about the reading).
+const KANJI_ONLY = /^(?=.*[\u4e00-\u9fff])[^\u3040-\u30f5\u30f7-\u30fa\u30fd-\u30ff]+$/;
 
 const VOICE = /^(ja-JP|zh-CN)-[\w:]+Neural(@\w+)?(\|(ja-JP|zh-CN)-[\w:]+Neural(@\w+)?)*$/;
 
@@ -91,11 +92,24 @@ async function speak(text: string, voice: string): Promise<{ audio: BodyInit; en
 async function hedgedVertex(text: string, voice: string) {
   const first = synthesizeVertex(text, voice, 15000);
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let giveUp: (e: unknown) => void = () => {};
+  let sent = false;
   const second = new Promise<Awaited<typeof first>>((ok, fail) => {
-    timer = setTimeout(() => synthesizeVertex(text, voice, 15000).then(ok, fail), 5000);
+    giveUp = fail;
+    timer = setTimeout(() => {
+      sent = true;
+      synthesizeVertex(text, voice, 15000).then(ok, fail);
+    }, 5000);
   });
-  // Answered in time: the second try is never sent (it used to go out anyway, paid for twice).
-  first.then(() => clearTimeout(timer), () => {});
+  // Answered in time: the second try is never sent (it used to go out anyway, paid for twice). Failed
+  // before it went out (credit used up, refused): don't wait 5s to try the same thing; fall through.
+  first.then(
+    () => clearTimeout(timer),
+    (e) => {
+      clearTimeout(timer);
+      if (!sent) giveUp(e);
+    },
+  );
   second.catch(() => {});
   return Promise.any([first, second]);
 }

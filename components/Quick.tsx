@@ -343,26 +343,18 @@ export default function Quick({ drill }: { drill?: string }) {
         <Link href="/" className="back">← 今日</Link>
         <header className="page-mast">
           <div>
-            <h1>瞬间说</h1>
+            <h1>瞬間</h1>
             <p className="muted">看中文，3 秒内开口</p>
           </div>
         </header>
         <div className="card">
-          <p style={{ marginTop: 0 }}>
-            真实对话里只有一两秒反应时间。每题给你一句中文和它出现的场合，<strong>3 秒内点按钮开口</strong>
-            ，说完对照标准说法。
-          </p>
-          <p className="muted">
-            不用和答案一模一样，意思对、先说出来最重要。说不出来的句子，这一轮最后会再出现一次，之后几天也会优先出现，直到能连续三次 3 秒内说出来。
-          </p>
           {(t.quickMs !== null || mastered > 0) && (
             <p className="muted">
               {t.quickMs !== null && `今天已经答了 ${t.quickSpoke} 题，平均 ${secs(t.quickMs)} 秒开口。`}
               {mastered > 0 && `已经练熟 ${mastered} 句。`}
             </p>
           )}
-          <div className="row" style={{ marginTop: 12 }}>
-            <span className="muted">每轮</span>
+          <div className="row" style={{ marginTop: 0 }}>
             <div className="seg" style={{ flex: 1 }}>
               {SIZES.map((n) => (
                 <button key={n} className={size === n ? "on" : ""} onClick={() => pickSize(n)}>
@@ -371,7 +363,7 @@ export default function Quick({ drill }: { drill?: string }) {
               ))}
             </div>
           </div>
-          <button className="primary next-cta" onClick={() => begin()}>开始</button>
+          <button className="primary next-cta" onClick={() => begin()}>始める</button>
         </div>
       </main>
     );
@@ -392,7 +384,7 @@ export default function Quick({ drill }: { drill?: string }) {
       <main>
         <header className="page-mast">
           <div>
-            <h1>瞬间说</h1>
+            <h1>瞬間</h1>
             <p className="muted">这一轮的结果</p>
           </div>
         </header>

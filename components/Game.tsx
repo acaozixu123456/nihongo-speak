@@ -526,7 +526,7 @@ function Question({ q, again, onAnswer, onDone }: { q: Q; again: boolean; onAnsw
               <div className="zh">{q.zh}</div>
             </>
           ) : (
-            <div className="game-big">{q.zh}</div>
+            <div className="game-zh">{q.zh}</div>
           )}
         </div>
       )}
@@ -537,7 +537,7 @@ function Question({ q, again, onAnswer, onDone }: { q: Q; again: boolean; onAnsw
             <button
               key={c}
               disabled={verdict !== null}
-              className={`game-choice ${chosen === c ? "sel" : ""} ${verdict !== null && c === q.answer ? "right" : ""} ${verdict === false && chosen === c ? "wrong" : ""}`}
+              className={`game-choice ${q.kind === "pick" || q.kind === "fill" || q.kind === "reading" ? "jp" : ""} ${chosen === c ? "sel" : ""} ${verdict !== null && c === q.answer ? "right" : ""} ${verdict === false && chosen === c ? "wrong" : ""}`}
               onClick={() => {
                 tap();
                 setChosen(c);
