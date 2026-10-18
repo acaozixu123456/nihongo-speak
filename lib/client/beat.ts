@@ -1,22 +1,16 @@
 "use client";
 
+import { audioCtx, currentAudio, renewAudio } from "./audio";
 import { setAudioSession } from "./recorder";
 
 // Music and sounds for the 今日 连播: a little four-chord dance track under the voice (kick, hats,
 // clap, bass and a plucked arpeggio), a thud when a card lands, a ping when its meaning shows.
 // All synthesized with Web Audio, nothing to download. Best-effort.
 
-let ctx: AudioContext | null = null;
 let noise: AudioBuffer | null = null;
 
-// iPhone suspends (or "interrupts") the context whenever the page is left or the audio session
-// changes, and it stays silent until resumed from a tap: every start resumes it.
-function ac() {
-  const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-  if (!ctx || ctx.state === "closed") ctx = new Ctx();
-  if (ctx.state !== "running") void ctx.resume().catch(() => {});
-  return ctx;
-}
+// The app's shared context (see audio.ts): renewed after the app has been in the background.
+const ac = audioCtx;
 
 function env(c: AudioContext, t: number, vol: number, len: number) {
   const gain = c.createGain();
@@ -88,6 +82,12 @@ export function startBeat(mode: BeatMode = "calm"): () => void {
   let next = c.currentTime + 0.05;
   let n = 0; // eighth notes
   const timer = setInterval(() => {
+    // The context was replaced (after the app came back from the background): carry on in the new one.
+    const now = currentAudio();
+    if (now && now !== c) {
+      c = now;
+      next = c.currentTime + 0.05;
+    }
     if (c.state !== "running") {
       void c.resume().catch(() => {});
       next = c.currentTime + 0.05;
@@ -149,7 +149,5 @@ export const hey = () => {
 // follows the ring/silent switch unless the session is set to playback.
 export function primeBeat() {
   setAudioSession("playback");
-  try {
-    ac();
-  } catch {}
+  renewAudio();
 }

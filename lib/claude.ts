@@ -701,3 +701,26 @@ export function rehearseDebrief(a: { askZh: string; report: string }) {
     2000,
   );
 }
+
+// ---- 洗脑连播: one short sentence for each grammar point, to hear and say along ----
+
+const ExamplesSchema = z.object({
+  items: z.array(
+    z.object({
+      ja: z.string().describe("短く自然な日本語の例文（1文、20字以内が目安、N4〜N3）。seed があればそれを使う（長ければ要の部分だけに縮める）"),
+      zh: z.string().describe("その例文の中国語訳（1文、説明は書かない）"),
+    }),
+  ),
+});
+
+export async function pointExamples(points: { pattern: string; zh: string; seed?: string }[]) {
+  const r = await haikuFirst(
+    ExamplesSchema,
+    `${COACH}
+学習者が覚える文法・表現ごとに、そのまま声に出して真似できる例文を1つずつ作ってください。職場や日常生活で実際に言う場面の文。記号（N、V、／、〜）や括弧書きの説明は例文に入れない。
+seed（学習者が言い間違えた文の正しい言い方）があれば、それを例文にする。入力と同じ順番、同じ数で返す。`,
+    points.map((p, i) => `${i + 1}. ${p.pattern}（${p.zh}）${p.seed ? ` seed：${p.seed}` : ""}`).join("\n"),
+    1500,
+  );
+  return r.items.slice(0, points.length);
+}

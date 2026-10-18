@@ -1,5 +1,6 @@
 "use client";
 
+import { currentAudio, renewAudio } from "./audio";
 import { play } from "./player";
 
 // Phone-call replies from Gemini Live (/api/live). The answer streams in as raw 24 kHz PCM and
@@ -9,13 +10,12 @@ import { play } from "./player";
 // <audio> element once it is in.
 const OUT_RATE = 24000;
 
-let ctx: AudioContext | null = null;
+let ctx: AudioContext | null = null; // the shared context, as of the tap that picked up the call
 let sources: AudioBufferSourceNode[] = [];
 
 export function unlockLive() {
   try {
-    ctx ??= new AudioContext();
-    void ctx.resume();
+    ctx = renewAudio();
   } catch {
     ctx = null;
   }
@@ -49,6 +49,7 @@ export async function liveReply(
   if (!res.ok || !res.body) throw new Error(`live ${res.status}`);
 
   stopLive();
+  ctx = currentAudio() ?? ctx;
   const live = ctx?.state === "running" ? ctx : null;
   let at = 0;
   const chunks: Int16Array[] = [];

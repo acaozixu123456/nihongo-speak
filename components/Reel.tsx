@@ -24,6 +24,9 @@ export default function Reel({ items, mode, onClose }: { items: RecapItem[]; mod
   const from = useRef({ lap: 0, i: 0 });
   const wild = mode === "wild";
   const BEAT = 60_000 / BPM[mode];
+  // Example sentences can arrive after the reel starts; the loop always reads the latest list.
+  const list = useRef(items);
+  list.current = items;
 
   const url = (it: RecapItem) => ttsUrl(it.say, it.voice ?? "ja-JP-AoiNeural");
 
@@ -33,12 +36,13 @@ export default function Reel({ items, mode, onClose }: { items: RecapItem[]; mod
     const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
     const say = (it: RecapItem, rate: number) => play(url(it), rate).catch(() => wait(1000));
     const beatOff = startBeat(mode);
+    const items = list.current;
     try {
       const laps = wild ? 2 : 1;
       for (let lap = start.lap; lap < laps && live(); lap++) {
         for (let i = lap === start.lap ? start.i : 0; i < items.length && live(); i++) {
           from.current = { lap, i };
-          const it = items[i];
+          const it = list.current[i] ?? items[i];
           preload(items.slice(i + 1, i + 4).map(url));
           const show = (p: Partial<{ zh: boolean; along: boolean; again: boolean }>) =>
             setPhase({ i, lap, zh: false, along: false, again: false, ...p });
@@ -179,8 +183,10 @@ export default function Reel({ items, mode, onClose }: { items: RecapItem[]; mod
       <div className="rl-card" key={`${phase.lap}-${phase.i}`}>
         <div className="rl-kana">{it.kana && it.kana !== it.ja ? it.kana : " "}</div>
         <div className={`rl-ja ${size(it.ja)}`}>{it.ja}</div>
-        {it.say !== it.ja && it.say !== it.kana && <div className="rl-say">{it.say}</div>}
-        <div className={`rl-zh ${phase.zh || phase.lap > 0 ? "on" : ""}`}>{it.zh}</div>
+        {!it.point && it.say !== it.ja && it.say !== it.kana && <div className="rl-say">{it.say}</div>}
+        {it.zh && <div className={`rl-zh ${phase.zh || phase.lap > 0 ? "on" : ""}`} style={it.point ? { fontSize: 15 } : undefined}>
+            {it.zh}
+          </div>}
         {it.miss && <div className="rl-stamp">要記</div>}
         {phase.again && !phase.along && (
           <div className="rl-again-tag" key="again">

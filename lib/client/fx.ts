@@ -2,13 +2,13 @@
 
 // Small rewards: a soft chime and a burst of confetti. Both are best-effort.
 
-let ctx: AudioContext | null = null;
+import { audioCtx } from "./audio";
+
+let ctx: AudioContext | null = null; // the shared context, as of the last sound
 
 export function chime(big = false) {
   try {
-    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    ctx ??= new Ctx();
-    if (ctx.state === "suspended") void ctx.resume();
+    ctx = audioCtx();
     const notes = big ? [660, 880, 1320] : [880, 1320];
     notes.forEach((freq, i) => {
       const osc = ctx!.createOscillator();
@@ -78,9 +78,7 @@ const SOUNDS: Record<string, Note[]> = {
 
 export function sfx(name: keyof typeof SOUNDS) {
   try {
-    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    ctx ??= new Ctx();
-    if (ctx.state === "suspended") void ctx.resume();
+    ctx = audioCtx();
     for (const n of SOUNDS[name]) {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -142,9 +140,7 @@ function note(f: number, at: number, len: number, type: OscillatorType, vol: num
 
 function tone(kind: Kind, step: number) {
   try {
-    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    ctx ??= new Ctx();
-    if (ctx.state === "suspended") void ctx.resume();
+    ctx = audioCtx();
     if (kind === "right") {
       const up = 2 ** (Math.min(step, 7) / 12);
       note(1319 * up, 0, 0.16, "triangle", 0.14);

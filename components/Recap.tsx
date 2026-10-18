@@ -6,7 +6,7 @@ import { dayKey, useProgress, type RadioEpisode } from "@/lib/client/progress";
 import { useHydrated } from "@/lib/client/hydrated";
 import { play, ttsUrl, unlock } from "@/lib/client/player";
 import { primeBeat, type BeatMode } from "@/lib/client/beat";
-import { recap, recapDays, reelOrder, SRC_JA, type RecapItem } from "@/lib/client/recap";
+import { loadExamples, recap, recapDays, reelOrder, SRC_JA, withExamples, type Example, type RecapItem } from "@/lib/client/recap";
 import type { LearnedSrc } from "@/lib/progress-model";
 import Earworm from "./Earworm";
 import Reel from "./Reel";
@@ -66,12 +66,23 @@ export default function Recap() {
     if (hydrated && !picked && todayCount === 0) setRange("7");
   }, [hydrated, picked, todayCount]);
   useEffect(() => setSong(readSong()), []);
+  // Grammar points are played as a short example sentence; fetched as soon as the page opens.
+  const [ex, setEx] = useState<Record<string, Example>>({});
+  useEffect(() => {
+    if (!items.length) return;
+    let live = true;
+    void loadExamples(items).then((e) => live && setEx(e));
+    return () => {
+      live = false;
+    };
+  }, [items]);
+  const shown = useMemo(() => withExamples(items, ex), [items, ex]);
 
   const label = RANGES.find((r) => r.key === range)!.label;
   const counts = new Map<LearnedSrc, number>();
   for (const i of items) counts.set(i.src, (counts.get(i.src) ?? 0) + 1);
-  const missed = items.filter((i) => i.miss);
-  const rest = items.filter((i) => !i.miss);
+  const missed = shown.filter((i) => i.miss);
+  const rest = shown.filter((i) => !i.miss);
 
   const mySong = song && song.day === today && song.range === range ? song : null;
   const songEp = useMemo(
