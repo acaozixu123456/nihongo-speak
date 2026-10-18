@@ -76,7 +76,7 @@ export function todaysEpisode(p: Progress) {
 export function plan(p: Progress, quiet: boolean): Stop[] {
   const ep = todaysEpisode(p);
   const epHref = ep ? `/ep/${ep.id}` : NEW_EP;
-  const listen: Stop = { key: "listen", ja: "聴く", meta: ep ? ep.title_zh : "新しい回", href: epHref, min: 6 };
+  const listen: Stop = { key: "listen", ja: "聴く", meta: ep ? (ep.title_ja ?? ep.title_zh) : "新しい回", href: epHref, min: 6 };
   // The episode's 洗脑歌, as a break in the middle.
   const song: Stop = { key: "song", ja: "一休み", meta: "洗脑歌", href: `${epHref}/song`, min: 2 };
   if (quiet) return [listen, song, { key: "flow", ja: "流す", meta: "心の中で", href: "/moyu", min: 10 }];
@@ -122,7 +122,7 @@ function makeEpisode(): Promise<string> {
   making ??= makeRadio()
     .then((ep) => {
       const r = read();
-      if (r) write({ ...r, stops: r.stops.map((s) => (s.href.startsWith(NEW_EP) ? { ...s, href: s.href.replace(NEW_EP, `/ep/${ep.id}`), meta: s.key === "listen" ? ep.title_zh : s.meta } : s)) });
+      if (r) write({ ...r, stops: r.stops.map((s) => (s.href.startsWith(NEW_EP) ? { ...s, href: s.href.replace(NEW_EP, `/ep/${ep.id}`), meta: s.key === "listen" ? (ep.title_ja ?? ep.title_zh) : s.meta } : s)) });
       return ep.id;
     })
     .finally(() => (making = null));

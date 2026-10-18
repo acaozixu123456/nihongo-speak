@@ -1356,6 +1356,7 @@ button.today-go { width: 100%; border: none; cursor: pointer; }
 .radio-cover.drawn .radio-waves { bottom: 14px; right: 16px; }
 .radio-cover.drawn .radio-waves i { background: #fbf6ee; opacity: 0.85; box-shadow: 0 0 4px rgba(0, 0, 0, 0.3); }
 .radio-title.under { margin-top: 14px; color: var(--text); font-size: 24px; max-width: none; }
+.radio-title-zh { margin: 4px 0 0; font-size: 14px; color: var(--muted); }
 /* 今日: one line saying what the app is, the route, then every feature in three groups. */
 .top-link { font-family: var(--ja); font-size: 14px; color: var(--text); text-decoration: none; padding: 8px 0 8px 12px; }
 .tagline { margin: 10px 0 16px; font-size: 14px; color: var(--muted); }
