@@ -33,6 +33,11 @@ export async function liveTurn(
   emit: (e: LiveEvent) => void,
   timeoutMs = 25000,
 ) {
+  // The answer's audio streams in at about the speed it is spoken, after the subtitle text is
+  // already complete, so a single deadline for the whole turn cut long answers off halfway (a
+  // 10s line that started at 15s). The deadline is for the first sound; after that, only a
+  // stall of a few seconds ends the turn.
+  const stallMs = 8000;
   const { project, token } = await vertexAccess();
   const ws = new WebSocket(
     `wss://${LOCATION}-aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent` +
@@ -43,7 +48,8 @@ export async function liveTurn(
   const text = (s: string) => s.replace(/\s+/g, "");
 
   await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => finish(new Error("Gemini Live timed out")), timeoutMs);
+    let timer = setTimeout(() => finish(new Error("Gemini Live timed out")), timeoutMs);
+    let talking = false;
     let heard = "";
     let said = "";
     let ready = false;
@@ -96,7 +102,15 @@ export async function liveTurn(
       if (!sc) return;
       if (sc.inputTranscription?.text) emit({ heard: (heard += text(sc.inputTranscription.text)) });
       if (sc.outputTranscription?.text) emit({ said: (said += text(sc.outputTranscription.text)) });
-      for (const p of sc.modelTurn?.parts ?? []) if (p.inlineData?.data) emit({ audio: p.inlineData.data });
+      for (const p of sc.modelTurn?.parts ?? []) {
+        if (!p.inlineData?.data) continue;
+        emit({ audio: p.inlineData.data });
+        talking = true;
+      }
+      if (talking) {
+        clearTimeout(timer);
+        timer = setTimeout(() => finish(new Error("Gemini Live stalled")), stallMs);
+      }
       if (sc.turnComplete) {
         ws.onclose = null;
         finish();

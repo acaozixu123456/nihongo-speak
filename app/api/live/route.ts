@@ -5,7 +5,8 @@ import { liveTurn, type LiveEvent } from "@/lib/live";
 import { resolveTalk } from "@/lib/talk";
 import { vertexConfigured } from "@/lib/vertex-tts";
 
-export const maxDuration = 30;
+// Up to 25s before the answer starts, then as long as it takes to say it (it streams in real time).
+export const maxDuration = 90;
 
 type Body = { scenarioId: string; talk?: Scenario["talk"]; history: Turn[]; audio: string };
 
