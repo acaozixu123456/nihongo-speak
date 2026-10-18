@@ -126,6 +126,25 @@ export type Retell = {
 };
 export const RETELLS_KEPT = 60;
 
+// 予行演習: a real conversation coming up (asking the boss for a day off, the ward office), played out
+// three times with the other side reacting differently each time, then reported on once it really
+// happened. `missed` are the lines the learner couldn't get out in real life, rewritten in Japanese.
+export type RehearsalTalk = { aiRole: string; aiVoice: string; userRole: string; goalZh: string; setup: string; opening: { ja: string; zh: string } };
+export type Rehearsal = {
+  id: string;
+  date: string;
+  askZh: string;
+  titleZh: string;
+  who: string;
+  person?: string;
+  talk: RehearsalTalk;
+  twists: string[]; // one per round: how the other side behaves this time
+  lines: { ja: string; kana: string; zh: string }[];
+  rounds: number; // rounds finished
+  debrief?: { date: string; noteZh: string; missed: { ja: string; kana: string; zh: string }[] };
+};
+export const REHEARSALS_KEPT = 30;
+
 export type Progress = {
   goal: number;
   days: Record<string, number>; // YYYY-MM-DD -> xp
@@ -141,6 +160,7 @@ export type Progress = {
   skills: Record<string, Skill>; // keyed by the Japanese without spaces or punctuation
   people: Record<string, PersonMemory[]>;
   retells: Retell[]; // newest last // keyed by the character's id in content/calls.ts
+  rehearsals: Rehearsal[]; // newest last
   freezes: number; // streak protectors in hand
   frozen: string[]; // days covered by a protector
   freezeAwardDay?: string;
@@ -165,6 +185,7 @@ export const EMPTY: Progress = {
   skills: {},
   people: {},
   retells: [],
+  rehearsals: [],
   freezes: 0,
   frozen: [],
   bonusDays: [],
@@ -272,6 +293,17 @@ export function merge(a: Progress, b: Progress): Progress {
     .sort((x, y) => (x.date < y.date ? -1 : 1))
     .slice(-RETELLS_KEPT);
 
+  // The copy that got further (more rounds, or a report) wins.
+  const rehearsals = [...[...(a.rehearsals ?? []), ...(b.rehearsals ?? [])]
+    .reduce((m, r) => {
+      const o = m.get(r.id);
+      if (!o || r.rounds > o.rounds || (r.debrief && !o.debrief)) m.set(r.id, r);
+      return m;
+    }, new Map<string, Rehearsal>())
+    .values()]
+    .sort((x, y) => (x.id < y.id ? -1 : 1))
+    .slice(-REHEARSALS_KEPT);
+
   const byId = <T extends { id: string }>(x: T[], y: T[]) => [...new Map([...x, ...y].map((i) => [i.id, i])).values()];
 
   return {
@@ -296,6 +328,7 @@ export function merge(a: Progress, b: Progress): Progress {
     skills,
     people,
     retells,
+    rehearsals,
     freezes: newer.freezes,
     frozen: [...new Set([...a.frozen, ...b.frozen])],
     freezeAwardDay: newer.freezeAwardDay,

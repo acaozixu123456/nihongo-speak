@@ -42,15 +42,29 @@ export const people: Person[] = [
 
 export const findPerson = (id?: string) => people.find((p) => p.id === id);
 
-// The call's role-play settings with the character's personality and what they remember.
-export function callTalk(call: Call, memories: { date: string; ja: string }[]): Scenario["talk"] {
+// A point the learner keeps getting wrong. The other side uses it in their own lines first, so the learner
+// hears it and tends to reuse it in their answer (structural priming), without anyone correcting them.
+export type Prime = { tag: string; pattern?: string; better?: string };
+
+export function primeRule(prime?: Prime | null) {
+  if (!prime) return "";
+  const form = prime.pattern ? `${prime.tag}（${prime.pattern}）` : prime.tag;
+  return `\n\nさりげない練習（学習者には言わない）：学習者は「${form}」をよく間違える${prime.better ? `（正しい例：${prime.better}）` : ""}。会話の中で、あなた自身がこの形を自然に1〜2回使う（毎回ちがう動詞や言葉で）。使ったすぐ後に、学習者が答えるときも同じ形を使いたくなる質問をする。説明したり、言わせようとしたり、直したりはしない。`;
+}
+
+// The call's role-play settings with the character's personality, what they remember, and the point to prime.
+export function callTalk(call: Pick<Call, "person" | "talk">, memories: { date: string; ja: string }[], prime?: Prime | null): Scenario["talk"] {
   const person = findPerson(call.person);
-  if (!person) return call.talk;
+  const primed = primeRule(prime);
+  if (!person) return { ...call.talk, setup: `${call.talk.setup}${primed}` };
   const recall = memories.length
     ? `\n\nこれまでの電話で分かっていること（古い順）：\n${memories.map((m) => `- ${m.date}：${m.ja}`).join("\n")}\n会話の最初のほうで、その中の一つに自然に一言触れる（覚えていてくれた、と感じるように）。しつこく繰り返さない。`
     : "";
-  return { ...call.talk, aiRole: `${person.persona}\n今回の役回り：${call.talk.aiRole}`, setup: `${call.talk.setup}${recall}` };
+  return { ...call.talk, aiRole: `${person.persona}\n今回の役回り：${call.talk.aiRole}`, setup: `${call.talk.setup}${recall}${primed}` };
 }
+
+// Each recurring character's phone voice.
+export const personVoice = (id?: string) => calls.find((c) => c.person === id)?.talk.aiVoice;
 
 const RECEPTION = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-NanamiNeural@customerservice";
 const MAN = "ja-JP-Masaru:DragonHDLatestNeural|ja-JP-KeitaNeural";
@@ -58,7 +72,7 @@ const KACHO = "ja-JP-Masaru:DragonHDLatestNeural|ja-JP-NanamiNeural@chat";
 const FRIEND = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-MayuNeural";
 const COLLEAGUE = "ja-JP-DaichiNeural";
 
-const PHONE = `これは電話です。お互いに顔は見えません。
+export const PHONE = `これは電話です。お互いに顔は見えません。
 電話らしい話し方をする：1回の発話は短く（1〜2文）、名前や日時、番号は復唱して確認する。
 学習者が聞き返したり（もう一度お願いします、など）黙ったりしたら、少しゆっくり、言い換えて言い直す。
 用件が済んだら、電話らしく自然に締めくくる（失礼いたします、など）。`;
