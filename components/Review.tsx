@@ -39,6 +39,17 @@ export default function Review() {
     wantVariant ? { kind: "variant", ja: card.ja, zh: card.zh } : null,
   );
   const variant = variantData && variantOk(variantData) ? variantData : null;
+  // A slow answer isn't waited for: after a few seconds, or once the answer is shown, the original card stays.
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    setSlow(false);
+    if (!wantVariant) return;
+    const t = setTimeout(() => setSlow(true), 8000);
+    return () => clearTimeout(t);
+  }, [wantVariant, index]);
+  useEffect(() => {
+    if (wantVariant && !variant && (slow || revealed)) setPlain(true);
+  }, [wantVariant, variant, slow, revealed]);
   const variantFailed = !!variantError || (!!variantData && !variant);
   type Ask = { zh: string; ja: string; reading?: string; pattern?: string };
   // Once the learner has answered, the sentence they were shown stays put.
@@ -213,11 +224,12 @@ export default function Review() {
         {/* One grey line of context; the Chinese sentence is the only thing that stands out. */}
         <div className="meta">
           {[
-            fromRadio ? `趣味电台 · ${fromRadio.title_zh}` : scenario?.titleZh,
-            ask && ask.ja !== card.ja && ask.pattern ? `新句子 · ${ask.pattern}` : null,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
+            ask && ask.ja !== card.ja && ask.pattern
+              ? `新句子 · ${ask.pattern}`
+              : fromRadio
+                ? `趣味电台 · ${fromRadio.title_zh}`
+                : scenario?.titleZh,
+          ]}
         </div>
         {wantVariant && !variant && !variantFailed && !heard ? (
           <div className="prompt judge-wait muted">出个新句子…</div>
