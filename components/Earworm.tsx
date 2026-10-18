@@ -54,6 +54,9 @@ type Media = { song: string; scenes: string[] };
 export default function Earworm({ ep, kicker = "趣味电台 · 洗脑歌", onEnd }: { ep: RadioEpisode; kicker?: string; onEnd?: () => void }) {
   const [job, setJob] = useState<Job | null | undefined>(undefined);
   const [error, setError] = useState("");
+  // Asking failed this many times in a row, or today's songs are used up (no use asking again).
+  const [fails, setFails] = useState(0);
+  const [usedUp, setUsedUp] = useState(false);
   const [media, setMedia] = useState<Media | null>(null);
   const [open, setOpen] = useState(false);
   const audio = useRef<HTMLAudioElement>(null);
@@ -84,13 +87,17 @@ export default function Earworm({ ep, kicker = "趣味电台 · 洗脑歌", onEn
           });
           const data = (await res.json()) as { job?: Job | null; error?: string };
           // Today's songs are used up: asking again won't help until tomorrow.
-          if (res.status === 429) return setError(data.error ?? "今天的次数用完了");
+          if (res.status === 429) {
+            setError(data.error ?? "今天的洗脑歌次数用完了");
+            return setUsedUp(true);
+          }
           if (!res.ok) throw new Error(data.error ?? "出错了");
           if (stop) return;
           const j = data.job ?? null;
           // A finished song stays the same object, so its files aren't fetched (and the playing ones dropped) again.
           setJob((prev) => (prev?.step === "ready" && j?.step === "ready" ? prev : j));
           setError("");
+          setFails(0);
           if (j && (j.step === "ready" || j.step === "failed")) return;
           if (!j) return; // this episode can't have one (an old episode without words)
           // Another tab is doing this step: come back after a pause.
@@ -98,6 +105,7 @@ export default function Earworm({ ep, kicker = "趣味电台 · 洗脑歌", onEn
         } catch (e) {
           if (stop) return;
           setError(e instanceof Error ? e.message : "出错了");
+          setFails((n) => n + 1);
           await new Promise((r) => setTimeout(r, 10000));
         }
       }
@@ -139,14 +147,41 @@ export default function Earworm({ ep, kicker = "趣味电台 · 洗脑歌", onEn
     };
   }, [ready, ep.id]);
 
-  const gone = job === null || job?.step === "failed";
+  // On 今日's route, a song that can't be had (none for this episode, failed, used up, or the server
+  // keeps erroring) moves the route on instead of leaving the stop waiting.
+  const gone = job === null || job?.step === "failed" || usedUp || (fails >= 3 && !ready);
   const end = useRef(onEnd);
   end.current = onEnd;
   useEffect(() => {
     if (gone) end.current?.();
   }, [gone]);
 
-  if (job === undefined || job === null) return null;
+  if (usedUp) {
+    return (
+      <div className="ew-card">
+        <div className="ew-text">
+          <div className="ew-title">洗脑歌</div>
+          <div className="muted">{error}</div>
+        </div>
+      </div>
+    );
+  }
+
+  // The first answer can take a while (it may be writing the lyrics): say so instead of a blank page.
+  if (job === undefined) {
+    return (
+      <div className="ew-card making">
+        <span className="ew-spin" />
+        <div className="ew-text">
+          <div className="ew-title">洗脑歌</div>
+          <div className="muted">正在准备…</div>
+          {error && <div className="error">{error}</div>}
+        </div>
+      </div>
+    );
+  }
+
+  if (job === null) return null;
 
   if (job.step === "failed") {
     return (
