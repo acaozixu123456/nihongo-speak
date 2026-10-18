@@ -181,7 +181,7 @@ export default function Rehearse() {
             placeholder="实际说得怎么样？哪句没说出来？中文就行"
           />
           <button className="today-go" onClick={() => sendReport(pending)} disabled={!report.trim() || busy}>
-            {busy ? "…" : "告诉 AI"}
+            {busy ? "AI 在看…" : "告诉 AI"}
           </button>
           <button className="link-quiet" onClick={() => sendReport(pending, true)} disabled={busy}>还没说 / 跳过</button>
         </div>

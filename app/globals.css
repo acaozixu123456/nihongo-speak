@@ -1438,3 +1438,6 @@ button.today-go { width: 100%; border: none; cursor: pointer; }
 .word.reveal { animation: wordin 0.35s both; }
 @keyframes wordin { from { color: var(--faint); background: transparent; } }
 @media (prefers-reduced-motion: reduce) { .word.reveal { animation: none; } }
+/* A tapped sentence still being fetched. Above every sheet and overlay, never in the way of a tap. */
+.audio-wait { position: fixed; top: calc(env(safe-area-inset-top) + 60px); left: 50%; transform: translateX(-50%); z-index: 70; display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; background: var(--card); color: var(--muted); font-family: var(--ja); font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); pointer-events: none; animation: fade 0.2s both; white-space: nowrap; }
+.audio-wait .ew-spin { width: 12px; height: 12px; margin: 0; }
