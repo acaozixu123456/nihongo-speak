@@ -147,7 +147,7 @@ export default function Rehearse() {
           <span className="kicker">演完了</span>
           <span className="today-title">{current.titleZh}</span>
           <span className="today-zh">真说完以后回来，告诉我哪句没说出来，我把它变成下次能用的话。</span>
-          <Link href="/" className="today-go">回到今日</Link>
+          <Link href="/" className="today-go">今日へ</Link>
         </div>
       ) : debrief ? (
         <div className="today rehearse">
@@ -167,7 +167,7 @@ export default function Rehearse() {
             </button>
           ))}
           {debrief.d.missed.length > 0 && <span className="today-zh">已放进フレーズ帳，瞬間 会再考你。</span>}
-          <button className="today-go" onClick={() => setDebrief(null)}>准备下一个</button>
+          <button className="today-go" onClick={() => setDebrief(null)}>次を準備する</button>
         </div>
       ) : pending ? (
         <div className="today rehearse">
@@ -196,7 +196,7 @@ export default function Rehearse() {
             placeholder="比如：明天跟课长请半天假去医院"
           />
           <button className="today-go" onClick={start} disabled={!ask.trim() || busy}>
-            {busy ? "AI 在准备对方…" : "开始演"}
+            {busy ? "AI 在准备对方…" : "始める"}
           </button>
         </div>
       )}

@@ -8,9 +8,10 @@ import { scenarios } from "@/content/scenarios";
 
 type Place = { href: string; ja: string; zh: string; n?: string | number | false };
 
-// Every feature, always under 今日: three groups (listen, speak, remember), each with one grey line
-// in Chinese, so someone opening the app for the first time can see what is in it. The numbers on
-// the right only show what is waiting.
+// Every feature, always under 今日: three groups (listen, speak, remember), each a grouped list with
+// one grey line in Chinese per row, so someone opening the app for the first time can see what is in
+// it. The numbers on the right only show what is waiting; only 新 is vermilion, since vermilion is
+// kept for the one next thing to do.
 export default function Places() {
   const p = useProgress();
   const hydrated = useHydrated();
@@ -66,7 +67,7 @@ export default function Places() {
               <Link key={x.href} href={x.href} className="pl">
                 <b>{x.ja}</b>
                 <span>{x.zh}</span>
-                {x.n ? <em>{x.n}</em> : null}
+                {x.n ? <em className={x.n === "新" ? "new" : undefined}>{x.n}</em> : null}
               </Link>
             ))}
           </div>

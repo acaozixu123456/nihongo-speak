@@ -24,7 +24,7 @@ export function WeakList() {
         <span className="kicker">最该练 · 错 {top.miss} 次</span>
         <span className="weak-top">{top.tag}</span>
         {top.examples[0] && <span className="weak-ex">{top.examples[0].better}</span>}
-        <span className="today-go">练一组</span>
+        <span className="today-go">一組やる</span>
       </Link>
       {rest.length > 0 && (
         <>

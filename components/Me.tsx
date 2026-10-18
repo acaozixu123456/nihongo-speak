@@ -17,7 +17,7 @@ export default function Me() {
   return (
     <main className="page">
       <Link href="/" className="back">← 今日</Link>
-      <h1 className="display">记录</h1>
+      <h1 className="display">記録</h1>
 
       <Link href="/stats" className="me-card">
         <div className="me-nums">

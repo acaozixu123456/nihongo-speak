@@ -12,7 +12,7 @@ import { finished, minutes, oneFix, plan, quietPref, setQuiet, startRoute, useRo
 const WEEKDAY_JA = ["日", "月", "火", "水", "木", "金", "土"];
 
 // 今日: today's route and its one button first; under it every feature, grouped, so the app shows
-// what is in it. The record (streak, days) lives behind 记录.
+// what is in it. The record (streak, days) lives behind 記録.
 export default function Home() {
   const p = useProgress();
   const hydrated = useHydrated();
@@ -26,8 +26,8 @@ export default function Home() {
   const top = (
     <div className="top">
       <span>{date}</span>
-      <Link href="/me" className="top-me pill">
-        记录
+      <Link href="/me" className="top-link">
+        記録 ›
       </Link>
     </div>
   );
@@ -80,7 +80,7 @@ export default function Home() {
           router.push(startRoute(p, quiet));
         }}
       >
-        <span className="kicker">約 {minutes(stops.slice(at))} 分{quiet ? " · 聴くだけ" : ""}</span>
+        <span className="kicker">今日 · 約 {minutes(stops.slice(at))} 分{quiet ? " · 聴くだけ" : ""}</span>
         <span className="route">
           {stops.map((s, i) => (
             <span key={i} className={`stop ${i < at ? "done" : i === at ? "now" : ""}`}>

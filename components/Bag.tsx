@@ -28,7 +28,7 @@ export default function Bag() {
 
       {due.length > 0 && (
         <Link href="/review" className="btn primary next-cta" style={{ display: "block" }}>
-          复习今天到期的 {due.length} 句
+          今日の{due.length}文を復習
         </Link>
       )}
 
@@ -41,22 +41,26 @@ export default function Bag() {
             return (
               <div key={c.id} className="item">
                 <div className="item-body">
-                  <div className="ja">{c.ja}</div>
+                  <div className="ja">
+                    {c.due <= today && <i className="due-dot" aria-label="今天复习" />}
+                    {c.ja}
+                  </div>
                   {c.reading && <div className="kana">{c.reading}</div>}
                   <div className="zh">{c.zh}</div>
                   <div className="small-text" style={{ marginTop: 4 }}>
-                    {RANK[Math.min(3, c.step)]} · {c.due <= today ? <span className="y">今天复习</span> : `下次 ${c.due.slice(5)}`}
+                    {RANK[Math.min(3, c.step)]} · {c.due <= today ? "今天复习" : `下次 ${c.due.slice(5)}`}
                     {from && ` · ${from.titleZh}`}
                   </div>
                 </div>
                 <button
-                  className="small"
+                  className="bag-play"
+                  aria-label="听"
                   onClick={() => {
                     unlock();
                     play(ttsUrl(c.ja, c.voice), 1).catch(() => {});
                   }}
                 >
-                  听
+                  ▶
                 </button>
               </div>
             );
