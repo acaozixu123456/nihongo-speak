@@ -410,8 +410,9 @@ function request(items: SkillItem[], p: Progress, topic?: string) {
 
 async function fetchGame(body: string): Promise<GameData> {
   const res = await fetch("/api/game", { method: "POST", headers: { "content-type": "application/json" }, body });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? "AI 出错了");
+  // A timeout comes back as a plain-text page, not JSON; say so instead of showing the parse error.
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data) throw new Error(data?.error ?? "AI 这次太慢了，再试一次");
   return data as GameData;
 }
 
@@ -581,14 +582,14 @@ function Question({ q, again, onAnswer, onDone }: { q: Q; again: boolean; onAnsw
       {error && <p className="error">{error}</p>}
 
       {verdict === null && q.kind !== "say" && q.kind !== "match" && (
-        <>
+        <div className="sticky-cta">
           <button className="btn primary game-next" disabled={choice ? !chosen : !built.length} onClick={check}>
             確認
           </button>
           <button className="small ghost game-unsure" onClick={() => decide(false, true, true)}>
             {q.kind === "listen" || q.kind === "dictate" ? "聞き取れない・答えを見る" : "わからない・答えを見る"}
           </button>
-        </>
+        </div>
       )}
 
       {verdict !== null && (

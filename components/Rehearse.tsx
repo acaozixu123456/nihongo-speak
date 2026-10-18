@@ -25,6 +25,7 @@ async function post<T>(body: unknown): Promise<T> {
 function roundCall(r: Rehearsal, i: number): CallDef {
   return {
     id: `rehearse-${r.id}`,
+    title: "予行演習",
     titleZh: r.titleZh,
     who: r.who,
     incoming: false,

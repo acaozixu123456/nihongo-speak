@@ -6,9 +6,9 @@ import { removeCustom, stepsDone, useProgress, type Step } from "@/lib/client/pr
 import { buildingScenarios, npc, stars, type BuildingId } from "@/lib/client/game";
 
 const STEPS: { key: Step; label: string }[] = [
-  { key: "listen", label: "听" },
-  { key: "shadow", label: "跟读" },
-  { key: "talk", label: "对话" },
+  { key: "listen", label: "聞く" },
+  { key: "shadow", label: "まねる" },
+  { key: "talk", label: "会話" },
 ];
 
 // One group of scenarios. Tapping a row opens its three steps; the first unfinished one is open to start with.

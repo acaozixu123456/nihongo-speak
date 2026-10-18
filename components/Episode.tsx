@@ -319,7 +319,7 @@ export default function Episode({ id }: { id: string }) {
           </button>
           <div className="hk-zh">{k.zh}</div>
           <Link href={`/ep/${ep.id}/game`} className="hk-go">
-            练一练
+            練習
           </Link>
         </div>
       ) : (
@@ -381,7 +381,7 @@ export default function Episode({ id }: { id: string }) {
 
       <div className="radio-ctrl">
         <button className="player-tool" onClick={() => jump(-1)} disabled={!prep.current} aria-label="再听这一句">
-          重听
+          戻る
         </button>
         <button className="radio-play" onClick={toggle} aria-label={playingNow ? "暂停" : "播放"}>
           {phase === "loading" ? <span className="spin" /> : playingNow ? "❚❚" : "▶"}
@@ -414,12 +414,12 @@ export default function Episode({ id }: { id: string }) {
 
       <div className="radio-rows">
         <button className="radio-row" onClick={() => setOpen(!open)}>
-          <span>文稿</span>
+          <span>スクリプト</span>
           <em>{open ? "收起" : "›"}</em>
         </button>
         <Link href={`/ep/${ep.id}/game`} className="radio-row">
           <span>
-            练一练{ep.asked?.length ? <small> · 含你问过 AI 的 {ep.asked.length} 处</small> : null}
+            練習{ep.asked?.length ? <small> · 含你问过 AI 的 {ep.asked.length} 处</small> : null}
           </span>
           <em>›</em>
         </Link>

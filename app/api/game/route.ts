@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { makeGame, type GameItem } from "@/lib/game";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const str = (s: unknown, n: number): s is string => typeof s === "string" && s.length <= n;
 

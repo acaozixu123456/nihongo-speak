@@ -35,20 +35,30 @@ export function CallList() {
           <p className="muted">只有声音，默认不显示文字。听不清就说「もう一度お願いします」。</p>
         </div>
       </header>
-      <div className="list">
-        {calls.map((c) => (
-          <Link key={c.id} href={`/call/${c.id}`} className="row-link">
-            <span className="glyph">{c.incoming ? "受" : "電"}</span>
-            <span className="row-text">
-              {c.titleZh}
-              <small>
-                {c.who}
-              </small>
-            </span>
-            <span className="chev" aria-hidden>›</span>
-          </Link>
-        ))}
-      </div>
+      {/* Grouped by direction instead of a 電/受 badge on every row. */}
+      {[
+        { ja: "かける", zh: "我打出去", list: calls.filter((c) => !c.incoming) },
+        { ja: "かかってくる", zh: "别人打来", list: calls.filter((c) => c.incoming) },
+      ].map((g) => (
+        <section key={g.ja}>
+          <h2 className="pl-head">
+            {g.ja}
+            <small>{g.zh}</small>
+          </h2>
+          <div className="pl-grid">
+            {g.list.map((c) => (
+              <Link key={c.id} href={`/call/${c.id}`} className="pl two">
+                <div className="pl-text">
+                  <b>{c.title}</b>
+                  <span>
+                    {c.who} · {c.titleZh}
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ))}
     </main>
   );
 }

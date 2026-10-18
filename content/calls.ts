@@ -5,6 +5,7 @@ import type { Scenario } from "./scenarios";
 
 export type Call = {
   id: string;
+  title: string;
   titleZh: string;
   who: string; // shown as the caller / callee name
   incoming: boolean; // the other side calls the learner
@@ -83,6 +84,7 @@ export const PHONE = `これは電話です。お互いに顔は見えません�
 export const calls: Call[] = [
   {
     id: "clinic",
+    title: "病院の予約",
     titleZh: "打电话预约看病",
     who: "さくら内科クリニック",
     incoming: false,
@@ -98,6 +100,7 @@ export const calls: Call[] = [
   },
   {
     id: "redelivery",
+    title: "再配達の依頼",
     titleZh: "打电话约快递再配送",
     who: "ヤマト運輸 再配達受付",
     incoming: false,
@@ -113,6 +116,7 @@ export const calls: Call[] = [
   },
   {
     id: "restaurant",
+    title: "お店の予約",
     titleZh: "打电话订餐厅",
     who: "居酒屋 とりまる",
     incoming: false,
@@ -128,6 +132,7 @@ export const calls: Call[] = [
   },
   {
     id: "client",
+    title: "取引先からの電話",
     titleZh: "接到客户找课长的电话",
     who: "ABC商事 田中様",
     incoming: true,
@@ -144,6 +149,7 @@ export const calls: Call[] = [
   },
   {
     id: "sick",
+    title: "病欠の連絡",
     titleZh: "早上打给课长请病假",
     who: "山田課長",
     incoming: false,
@@ -160,6 +166,7 @@ export const calls: Call[] = [
   },
   {
     id: "late",
+    title: "遅刻の連絡",
     titleZh: "电车晚点，打给课长说要迟到",
     who: "山田課長",
     incoming: false,
@@ -176,6 +183,7 @@ export const calls: Call[] = [
   },
   {
     id: "weekend",
+    title: "週末の誘い",
     titleZh: "朋友打来约周末",
     who: "友達のゆい",
     incoming: true,
@@ -192,6 +200,7 @@ export const calls: Call[] = [
   },
   {
     id: "cover",
+    title: "同僚からの頼み",
     titleZh: "同事打来请你帮忙替一下",
     who: "同僚の佐藤さん",
     incoming: true,

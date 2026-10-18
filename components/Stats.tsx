@@ -37,39 +37,44 @@ export default function Stats() {
 
   return (
     <main>
-      <Link href="/me" className="back">← 记录</Link>
+      <Link href="/me" className="back">← 記録</Link>
       <header className="page-mast">
         <div>
           <h1>記録</h1>
           <p className="muted">开口时长、反应速度、发音的变化</p>
         </div>
       </header>
-      <h2>一共练了多少</h2>
-      <div className="grid2 ledger2">
-        <div className="kpi">
-          <b>{formatDuration(all.speakSec)}</b>
-          <span>开口说日语</span>
+      {/* Three numbers up front; the other totals are a short list, and a zero is left out. */}
+      <div className="card big3">
+        <div>
+          <b>{Math.round(all.speakSec / 60)}<small>分</small></b>
+          <span>話した時間</span>
         </div>
-        <div className="kpi">
-          <b>{all.said} 句</b>
-          <span>说过的句子</span>
+        <div>
+          <b>{all.said}</b>
+          <span>話した文</span>
         </div>
-        <div className="kpi">
-          <b>{all.listenLines} 句</b>
-          <span>整段听过的句子</span>
-        </div>
-        <div className="kpi">
-          <b>{mastered(p)} / {p.cards.length}</b>
-          <span>掌握的表达 / 收藏</span>
-        </div>
-        <div className="kpi">
-          <b>{finished}</b>
-          <span>三步全部完成的场景</span>
-        </div>
-        <div className="kpi">
-          <b>{(p.retells ?? []).length} 回</b>
+        <div>
+          <b>{(p.retells ?? []).length}</b>
           <span>三回話す</span>
         </div>
+      </div>
+      <div className="rowlist">
+        {[
+          { label: "整段听过的句子", value: all.listenLines, show: all.listenLines > 0, unit: " 句" },
+          { label: "掌握的表达 / 收藏", value: `${mastered(p)} / ${p.cards.length}`, show: p.cards.length > 0, unit: "" },
+          { label: "三步全部完成的场景", value: finished, show: finished > 0, unit: "" },
+        ]
+          .filter((x) => x.show)
+          .map((x) => (
+            <div key={x.label} className="rowlist-row">
+              <span>{x.label}</span>
+              <b>
+                {x.value}
+                {x.unit}
+              </b>
+            </div>
+          ))}
       </div>
 
       <h2>这周和上周比</h2>
