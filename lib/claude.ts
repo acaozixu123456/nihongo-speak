@@ -712,6 +712,20 @@ export async function kanaReading(text: string): Promise<string | null> {
   return /^[぀-ヿ\s、。！？・ー]+$/.test(kana.trim()) ? kana.trim() : null;
 }
 
+// ---- ラジオ: a Japanese title for episodes made before titles were written in both languages ----
+
+const TitleSchema = z.object({ ja: z.string().describe("日本語のタイトル（20字以内）。直訳ではなく自然な見出し。問いかけの形はそのまま") });
+
+export async function radioTitleJa(zh: string, opening: string): Promise<string> {
+  const { ja } = await haikuFirst(
+    TitleSchema,
+    "日本語学習者向けラジオ番組の中国語タイトルを、同じ内容の自然な日本語タイトルにする。",
+    `中国語タイトル：${zh}\n番組の冒頭：${opening}`,
+    300,
+  );
+  return ja.trim();
+}
+
 // ---- 洗脑歌: lyrics as they are sung ----
 
 const SungSchema = z.object({

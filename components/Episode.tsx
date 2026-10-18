@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { makingText, radioClips, useRadioMaking, type Clip, type ClipState, type RadioPart } from "@/lib/client/moyu";
 import { mixRadio, type Mixed } from "@/lib/client/radio-mix";
 import { play, preload, SILENCE, ttsUrl, unlock } from "@/lib/client/player";
-import { findEpisode, markHeard, RADIO_VOICE, useProgress } from "@/lib/client/progress";
+import { ensureTitleJa, findEpisode, markHeard, RADIO_VOICE, useProgress } from "@/lib/client/progress";
 import { setAudioSession } from "@/lib/client/recorder";
 import { useHydrated } from "@/lib/client/hydrated";
 import Earworm from "./Earworm";
@@ -62,6 +62,9 @@ export default function Episode({ id }: { id: string }) {
   const p = useProgress();
   const hydrated = useHydrated();
   const ep = hydrated ? findEpisode(p, id) : undefined;
+  useEffect(() => {
+    if (ep) ensureTitleJa(ep);
+  }, [ep]);
   const audio = useRef<HTMLAudioElement>(null);
   const prep = useRef<Mixed | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -297,7 +300,7 @@ export default function Episode({ id }: { id: string }) {
         {k ? "ゆるっと日本ラジオ" : "趣味电台"} · {shortDate(ep.date)}
       </div>
       <div className={`radio-cover ${cover ? "drawn" : ""}`} style={cover ? { backgroundImage: `url(${cover})` } : undefined}>
-        {!cover && <h1 className="radio-title">{ep.title_zh}</h1>}
+        {!cover && <h1 className="radio-title">{ep.title_ja ?? ep.title_zh}</h1>}
         <div className={`radio-waves ${playingNow ? "on" : ""}`} aria-hidden>
           <i />
           <i />
@@ -308,7 +311,8 @@ export default function Episode({ id }: { id: string }) {
           <span className={`han ${playingNow && who === "B" ? "on" : ""}`}>健</span>
         </div>
       </div>
-      {cover && <h1 className="radio-title under">{ep.title_zh}</h1>}
+      {cover && <h1 className="radio-title under">{ep.title_ja ?? ep.title_zh}</h1>}
+      {ep.title_ja && <p className="radio-title-zh">{ep.title_zh}</p>}
 
       {done && k ? (
         <div className="hitokoto">

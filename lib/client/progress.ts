@@ -732,6 +732,23 @@ export function saveAsked(id: string, item: AskedItem) {
 
 export const findEpisode = (p: Progress, id: string) => p.episodes.find((e) => e.id === id);
 
+// Episodes saved before titles came in both languages get their Japanese title once, on first view.
+const titling = new Set<string>();
+export function ensureTitleJa(ep: RadioEpisode) {
+  if (ep.title_ja || titling.has(ep.id)) return;
+  titling.add(ep.id);
+  const opening = ep.lines.slice(0, 6).map((l) => l.ja).join("").slice(0, 400);
+  fetch("/api/radio-title", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ zh: ep.title_zh, opening }) })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d: { ja?: string } | null) => {
+      if (!d?.ja) return;
+      const p = read();
+      write({ ...p, episodes: p.episodes.map((e) => (e.id === ep.id ? { ...e, title_ja: d.ja } : e)) });
+    })
+    .catch(() => {})
+    .finally(() => titling.delete(ep.id));
+}
+
 // ---- Custom scenarios ----
 
 export function addCustom(s: CustomScenario) {

@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { makeRadio, makingText, SHOW_LINES, useRadioMaking } from "@/lib/client/moyu";
-import { useProgress } from "@/lib/client/progress";
+import { ensureTitleJa, useProgress } from "@/lib/client/progress";
 import { useHydrated } from "@/lib/client/hydrated";
 
 export const shortDate = (day: string) => {
@@ -22,6 +22,9 @@ export default function Episodes() {
   const [wishing, setWishing] = useState(false);
   const [wish, setWish] = useState("");
   const eps = hydrated ? p.episodes : [];
+  useEffect(() => {
+    eps.slice(0, 8).forEach(ensureTitleJa);
+  }, [eps]);
   const making = useRadioMaking();
 
   async function fresh(topic?: string) {
@@ -74,7 +77,7 @@ export default function Episodes() {
           <Link key={e.id} href={`/ep/${e.id}`} className="ep-row">
             <span className="ep-date">{shortDate(e.date)}</span>
             <span className="entry-text">
-              {e.title_zh}
+              {e.title_ja ?? e.title_zh}
               {!e.heard && <i className="dot" aria-label="没听过" />}
             </span>
             <span className="chev" aria-hidden>›</span>

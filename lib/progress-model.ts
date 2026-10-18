@@ -335,7 +335,8 @@ export function merge(a: Progress, b: Progress): Progress {
       .map((e) => {
         const copies = [...(a.episodes ?? []), ...(b.episodes ?? [])].filter((o) => o.id === e.id);
         const asked = [...new Map(copies.flatMap((o) => o.asked ?? []).map((x) => [x.text, x])).values()];
-        return { ...e, heard: e.heard || copies.some((o) => o.heard), ...(asked.length ? { asked } : {}) };
+        const title_ja = e.title_ja ?? copies.find((o) => o.title_ja)?.title_ja;
+        return { ...e, heard: e.heard || copies.some((o) => o.heard), ...(asked.length ? { asked } : {}), ...(title_ja ? { title_ja } : {}) };
       })
       .sort((x, y) => (x.id < y.id ? 1 : -1))
       .slice(0, EPISODES_KEPT),

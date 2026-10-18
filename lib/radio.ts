@@ -25,6 +25,7 @@ const Line = z.object({
 
 export const RadioSchema = z.object({
   title_zh: z.string().describe("番組タイトル（中国語、15字以内）。思わず聞きたくなる問いかけ型"),
+  title_ja: z.string().describe("title_zh と同じ問いかけの日本語タイトル（20字以内）。直訳ではなく、自然な日本語の見出し"),
   hook_zh: z
     .string()
     .describe("画面に出す中国語の1〜2文。答えを言わずに疑問を投げかけ、続きを聞きたくさせる"),
@@ -71,6 +72,7 @@ export const RadioSchema = z.object({
 
 // Episodes made before the 2026-10 makeover: no parts, gaps or ひとこと, and a question at the end.
 export const OldRadioSchema = RadioSchema.extend({
+  title_ja: z.string().optional(),
   story: RadioSchema.shape.story.optional(),
   lines: z.array(Line.partial({ part: true, gap: true, back: true })),
   hitokoto: RadioSchema.shape.hitokoto.optional(),
