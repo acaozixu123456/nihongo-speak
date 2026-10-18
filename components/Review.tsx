@@ -1,20 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { play, preload, ttsUrl, unlock } from "@/lib/client/player";
+import { useEffect, useRef, useState } from "react";
+import { play, preload, stop, ttsUrl, unlock } from "@/lib/client/player";
 import { transcribe } from "@/lib/client/recorder";
 import { dueCards, findEpisode, findScenario, recordSpeech, reviewCard, useProgress, wavSeconds, type Card } from "@/lib/client/progress";
-import AiJudge, { type Verdict } from "./AiJudge";
+import { useJudge } from "./AiJudge";
 import HoldButton from "./HoldButton";
+import { Stamp, StreakPill, VerdictSheet, kindByText, kindOf } from "./Verdict";
 import { useCoach } from "@/lib/client/coach";
 import { stepDone, useOnRoute } from "@/lib/client/route";
 import type { Variant } from "@/lib/claude";
 import { variantOk } from "@/lib/variant";
-
-function tone(score: number) {
-  return score >= 80 ? "good" : score >= 60 ? "warn" : "bad";
-}
 
 export default function Review() {
   const p = useProgress();
@@ -26,7 +23,6 @@ export default function Review() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [again, setAgain] = useState(0);
-  const [verdict, setVerdict] = useState<Verdict | null>(null);
 
   const due = dueCards(p);
   const list = queue ?? due;
@@ -61,6 +57,30 @@ export default function Review() {
         ? { zh: card.zh, ja: card.ja, reading: card.reading }
         : null);
 
+  // What the AI makes of the spoken answer becomes the 判定; without the AI, how close the words came decides.
+  // 看答案 without speaking counts as a miss, quietly.
+  const scenario = card ? findScenario(p, card.scenarioId) : undefined;
+  const judge = useJudge(heard ? { zh: heard.ask.zh, ja: heard.ask.ja, where: scenario?.titleZh, said: heard.text } : null);
+  const kind = heard
+    ? judge.data
+      ? kindOf(judge.data.verdict)
+      : judge.failed
+        ? kindByText(heard.text, heard.ask.ja)
+        : null
+    : revealed
+      ? "wrong"
+      : null;
+
+  // Once judged, the right sentence is read out: slower when it was missed.
+  const readFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!kind || !card || !ask || readFor.current === card.id + index) return;
+    readFor.current = card.id + index;
+    const t = setTimeout(() => listen(card, ask.ja, kind === "right" ? 1 : 0.85), heard ? 600 : 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind]);
+
   // The sentence on screen is fetched while the learner reads it, so 听 plays at once.
   const askJa = queue && card && ask ? ttsUrl(ask.ja, card.voice) : null;
   useEffect(() => {
@@ -87,9 +107,9 @@ export default function Review() {
     if (over) stepDone();
   }, [over]);
 
-  function listen(c: Card, ja = c.ja) {
+  function listen(c: Card, ja = c.ja, rate = 1) {
     unlock();
-    play(ttsUrl(ja, c.voice), 1).catch(() => setError("音频播放失败"));
+    play(ttsUrl(ja, c.voice), rate).catch(() => setError("音频播放失败"));
   }
 
   async function onRecorded(wav: Blob) {
@@ -106,7 +126,6 @@ export default function Review() {
       recordSpeech(wavSeconds(wav), r.scores?.pron);
       setHeard({ text: r.text, score: r.scores?.pron, ask: shown });
       setRevealed(true);
-      listen(card, shown.ja);
     } catch (e) {
       setError(e instanceof Error ? e.message : "评分失败");
     } finally {
@@ -116,6 +135,7 @@ export default function Review() {
 
   function answer(remembered: boolean) {
     if (!card) return;
+    stop();
     reviewCard(card.id, remembered);
     if (!remembered) {
       setAgain((n) => n + 1);
@@ -125,7 +145,6 @@ export default function Review() {
     setIndex((i) => i + 1);
     setRevealed(false);
     setHeard(null);
-    setVerdict(null);
     setPlain(false);
     setError("");
   }
@@ -205,65 +224,43 @@ export default function Review() {
     );
   }
 
-  const scenario = findScenario(p, card.scenarioId);
   const fromRadio = card.scenarioId.startsWith("radio:") ? findEpisode(p, card.scenarioId.slice(6)) : undefined;
+  const ja = ask?.ja ?? card.ja;
 
   return (
     <main>
       <div className="row spread">
-        <Link href="/review" className="muted" onClick={() => setQueue(null)}>← 退出</Link>
-        <span className="muted">
-          {index + 1} / {list.length}
-        </span>
-      </div>
-      <div className="progressbar">
-        <div style={{ width: `${(index / list.length) * 100}%` }} />
+        <Link href="/review" className="muted" onClick={() => setQueue(null)}>✕</Link>
+        <div className="progressbar" style={{ flex: 1, margin: "0 12px" }}>
+          <div style={{ width: `${(index / list.length) * 100}%` }} />
+        </div>
+        <StreakPill />
       </div>
 
-      <div className="card flash">
-        {/* One grey line of context; the Chinese sentence is the only thing that stands out. */}
-        <div className="meta">
-          {[
-            ask && ask.ja !== card.ja && ask.pattern
-              ? `新句子 · ${ask.pattern}`
-              : fromRadio
-                ? `趣味电台 · ${fromRadio.title_zh}`
-                : scenario?.titleZh,
-          ]}
-        </div>
+      <div className={`card flash ${kind ? `v-${kind}` : ""}`}>
+        <Stamp kind={heard ? kind : null} />
+        {!revealed && (
+          <div className="meta">
+            {[
+              ask && ask.ja !== card.ja && ask.pattern
+                ? `新句子 · ${ask.pattern}`
+                : fromRadio
+                  ? `趣味电台 · ${fromRadio.title_zh}`
+                  : scenario?.titleZh,
+            ]}
+          </div>
+        )}
         {wantVariant && !variant && !variantFailed && !heard ? (
           <div className="prompt judge-wait muted">出个新句子…</div>
         ) : (
-          <div className="prompt">{ask?.zh ?? card.zh}</div>
+          <div className={`prompt ${revealed ? "asked" : ""}`}>{ask?.zh ?? card.zh}</div>
         )}
-        {revealed ? (
-          <>
-            <div className="answer">{ask?.ja ?? card.ja}</div>
-            {ask?.reading && <div className="kana">{ask.reading}</div>}
-            {ask && ask.ja !== card.ja && <div className="small-text">原句：{card.ja}</div>}
-            {heard && (
-              <p className="muted">
-                你说：{heard.text}
-                {heard.score !== undefined && (
-                  <>
-                    {" "}· <strong className={tone(heard.score)}>{heard.score} 分</strong>
-                  </>
-                )}
-              </p>
-            )}
-            {heard && (
-              <AiJudge
-                zh={heard.ask.zh}
-                ja={heard.ask.ja}
-                where={scenario ? scenario.titleZh : undefined}
-                said={heard.text}
-                voice={card.voice}
-                onVerdict={setVerdict}
-              />
-            )}
-            <button style={{ marginTop: 12 }} onClick={() => listen(card, ask?.ja)}>听原声</button>
-          </>
+        {heard ? (
+          <button className={`said said-${kind ?? "wait"}`} onClick={() => listen(card, ja)}>
+            {kind === "right" ? ja : heard.text}
+          </button>
         ) : (
+          !revealed &&
           ask &&
           ask.ja !== card.ja && (
             <button className="link-btn" onClick={() => setPlain(true)}>换回原句</button>
@@ -272,27 +269,29 @@ export default function Review() {
       </div>
       {error && <p className="error">{error}</p>}
 
-      <div className="dock" style={{ bottom: 0, zIndex: 20 }}>
-        <div className="dock-inner">
-          {revealed ? (
+      {revealed ? (
+        <VerdictSheet
+          key={card.id + index}
+          kind={kind}
+          quiet={!heard}
+          ja={ja}
+          voice={card.voice}
+          why={judge.data}
+          onHear={() => listen(card, ja, kind === "right" ? 1 : 0.85)}
+          onNext={() => answer(kind !== "wrong")}
+        />
+      ) : (
+        <div className="dock" style={{ bottom: 0, zIndex: 20 }}>
+          <div className="dock-inner">
             <div className="row" style={{ flexWrap: "nowrap" }}>
-              <button className={verdict === "off" ? "primary" : ""} style={{ flex: 1, padding: 14 }} onClick={() => answer(false)}>
-                再练
-              </button>
-              <button className={verdict === "off" ? "" : "primary"} style={{ flex: 1, padding: 14 }} onClick={() => answer(true)}>
-                记住了
-              </button>
-            </div>
-          ) : (
-            <div className="row" style={{ flexWrap: "nowrap" }}>
-              <button onClick={() => setRevealed(true)} disabled={busy}>看答案</button>
+              <button onClick={() => setRevealed(true)} disabled={busy}>答え</button>
               <div style={{ flex: 1 }}>
-                <HoldButton label={busy ? "评分中…" : "点一下说日语"} disabled={busy} onRecorded={onRecorded} onError={setError} />
+                <HoldButton label={busy ? "…" : "🎙 日本語で"} disabled={busy} onRecorded={onRecorded} onError={setError} />
               </div>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
     </main>
   );
 }
