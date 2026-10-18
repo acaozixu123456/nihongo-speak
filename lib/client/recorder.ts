@@ -26,6 +26,8 @@ export class Recorder {
   private rec: MediaRecorder | null = null;
   private chunks: Blob[] = [];
   private stopped: Promise<void> = Promise.resolve();
+  // Stopped while the mic was still opening (the page was left): the mic is shut as soon as it opens.
+  private dropped = false;
 
   // Resolves once audio is actually being captured, so the caller can say "speak now".
   async start() {
@@ -35,6 +37,7 @@ export class Recorder {
       this.stream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
+      if (this.dropped) throw new Error("recorder stopped");
       const rec = new MediaRecorder(this.stream);
       this.rec = rec;
       this.chunks = [];
@@ -60,6 +63,7 @@ export class Recorder {
 
   async stop(): Promise<Blob> {
     const rec = this.rec;
+    if (!rec) this.dropped = true;
     if (rec && rec.state !== "inactive") rec.stop();
     await this.stopped;
     const type = rec?.mimeType || this.chunks[0]?.type || "";

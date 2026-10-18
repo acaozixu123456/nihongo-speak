@@ -726,7 +726,7 @@ export function addCustom(s: CustomScenario) {
 
 export function removeCustom(id: string) {
   const p = read();
-  write({ ...p, custom: p.custom.filter((s) => s.id !== id) });
+  write({ ...p, custom: p.custom.filter((s) => s.id !== id), removedCustom: [...(p.removedCustom ?? []), id] });
 }
 
 export const allScenarios = (p: Progress): Scenario[] => [...p.custom, ...scenarios];
