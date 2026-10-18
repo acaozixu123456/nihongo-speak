@@ -10,6 +10,7 @@ import HoldButton from "./HoldButton";
 import { useCoach } from "@/lib/client/coach";
 import { stepDone, useOnRoute } from "@/lib/client/route";
 import type { Variant } from "@/lib/claude";
+import { variantOk } from "@/lib/variant";
 
 function tone(score: number) {
   return score >= 80 ? "good" : score >= 60 ? "warn" : "bad";
@@ -34,7 +35,11 @@ export default function Review() {
   // Until the AI answers (or if it fails), the original card is asked.
   const [plain, setPlain] = useState(false);
   const wantVariant = !!queue && !!card && card.step > 0 && !plain;
-  const { data: variant } = useCoach<Variant>(wantVariant ? { kind: "variant", ja: card.ja, zh: card.zh } : null);
+  const { data: variantData, error: variantError } = useCoach<Variant>(
+    wantVariant ? { kind: "variant", ja: card.ja, zh: card.zh } : null,
+  );
+  const variant = variantData && variantOk(variantData) ? variantData : null;
+  const variantFailed = !!variantError || (!!variantData && !variant);
   type Ask = { zh: string; ja: string; reading?: string; pattern?: string };
   // Once the learner has answered, the sentence they were shown stays put.
   const ask: Ask | null =
@@ -205,13 +210,20 @@ export default function Review() {
       </div>
 
       <div className="card flash">
-        {scenario && <div className="muted">{scenario.titleZh}</div>}
-        {fromRadio && <div className="muted">趣味电台 · {fromRadio.title_zh}</div>}
-        {ask && ask.ja !== card.ja && (
-          <div className="small-text y">换了个新句子 · 同样考「{ask.pattern}」</div>
+        {/* One grey line of context; the Chinese sentence is the only thing that stands out. */}
+        <div className="meta">
+          {[
+            fromRadio ? `趣味电台 · ${fromRadio.title_zh}` : scenario?.titleZh,
+            ask && ask.ja !== card.ja && ask.pattern ? `新句子 · ${ask.pattern}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </div>
+        {wantVariant && !variant && !variantFailed && !heard ? (
+          <div className="prompt judge-wait muted">出个新句子…</div>
+        ) : (
+          <div className="prompt">{ask?.zh ?? card.zh}</div>
         )}
-        {wantVariant && !variant && !heard && <div className="small-text judge-wait">AI 正在出一个新句子…</div>}
-        <div className="prompt">{ask?.zh ?? card.zh}</div>
         {revealed ? (
           <>
             <div className="answer">{ask?.ja ?? card.ja}</div>
@@ -240,12 +252,10 @@ export default function Review() {
             <button style={{ marginTop: 12 }} onClick={() => listen(card, ask?.ja)}>听原声</button>
           </>
         ) : (
-          <>
-            <p className="muted">用日语怎么说？点下面的按钮说出来。</p>
-            {ask && ask.ja !== card.ja && (
-              <button className="small" onClick={() => setPlain(true)}>还是考原句</button>
-            )}
-          </>
+          ask &&
+          ask.ja !== card.ja && (
+            <button className="link-btn" onClick={() => setPlain(true)}>换回原句</button>
+          )
         )}
       </div>
       {error && <p className="error">{error}</p>}

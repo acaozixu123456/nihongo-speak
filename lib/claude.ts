@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import * as z from "zod/v4";
 import type { Scenario } from "@/content/scenarios";
+import { variantOk } from "@/lib/variant";
 
 // Only the role-play part of a scenario is needed here.
 type Talk = Pick<Scenario, "talk">;
@@ -431,22 +432,35 @@ ${before.map((t) => `${t.role === "user" ? "学習者" : "相手"}：${t.text}`)
 
 // 复习: a fresh sentence built on the same pattern, so a card isn't memorised as one fixed string.
 const VariantSchema = z.object({
-  zh: z.string().describe("学習者に見せる中国語（言いたいこと）"),
-  ja: z.string().describe("元の文と同じ文法・表現を使い、内容や場面を少し変えた自然な日本語。元の文と同じくらいの長さ"),
+  zh: z
+    .string()
+    .describe("ja をそのまま中国語に訳した文（1文、40字以内）。学習者はこれを見て日本語で言う。出題の説明・指示・文法の解説・「翻訳して」などは絶対に書かない"),
+  ja: z
+    .string()
+    .describe("元の文と同じ文法・表現を使い、内容や場面を少し変えた自然な日本語の1文。元の文が短い一言でも、何について言うのかが分かる具体的な文にする（40字以内）"),
   reading: z.string().describe("ja の全文をひらがなで"),
   pattern_zh: z.string().describe("元の文と共通する文法・表現（中国語、短く）"),
 });
 
 export type Variant = z.infer<typeof VariantSchema>;
 
-export function makeVariant(c: { ja: string; zh: string }) {
-  return haikuFirst(
-    VariantSchema,
-    `${COACH}
-学習者が覚えた文の復習用に、同じ文法・表現を使った別の文を1つ作ってください。語彙は N3 程度。職場や日常生活でそのまま使える文にする。`,
-    `元の文：${c.ja}
+export async function makeVariant(c: { ja: string; zh: string }) {
+  const ask = () =>
+    haikuFirst(
+      VariantSchema,
+      `${COACH}
+学習者が覚えた文の復習用に、同じ文法・表現を使った別の文を1つ作ってください。語彙は N3 程度。職場や日常生活でそのまま使える文にする。
+zh は画面に大きく出る「言いたいこと」です。ja の中国語訳だけを書き、指示や説明は書かないこと。
+例：元の文「気になります！」→ ja「新しいカフェの味が気になります。」zh「我很好奇新咖啡店的味道。」`,
+      `元の文：${c.ja}
 意味：${c.zh}`,
-  );
+    );
+  const first = await ask();
+  if (variantOk(first)) return first;
+  console.error("bad variant, retrying:", first);
+  const second = await ask();
+  if (variantOk(second)) return second;
+  throw new Error("AI 出的新句子不对，先考原句");
 }
 
 // 通勤播客: a short daily audio episode built from the learner's own weak points and saved phrases.
