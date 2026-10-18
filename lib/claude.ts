@@ -563,7 +563,7 @@ const RetellFixSchema = z.object({
     you_said: z.string().describe("詰まる直前に学習者が言った言葉（文字起こしのまま、短く）。詰まった箇所が示されていなければ空文字"),
     better: z.string().describe("学習者がそこで言おうとしたことの自然な言い方（日本語、1文、N3程度）。次の話でも使える汎用的な言い回しを優先。示されていなければ空文字"),
     around: z.string().describe("詰まったのが特定の単語なら、その単語を使わず簡単な言葉で言い換えた言い方（日本語）。不要なら空文字"),
-    zh: z.string().describe("better の意味（簡体字の中国語、短く）。示されていなければ空文字"),
+    zh: z.string().describe("better の中国語訳（簡体字）。説明ではなく訳だけ。中国語を見て日本語を言う練習に使う。示されていなければ空文字"),
   }),
   fix: z.object({
     you_said: z.string().describe("学習者が実際に言った日本語（その一節だけ）。直すところがなければ空文字"),
@@ -621,7 +621,7 @@ const RetellEndSchema = z.object({
       z.object({
         you: z.string().describe("3回目で学習者が実際に言った一節（文字起こしのまま。えっと等は省いてよい）"),
         ja: z.string().describe("その一節の自然な言い方。内容は変えない。N3程度の語彙で、話し言葉で"),
-        zh: z.string(),
+        zh: z.string().describe("ja の中国語訳（簡体字）。説明ではなく訳だけ"),
       }),
     )
     .describe("3回目の話を前から順に3〜5か所に区切り、学習者の言い方と自然な言い方を対にしたもの。直すところがない一節は you と ja が同じでよい"),
