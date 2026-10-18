@@ -170,6 +170,59 @@ function secondNote(a: Take | null, b: Take, text: string | undefined, better: s
   return out;
 }
 
+// The wait while a telling is written down (~18s), used for the next one: one thing only. Before the
+// friend, the plain form to switch to; before the last telling, the one fix said under the breath three
+// times; after the last, the long pauses per minute across the three, counted on the phone.
+const PLAIN = { ja: "〜たんだ。でもさ、〜。", say: "昨日ね、友達と出かけたんだ。でもさ、雨だったの。" };
+function WaitCard(a: {
+  round: number;
+  next?: string;
+  phrase: string;
+  murmurs: number;
+  onMurmur: () => void;
+  onHear: (ja: string) => void;
+  pauses: (number | null | undefined)[];
+}) {
+  let body: React.ReactNode = null;
+  if (a.round === 0 && a.next === "yui") {
+    body = (
+      <>
+        <div className="wait-ja" onClick={() => a.onHear(PLAIN.say)}>
+          {PLAIN.ja} ▶
+        </div>
+        <div className="wait-zh">下一遍讲给朋友，用普通形</div>
+      </>
+    );
+  } else if (a.round === 1 && a.phrase) {
+    body = (
+      <>
+        <div className="wait-ja" onClick={() => a.onHear(a.phrase)}>
+          {a.phrase} ▶
+        </div>
+        <button className="wait-dots" onClick={a.onMurmur} aria-label="说了一遍">
+          {[0, 1, 2].map((i) => (
+            <i key={i} className={i < a.murmurs ? "on" : ""} />
+          ))}
+        </button>
+        <div className="wait-zh">{a.murmurs >= 3 ? "好，最后一遍用上它" : "小声说 3 遍，每说一遍点一下"}</div>
+      </>
+    );
+  } else if (a.round === 2 && a.pauses.every((x) => typeof x === "number")) {
+    body = (
+      <>
+        <div className="wait-ja">{a.pauses.join(" → ")}</div>
+        <div className="wait-zh">停顿 1 秒以上，每分钟几次</div>
+      </>
+    );
+  }
+  return (
+    <div className="wait-card">
+      <i className="wait-bar" />
+      {body}
+    </div>
+  );
+}
+
 export default function Retell() {
   const p = useProgress();
   const hydrated = useHydrated();
@@ -201,6 +254,10 @@ export default function Retell() {
   const [uptake, setUptake] = useState<string[]>([]);
   // What the listener just said back, shown after the second telling with how it went.
   const [said, setSaid] = useState<{ who: string; text: string } | null>(null);
+  // While a telling is being written down: its long pauses per minute (counted on the phone, so
+  // known at once) and how many times the fix has been said under the breath (WaitCard).
+  const [pausesNow, setPausesNow] = useState<number | null>(null);
+  const [murmurs, setMurmurs] = useState(0);
   // The first telling's longest stall, and its recording to play back.
   const [stall, setStall] = useState<Stall | null>(null);
   const firstWav = useRef<Blob | null>(null);
@@ -290,6 +347,8 @@ export default function Retell() {
     const who = listener;
     play(ttsUrl(AIZUCHI[who], voiceOf(who)), 1).catch(() => {});
     const flow: Flow = await flowOf(wav).catch(() => ({ span: sec, pauses: 0, runs: [], gaps: [] }));
+    setPausesNow(perMinute(flow.pauses, flow.span || sec));
+    setMurmurs(0);
     // Gemini first (word for word, with where the silences fell); Azure if that fails.
     let heard: Heard | null = null;
     if (flow.runs.length) {
@@ -582,7 +641,18 @@ export default function Retell() {
       {warming && !talking && !error && (
         <p className="muted retell-note">隔一天再讲一遍，记得更牢。只讲一遍，想起多少讲多少，然后再讲今天的。</p>
       )}
-      {!warming && round === 0 && !talking && !error && (
+      {!warming && !talking && !error && (busy === "listen" || busy === "fix") && (
+        <WaitCard
+          round={round}
+          next={LISTENERS[round + 1]}
+          phrase={round === 1 ? (stall && fix?.stall.better) || fix?.fix.better || "" : ""}
+          murmurs={murmurs}
+          onMurmur={() => setMurmurs((m) => Math.min(3, m + 1))}
+          onHear={hear}
+          pauses={[takes[0]?.perMin, takes[1]?.perMin, pausesNow]}
+        />
+      )}
+      {!warming && round === 0 && !talking && !error && !busy && (
         <p className="muted retell-note">
           {againTake
             ? uptake.length
@@ -609,9 +679,9 @@ export default function Retell() {
 
       {round === 1 && !talking && (
         <div className="retell-fix">
-          {busy ? (
+          {busy === "fix" ? (
             <p className="muted judge-wait">AI 在听你的第一遍…</p>
-          ) : fix ? (
+          ) : busy ? null : fix ? (
             <>
               {carry && carried !== null && (
                 <p className="small-text">
