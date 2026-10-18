@@ -10,6 +10,7 @@ import HoldButton from "./HoldButton";
 import { useCoach } from "@/lib/client/coach";
 import { stepDone, useOnRoute } from "@/lib/client/route";
 import type { Variant } from "@/lib/claude";
+import { variantOk } from "@/lib/variant";
 
 function tone(score: number) {
   return score >= 80 ? "good" : score >= 60 ? "warn" : "bad";
@@ -34,7 +35,11 @@ export default function Review() {
   // Until the AI answers (or if it fails), the original card is asked.
   const [plain, setPlain] = useState(false);
   const wantVariant = !!queue && !!card && card.step > 0 && !plain;
-  const { data: variant } = useCoach<Variant>(wantVariant ? { kind: "variant", ja: card.ja, zh: card.zh } : null);
+  const { data: variantData, error: variantError } = useCoach<Variant>(
+    wantVariant ? { kind: "variant", ja: card.ja, zh: card.zh } : null,
+  );
+  const variant = variantData && variantOk(variantData) ? variantData : null;
+  const variantFailed = !!variantError || (!!variantData && !variant);
   type Ask = { zh: string; ja: string; reading?: string; pattern?: string };
   // Once the learner has answered, the sentence they were shown stays put.
   const ask: Ask | null =
@@ -210,7 +215,7 @@ export default function Review() {
         {ask && ask.ja !== card.ja && (
           <div className="small-text y">换了个新句子 · 同样考「{ask.pattern}」</div>
         )}
-        {wantVariant && !variant && !heard && <div className="small-text judge-wait">AI 正在出一个新句子…</div>}
+        {wantVariant && !variant && !variantFailed && !heard && <div className="small-text judge-wait">AI 正在出一个新句子…</div>}
         <div className="prompt">{ask?.zh ?? card.zh}</div>
         {revealed ? (
           <>
