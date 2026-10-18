@@ -69,6 +69,7 @@ export type Job = {
   version?: number; // songs made before VERSION get sung again (their lyrics and pictures stay)
   error?: string;
   busyUntil?: number;
+  revived?: number; // times a failed job was given another go
 };
 
 // What the phone sees.
@@ -341,8 +342,9 @@ export async function step(id: string, ep: Radio | null): Promise<Job | null> {
   // Songs sung before the timing was laid out get sung again, keeping the lyrics and pictures.
   if (j.step === "ready" && (j.version ?? 1) < VERSION) j = { ...j, step: "song", drawTries: 0, sings: 0, sung: undefined };
   // A job that stopped on an error gets another go when the page is opened again later.
-  if (j.step === "failed" && j.failedStep && Date.now() - (j.failedAt ?? 0) > 10 * 60 * 1000) {
-    j = { ...j, step: j.failedStep, error: undefined, drawTries: 0 };
+  // Twice at most: a step that keeps failing would otherwise be paid for every ten minutes.
+  if (j.step === "failed" && j.failedStep && (j.revived ?? 0) < 2 && Date.now() - (j.failedAt ?? 0) > 10 * 60 * 1000) {
+    j = { ...j, step: j.failedStep, error: undefined, drawTries: 0, revived: (j.revived ?? 0) + 1 };
   }
   if (j.step === "ready" || j.step === "failed" || (j.busyUntil ?? 0) > Date.now()) return j;
   await writeJob(id, { ...j, busyUntil: Date.now() + 115000 });

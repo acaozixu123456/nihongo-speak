@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readJob, step, view } from "@/lib/earworm";
+import { spend, tooMany } from "@/lib/quota";
 import { OldRadioSchema } from "@/lib/radio";
 import { storageReady } from "@/lib/store";
 import { vertexConfigured } from "@/lib/vertex-tts";
@@ -24,6 +25,8 @@ export async function POST(request: Request) {
   if (!storageReady() || !vertexConfigured()) return NextResponse.json({ error: "not set up" }, { status: 503 });
   const ep = body.episode ? OldRadioSchema.safeParse(body.episode) : null;
   try {
+    // Only a new song counts against the day's allowance; the steps after it are bounded per song.
+    if (ep?.success && !(await readJob(id)) && !(await spend("earworm"))) return tooMany();
     return NextResponse.json({ job: view(await step(id, ep?.success ? ep.data : null)) });
   } catch (e) {
     console.error(e);

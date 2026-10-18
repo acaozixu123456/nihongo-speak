@@ -7,6 +7,9 @@ type Body = { scenarioId: string; talk?: Scenario["talk"]; history: Turn[]; mode
 
 export async function POST(request: Request) {
   const body = (await request.json()) as Body;
+  if (!Array.isArray(body.history)) return NextResponse.json({ error: "bad request" }, { status: 400 });
+  // A practice talk is a few dozen turns; anything longer is someone filling Haiku's context.
+  body.history = body.history.slice(-40).map((t) => ({ role: t.role, text: String(t.text ?? "").slice(0, 1000) }));
   const scenario = resolveTalk(body);
   if (!scenario) return NextResponse.json({ error: "unknown scenario" }, { status: 404 });
   try {
