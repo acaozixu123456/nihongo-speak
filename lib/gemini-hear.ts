@@ -1,4 +1,5 @@
 import { people } from "@/content/calls";
+import { retellRead } from "@/lib/claude";
 import { vertexAccess } from "@/lib/vertex-tts";
 
 // 三回話す's ears: Gemini on Vertex AI (billed to the Google Cloud credit) writes down a telling word
@@ -6,7 +7,7 @@ import { vertexAccess } from "@/lib/vertex-tts";
 // not about what the recogniser misheard. The client cuts the recording at every silence of a second
 // or more. Each piece is written down on its own: given the whole story, the model "heard" what fits
 // it (a past-tense story turned a spoken 行きます into 行きました every time), alone it writes what was
-// said. A second, text-only call then says which silences fell in the middle of a sentence (stuck)
+// said. A second, text-only call (Haiku, faster at it) then says which silences fell in the middle of a sentence (stuck)
 // rather than between sentences (planning the next one, as native speakers do too), and gives the
 // listener's reaction to what was actually told.
 
@@ -27,9 +28,9 @@ type Reply = {
   }[];
 };
 
-async function ask<T>(parts: object[], schema: object, timeoutMs: number): Promise<T> {
+async function ask<T>(parts: object[], schema: object, timeoutMs: number, model = MODEL): Promise<T> {
   const { project, token } = await vertexAccess();
-  const url = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/${MODEL}:generateContent`;
+  const url = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/${model}:generateContent`;
   const send = (t: object | null) =>
     fetch(url, {
       method: "POST",
@@ -104,26 +105,22 @@ function hedged<T>(go: () => Promise<T>, after: number): Promise<T> {
   });
 }
 
-function piece(clip: string): Promise<{ text: string; kana: string }> {
+function piece(clip: string, model?: string): Promise<{ text: string; kana: string }> {
   const parts = [{ text: PIECE }, { inlineData: { mimeType: "audio/mp3", data: clip } }];
-  return hedged(() => ask(parts, pieceSchema, 25000), 9000);
+  return hedged(() => ask(parts, pieceSchema, 25000, model), 9000);
 }
-
-const readSchema = {
-  type: "OBJECT",
-  properties: {
-    cut: { type: "ARRAY", items: { type: "BOOLEAN" } },
-    reaction: { type: "STRING" },
-  },
-  required: ["cut", "reaction"],
-};
 
 const styleOf = (id: string) => {
   const p = people.find((x) => x.id === id);
   return p ? `${p.name}。${p.persona.split("話し方：")[1] ?? ""}` : "友達。くだけた話し方";
 };
 
-export async function hearRuns(a: { clips: string[]; listener: string; topic: string }): Promise<Heard> {
+export async function hearRuns(a: {
+  clips: string[];
+  listener: string;
+  topic: string;
+  model?: string;
+}): Promise<Heard> {
   const t0 = Date.now();
   const pieces: { text: string; kana: string }[] = new Array(a.clips.length);
   let next = 0;
@@ -131,28 +128,19 @@ export async function hearRuns(a: { clips: string[]; listener: string; topic: st
     Array.from({ length: Math.min(PARALLEL, a.clips.length) }, async () => {
       while (next < a.clips.length) {
         const i = next++;
-        pieces[i] = await piece(a.clips[i]);
+        pieces[i] = await piece(a.clips[i], a.model);
       }
     }),
   );
   const t1 = Date.now();
-  const told = pieces.map((p, i) => `【${i + 1}】${p.text}`).join("\n");
-  const read = await hedged(
-    () =>
-      ask<{ cut: boolean[]; reaction: string }>(
-        [
-          {
-            text: `日本語学習者が話のテーマ「${a.topic}」について人に話しました。1秒以上黙ったところで区切った文字起こしです（間違いもそのまま）：
-${told}
-cut：各部分（${pieces.length} 個、順に）について、その部分が文の途中で止まっている（言葉に詰まった、次の部分で同じ文が続く）なら true、文や節の切れ目（〜です。〜ました。〜て、〜けど、〜から、〜ので、〜たら などのあと）で止まったなら false。最後は false。
-reaction：聞き手（${styleOf(a.listener)}）が、話を聞き終わってすぐ言う一言の日本語。学習者がはっきり言った内容に具体的に触れる驚きや感想。15〜30字。質問で終わらない。`,
-          },
-        ],
-        readSchema,
-        25000,
-      ),
-    9000,
-  );
+  const read = await retellRead({
+    pieces: pieces.map((p) => p.text),
+    topic: a.topic,
+    listener: styleOf(a.listener),
+  }).catch((e) => {
+    console.warn("hear read, Haiku failed:", e);
+    return { cut: [] as boolean[], reaction: "" };
+  });
   const runs = pieces.map((p, i) => ({
     text: p.text,
     kana: p.kana,
