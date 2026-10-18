@@ -29,7 +29,7 @@ function roundCall(r: Rehearsal, i: number): CallDef {
     who: r.who,
     incoming: false,
     person: r.person,
-    talk: { ...r.talk, setup: `${r.talk.setup}\n\n今回（${i + 1}回目）の相手の反応：${r.twists[i] ?? ""}` },
+    talk: { ...r.talk, setup: `${r.talk.setup}\n\n今回（${i + 1}回目）の相手の反応：${r.twists[i] ?? ""}（これは相手の行動の説明。このままセリフにしない）` },
   };
 }
 
