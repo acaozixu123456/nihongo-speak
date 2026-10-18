@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateScenario, type Photo } from "@/lib/claude";
 import { buildScenario } from "@/lib/voices";
+import { spend, tooMany } from "@/lib/quota";
 
 export const maxDuration = 120;
 
@@ -15,6 +16,7 @@ export async function POST(request: Request) {
     ? { mediaType: m[1] as Photo["mediaType"], data: m[2] }
     : undefined;
   if ((!text && !img) || text.length > 500) return NextResponse.json({ error: "说一句发生了什么，或者拍张照片" }, { status: 400 });
+  if (!(await spend("scenario"))) return tooMany();
   try {
     const cat = category === "work" ? "work" : "life";
     const generated = await generateScenario(text, cat, img);

@@ -2,6 +2,7 @@ import { synthesize } from "@/lib/azure";
 import { FLASH, FLASH_LITE, geminiConfigured, geminiVoice, synthesizeGemini } from "@/lib/gemini-tts";
 import { readingOf, synthesizeVertex, vertexConfigured } from "@/lib/vertex-tts";
 import { kanaReading } from "@/lib/claude";
+import { burst } from "@/lib/quota";
 
 // "HD|fallback" voice lists as the scenarios write them; Chinese is for 摸鱼模式's narration.
 // Has kanji but no kana at all, e.g. 主食 or 確認.
@@ -16,6 +17,8 @@ export async function GET(request: Request) {
   if (!text || text.length > 400 || !VOICE.test(voice)) {
     return new Response("bad request", { status: 400 });
   }
+  // Lines asked for before come from the CDN and never get here; this caps a script asking for new ones.
+  if (!burst("tts", 600, 10 * 60_000)) return new Response("too many", { status: 429 });
   try {
     // ?engine=vertex skips the chain and fails loudly, to check the Vertex AI key on the live site.
     const gemini = geminiVoice(voice);
@@ -87,10 +90,12 @@ async function speak(text: string, voice: string): Promise<{ audio: BodyInit; en
 // 5s, a second one starts alongside it and whichever finishes first wins.
 async function hedgedVertex(text: string, voice: string) {
   const first = synthesizeVertex(text, voice, 15000);
-  const second = new Promise<Awaited<typeof first>>((ok, fail) =>
-    setTimeout(() => synthesizeVertex(text, voice, 15000).then(ok, fail), 5000),
-  );
-  first.catch(() => {});
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const second = new Promise<Awaited<typeof first>>((ok, fail) => {
+    timer = setTimeout(() => synthesizeVertex(text, voice, 15000).then(ok, fail), 5000);
+  });
+  // Answered in time: the second try is never sent (it used to go out anyway, paid for twice).
+  first.then(() => clearTimeout(timer), () => {});
   second.catch(() => {});
   return Promise.any([first, second]);
 }

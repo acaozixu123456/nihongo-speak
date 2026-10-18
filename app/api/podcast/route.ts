@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { makePodcast } from "@/lib/claude";
 import { makeRadio } from "@/lib/radio";
+import { spend, tooMany } from "@/lib/quota";
 
 // Gemini can take most of a minute on a whole show, may be asked twice, and Claude then needs time of its own.
 export const maxDuration = 300;
@@ -14,6 +15,7 @@ const str = (s: unknown, n: number): s is string => typeof s === "string" && s.l
 export async function POST(request: Request) {
   const body = (await request.json()) as { kind: "script" | "radio"; weak?: unknown; cards?: unknown; scenes?: unknown; avoid?: unknown; wish?: unknown; recent?: unknown; letter?: { said?: unknown; better?: unknown; where?: unknown } };
   try {
+    if ((body.kind === "script" || body.kind === "radio") && !(await spend(body.kind))) return tooMany();
     if (body.kind === "script") {
       const weak = (Array.isArray(body.weak) ? body.weak : []).slice(0, 3).filter((w) => str(w?.tag, 80) && str(w?.zh, 200));
       const cards = (Array.isArray(body.cards) ? body.cards : []).slice(0, 8).filter((c) => str(c?.ja, 200) && str(c?.zh, 200));

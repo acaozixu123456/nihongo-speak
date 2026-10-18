@@ -83,6 +83,8 @@ export default function Earworm({ ep, kicker = "趣味电台 · 洗脑歌", onEn
             signal: AbortSignal.timeout(130000),
           });
           const data = (await res.json()) as { job?: Job | null; error?: string };
+          // Today's songs are used up: asking again won't help until tomorrow.
+          if (res.status === 429) return setError(data.error ?? "今天的次数用完了");
           if (!res.ok) throw new Error(data.error ?? "出错了");
           if (stop) return;
           const j = data.job ?? null;
