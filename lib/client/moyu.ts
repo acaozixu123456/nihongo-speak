@@ -43,7 +43,7 @@ export type Clip = {
   parts: Part[];
   // 趣味电台 only, for the mixed version on its page (radio-mix.ts); joined end to end elsewhere.
   part?: RadioPart; // which corner of the show it belongs to
-  gap?: number; // seconds after the clip before it ends; below zero it cuts in
+  gap?: number; // seconds after the clip before it ends
   back?: Part; // the other host's quiet aizuchi part way through
   with?: Part; // said at the same time by the other host
 };
@@ -190,7 +190,8 @@ export function radioClips(ep: Radio, narrate = true): Clip[] {
       line: { ja: l.ja, zh: l.zh, voice: HOST[l.who] },
       parts: [{ voice: HOST[l.who], text: sayable(l.ja), pauseMs: 350 }],
       part: l.part,
-      gap: l.gap,
+      // No cutting in: the user found overlapping replies landing at the wrong moment.
+      gap: l.gap === undefined ? undefined : Math.max(0.15, l.gap),
       back: l.back && sayable(l.back) ? { voice: other, text: sayable(l.back) } : undefined,
     };
   });
