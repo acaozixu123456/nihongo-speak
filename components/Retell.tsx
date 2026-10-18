@@ -152,6 +152,23 @@ async function post<T>(body: unknown): Promise<T> {
 // What the button says while the learner waits (writing down a telling takes ~15s).
 const BUSY: Record<string, string> = { listen: "聞き取り中…", fix: "直すところを探し中…", end: "まとめ中…" };
 
+// After the second telling: one line on how it went against the first (mid-sentence stalls per
+// minute), and a tick when the words from the fix came out. Never a score, never a new point.
+const plain = (t: string) => t.replace(/[\s、。！？!?,.・「」]/g, "");
+function secondNote(a: Take | null, b: Take, text: string | undefined, better: string | undefined, focus: boolean): string[] {
+  const out: string[] = [];
+  const last = focus ? "最后一遍，留意上面那一件事就好。" : "最后一遍，放松讲。";
+  if (better && text && plain(text).includes(plain(better))) out.push(`✓ 「${better}」这遍用上了`);
+  if (a?.stalls !== undefined && b.stalls !== undefined) {
+    out.push(
+      b.stalls < a.stalls
+        ? `句子中间卡住少了：每分钟 ${a.stalls} → ${b.stalls} 次`
+        : `句子中间卡住：每分钟 ${a.stalls} → ${b.stalls} 次。${last}`,
+    );
+  } else out.push(`讲完了第二遍。${last}`);
+  return out;
+}
+
 export default function Retell() {
   const p = useProgress();
   const hydrated = useHydrated();
@@ -181,6 +198,8 @@ export default function Retell() {
   const [againTake, setAgainTake] = useState<Take | null>(null);
   // Yesterday's natural sentences heard again in today's retelling of that story.
   const [uptake, setUptake] = useState<string[]>([]);
+  // What the listener just said back, shown after the second telling with how it went.
+  const [said, setSaid] = useState<{ who: string; text: string } | null>(null);
   // The first telling's longest stall, and its recording to play back.
   const [stall, setStall] = useState<Stall | null>(null);
   const firstWav = useRef<Blob | null>(null);
@@ -290,7 +309,9 @@ export default function Retell() {
       return;
     }
     const lines = REACTIONS[who];
-    play(ttsUrl(heard?.reaction || lines[Math.floor(Math.random() * lines.length)], voiceOf(who)), 1).catch(() => {});
+    const reaction = heard?.reaction || lines[Math.floor(Math.random() * lines.length)];
+    play(ttsUrl(reaction, voiceOf(who)), 1).catch(() => {});
+    setSaid({ who, text: reaction });
     recordSpeech(sec);
     const span = flow.span || sec;
     const take: Take = {
@@ -571,6 +592,21 @@ export default function Retell() {
               : "上次的故事讲完了，现在讲今天的。"
             : "不打分。卡住了就说「えっと」接着讲。"}
         </p>
+      )}
+
+      {round === 2 && !talking && !busy && takes[1] && (
+        <div className="retell-fix">
+          {said && (
+            <div className="ja">
+              {nameOf(said.who)}：{said.text}
+            </div>
+          )}
+          {secondNote(takes[0], takes[1], texts.current[1], stall && fix?.stall.better ? fix.stall.better : fix?.fix.better, !!focus).map((l) => (
+            <p key={l} className="small-text">
+              {l}
+            </p>
+          ))}
+        </div>
       )}
 
       {round === 1 && !talking && (
