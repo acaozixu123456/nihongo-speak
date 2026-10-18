@@ -16,8 +16,8 @@ export type HeardRun = { text: string; kana: string; cut: boolean };
 export type Heard = { runs: HeardRun[]; reaction: string; ms: [number, number] };
 
 const MODEL = "gemini-3.8-flash";
-// Pieces written down at once; a telling has up to a few dozen.
-const PARALLEL = 16;
+// Pieces written down at once; a telling has up to a few dozen. 16 at once ran into 429s.
+const PARALLEL = 8;
 // Writing down what was heard needs no thinking; with the model's default it took ~8s a piece.
 // Dropped (and not asked for again) if this model turns the setting away.
 let thinking: object | null = { thinkingLevel: "minimal" };
@@ -51,6 +51,12 @@ async function ask<T>(parts: object[], schema: object, timeoutMs: number): Promi
       signal: AbortSignal.timeout(timeoutMs),
     });
   let res = await send(thinking);
+  // "Resource exhausted": Vertex's shared capacity for the model is busy for a moment (seen on
+  // production when a telling of nine pieces went out at once). Waiting a little is enough.
+  for (let i = 0; res.status === 429 && i < 3; i++) {
+    await new Promise((r) => setTimeout(r, 1000 * 2 ** i + Math.random() * 500));
+    res = await send(thinking);
+  }
   if (res.status === 400 && thinking) {
     console.warn(`Gemini hear: thinking setting refused: ${(await res.text()).slice(0, 200)}`);
     thinking = null;
@@ -117,29 +123,40 @@ const styleOf = (id: string) => {
 
 export async function hearRuns(a: { clips: string[]; listener: string; topic: string }): Promise<Heard> {
   const t0 = Date.now();
-  const pieces: { text: string; kana: string }[] = new Array(a.clips.length);
+  // A piece that still has no answer after 35s (or failed twice) is left out rather than losing the
+  // whole telling to Azure; only when more than a quarter are missing does the telling fail.
+  const pieces: ({ text: string; kana: string } | null)[] = new Array(a.clips.length).fill(null);
   let next = 0;
-  await Promise.all(
+  const all = Promise.all(
     Array.from({ length: Math.min(PARALLEL, a.clips.length) }, async () => {
       while (next < a.clips.length) {
         const i = next++;
-        pieces[i] = await piece(a.clips[i]);
+        pieces[i] = await piece(a.clips[i]).catch((e) => {
+          console.warn(`hear piece ${i + 1} left out:`, e);
+          return null;
+        });
       }
     }),
   );
+  await Promise.race([all, new Promise((r) => setTimeout(r, 35000))]);
+  const missing = pieces.filter((p) => !p).length;
+  if (missing > Math.max(1, Math.floor(a.clips.length / 4)) || missing === a.clips.length) {
+    throw new Error(`hear: ${missing} of ${a.clips.length} pieces not written down`);
+  }
+  const got = pieces.map((p) => p ?? { text: "", kana: "" });
   const t1 = Date.now();
   const read = await retellRead({
-    pieces: pieces.map((p) => p.text),
+    pieces: got.map((p) => p.text),
     topic: a.topic,
     listener: styleOf(a.listener),
   }).catch((e) => {
     console.warn("hear read, Haiku failed:", e);
     return { cut: [] as boolean[], reaction: "" };
   });
-  const runs = pieces.map((p, i) => ({
+  const runs = got.map((p, i) => ({
     text: p.text,
     kana: p.kana,
-    cut: i < pieces.length - 1 && !!read.cut?.[i],
+    cut: i < got.length - 1 && !!read.cut?.[i],
   }));
   return { runs, reaction: read.reaction ?? "", ms: [t1 - t0, Date.now() - t1] };
 }

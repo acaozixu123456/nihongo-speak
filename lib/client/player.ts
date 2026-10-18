@@ -125,6 +125,12 @@ export function onWaiting(f: () => void) {
   };
 }
 
+// How far the sound now playing has got (seconds into it, its length), for text that follows along.
+export function progress() {
+  const a = el();
+  return { at: a.currentTime, of: Number.isFinite(a.duration) ? a.duration : 0 };
+}
+
 export function stop() {
   turn++;
   setWaiting(false);
