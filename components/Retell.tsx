@@ -149,6 +149,9 @@ async function post<T>(body: unknown): Promise<T> {
   return data as T;
 }
 
+// What the button says while the learner waits (writing down a telling takes ~15s).
+const BUSY: Record<string, string> = { listen: "聞き取り中…", fix: "直すところを探し中…", end: "まとめ中…" };
+
 export default function Retell() {
   const p = useProgress();
   const hydrated = useHydrated();
@@ -495,7 +498,7 @@ export default function Retell() {
               ))}
             </div>
             <button className="today-go retell-along" onClick={() => sayAlong(end.natural.map((x) => x.ja))} disabled={along >= 0}>
-              {along >= 0 ? "…" : "一緒に言う"}
+              {along >= 0 ? "一緒に言ってる…" : "一緒に言う"}
             </button>
             <p className="muted retell-note">跟着说一遍，不打分。</p>
           </>
@@ -552,7 +555,7 @@ export default function Retell() {
           </button>
         ) : (
           <button className="today-go retell-go" onClick={begin} disabled={phase === "starting" || !!busy}>
-            {phase === "starting" || busy ? "…" : round === 0 ? "話す" : `${nameOf(listener)}に話す`}
+            {phase === "starting" ? "マイク準備中…" : busy ? (BUSY[busy] ?? "…") : round === 0 ? "話す" : `${nameOf(listener)}に話す`}
           </button>
         )}
       </div>
