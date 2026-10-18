@@ -23,8 +23,9 @@ import {
 import { totals } from "@/lib/client/metrics";
 import { addDays } from "@/lib/progress-model";
 import { stepDone, useOnRoute } from "@/lib/client/route";
-import AiJudge, { type Verdict } from "./AiJudge";
+import { useJudge, type Verdict } from "./AiJudge";
 import HoldButton from "./HoldButton";
+import { Stamp, StreakPill, VerdictSheet, kindByText, kindOf, type Kind } from "./Verdict";
 
 type Result = {
   item: QuickItem;
@@ -41,10 +42,6 @@ const HINT_CHARS = 3;
 const ROUTE_SIZE = 5;
 
 const secs = (ms: number) => (ms / 1000).toFixed(1);
-
-function tone(score: number) {
-  return score >= 80 ? "good" : score >= 60 ? "warn" : "bad";
-}
 
 function loadSize() {
   try {
@@ -103,8 +100,6 @@ export default function Quick({ drill }: { drill?: string }) {
   const [hinted, setHinted] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [results, setResults] = useState<Result[]>([]);
-  // After the answer is shown: cover it and say it again from memory.
-  const [again, setAgain] = useState<"off" | "covered" | { heard: string; score?: number; ok?: boolean }>("off");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const spokeRef = useRef<number | null>(null);
@@ -121,7 +116,6 @@ export default function Quick({ drill }: { drill?: string }) {
     setOvertime(false);
     setHinted(false);
     setResult(null);
-    setAgain("off");
     setError("");
   }
 
@@ -169,9 +163,9 @@ export default function Quick({ drill }: { drill?: string }) {
     } catch {}
   }
 
-  function hear(i: QuickItem) {
+  function hear(i: QuickItem, rate = 1) {
     unlock();
-    play(ttsUrl(i.ja, i.voice), 1).catch(() => setError("原声播放失败，可以再点一次「听原声」"));
+    play(ttsUrl(i.ja, i.voice), rate).catch(() => setError("原声播放失败"));
   }
 
   function finish(r: Result) {
@@ -181,7 +175,6 @@ export default function Quick({ drill }: { drill?: string }) {
     if (!retry) recordQuick(r.item, r.ms, r.hinted);
     setResult(r);
     setResults((rs) => [...rs, r]);
-    hear(r.item);
     const weak = r.ms === null || r.hinted || r.ms > QUICK_LIMIT_MS;
     if (weak && !retry && round) {
       setRetried((s) => new Set(s).add(r.item.ja));
@@ -234,22 +227,6 @@ export default function Quick({ drill }: { drill?: string }) {
     }
   }
 
-  async function onAgain(wav: Blob) {
-    if (!item) return;
-    setBusy(true);
-    setError("");
-    try {
-      const r = await transcribe(wav, item.ja);
-      recordSpeech(wavSeconds(wav), r.scores?.pron);
-      setAgain({ heard: r.text || "（没听清）", score: r.scores?.pron, ok: !!r.text });
-    } catch {
-      recordSpeech(wavSeconds(wav));
-      setAgain({ heard: "（识别失败，自己对照一下）" });
-    } finally {
-      setBusy(false);
-    }
-  }
-
   function giveUp() {
     if (!item) return;
     finish({ item, ms: null, hinted });
@@ -259,6 +236,35 @@ export default function Quick({ drill }: { drill?: string }) {
     stop();
     show(index + 1);
   }
+
+  // The 判定: the AI's verdict on what was said, made stricter by the clock (slow or hinted is at best 惜しい).
+  // Nothing said, or no recogniser, shows the answer quietly.
+  const first = !!result && results.filter((x) => x.item.ja === result.item.ja).length === 1;
+  const judge = useJudge(result?.heard ? { zh: result.item.zh, ja: result.item.ja, where: result.item.where, said: result.heard } : null);
+  let kind: Kind | null = null;
+  if (result) {
+    if (result.ms === null) kind = "wrong";
+    else if (!result.heard) kind = "close";
+    else {
+      const base = judge.data ? kindOf(judge.data.verdict) : judge.failed ? kindByText(result.heard, result.item.ja) : null;
+      kind = base === "right" && (result.hinted || result.ms > QUICK_LIMIT_MS) ? "close" : base;
+    }
+  }
+  const verdictOf = judge.data?.verdict;
+  useEffect(() => {
+    if (result && verdictOf && first) onVerdict(result, verdictOf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verdictOf]);
+  // Once judged: a missed sentence goes into review by itself, and the right one is read out (slower if missed).
+  useEffect(() => {
+    if (!result || !kind) return;
+    const { item: it } = result;
+    if (kind === "wrong" && !hasCard(p, it.ja))
+      toggleCard({ ja: it.ja, reading: it.reading, zh: it.zh, voice: it.voice, scenarioId: it.scenarioId });
+    const t = setTimeout(() => hear(it, kind === "right" ? 1 : 0.85), result.heard ? 600 : 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, result]);
 
   // On today's route: a short round starts at once, and the route moves on after its summary.
   const onRoute = useOnRoute();
@@ -456,119 +462,64 @@ export default function Quick({ drill }: { drill?: string }) {
   }
 
   // ---- One prompt ----
-  const saved = hasCard(p, item.ja);
-  const comingBack = result && round.slice(index + 1).some((i) => i.ja === item.ja);
   const hint = (item.reading ?? item.ja).slice(0, HINT_CHARS);
   return (
     <main>
       <div className="row spread">
         <Link href={drill ? `/quick?drill=${encodeURIComponent(drill)}` : "/quick"} className="muted" onClick={() => setRound(null)}>
-          ← 退出
+          ✕
         </Link>
-        <span className="muted">
-          {index + 1} / {round.length}
-        </span>
-      </div>
-      <div className="progressbar">
-        <div style={{ width: `${(index / round.length) * 100}%` }} />
+        <div className="progressbar" style={{ flex: 1, margin: "0 12px" }}>
+          <div style={{ width: `${(index / round.length) * 100}%` }} />
+        </div>
+        <StreakPill />
       </div>
 
-      <div className="card flash">
-        <div className="muted">{item.where}</div>
-        <div className="prompt">{item.zh}</div>
-        {!result && (
+      <div className={`card flash ${kind ? `v-${kind}` : ""}`}>
+        <Stamp kind={result?.heard ? kind : null} />
+        <div className={`prompt ${result ? "asked" : ""}`}>{item.zh}</div>
+        {!result ? (
           <>
             <Timer key={shownAt} start={shownAt} frozen={spokeAt} onOver={() => setOvertime(true)} />
             {hinted ? (
-              <div className="qhint">开头：{hint}…</div>
+              <div className="qhint">{hint}…</div>
             ) : (
               overtime &&
               spokeAt === null && (
-                <button className="small" style={{ marginTop: 10 }} onClick={() => setHinted(true)}>
-                  给个开头
-                </button>
+                <button className="link-btn" onClick={() => setHinted(true)}>ヒント</button>
               )
             )}
           </>
-        )}
-        {result && (
-          <>
-            <div className="qtime">
-              {result.ms === null ? (
-                <span className="bad">这次没说出来，没关系</span>
-              ) : result.hinted ? (
-                <span className="warn">看了提示后 {secs(result.ms)} 秒开口</span>
-              ) : (
-                <span className={result.ms <= QUICK_LIMIT_MS ? "good" : "warn"}>{secs(result.ms)} 秒开口</span>
-              )}
-            </div>
-            {again === "covered" ? (
-              <p className="muted">答案盖住了。不看原文，再说一遍。</p>
-            ) : (
-              <>
-                <div className="answer">{item.ja}</div>
-                {item.reading && <div className="kana">{item.reading}</div>}
-              </>
-            )}
-            {result.heard && again === "off" && (
-              <p className="muted">
-                你说：{result.heard}
-                {result.score !== undefined && (
-                  <>
-                    {" "}· <strong className={tone(result.score)}>发音 {result.score}</strong>
-                  </>
-                )}
-              </p>
-            )}
-            {result.heard && again === "off" && (
-              <AiJudge
-                zh={item.zh}
-                ja={item.ja}
-                where={item.where}
-                said={result.heard}
-                voice={item.voice}
-                onVerdict={results.filter((x) => x.item.ja === item.ja).length === 1 ? (v) => onVerdict(result, v) : undefined}
-              />
-            )}
-            {result.sttFailed && again === "off" && <p className="muted">这次没连上识别服务，计时照样记下了。自己对照一下答案。</p>}
-            {typeof again === "object" && (
-              <p className="muted">
-                再说一遍：{again.heard}
-                {again.score !== undefined && (
-                  <>
-                    {" "}· <strong className={tone(again.score)}>发音 {again.score}</strong>
-                  </>
-                )}
-              </p>
-            )}
-            {typeof again === "object" && again.ok && (
-              <AiJudge zh={item.zh} ja={item.ja} where={item.where} said={again.heard} voice={item.voice} />
-            )}
-            {comingBack && <p className="small-text">这句本轮最后会再出现一次。</p>}
-            <div className="row" style={{ justifyContent: "center" }}>
-              <button onClick={() => hear(item)}>听原声</button>
-              <button
-                className={`star ${saved ? "on" : ""}`}
-                onClick={() =>
-                  toggleCard({ ja: item.ja, reading: item.reading, zh: item.zh, voice: item.voice, scenarioId: item.scenarioId })
-                }
-              >
-                {saved ? "已加入复习" : "加入复习"}
-              </button>
-            </div>
-          </>
+        ) : (
+          result.heard && (
+            <button className={`said said-${kind ?? "wait"}`} onClick={() => hear(item)}>
+              {kind === "right" ? item.ja : result.heard}
+            </button>
+          )
         )}
       </div>
       {error && <p className="error">{error}</p>}
 
-      <div className="dock" style={{ bottom: 0, zIndex: 20 }}>
-        <div className="dock-inner">
-          {!result ? (
+      {result ? (
+        <VerdictSheet
+          key={`${index}-${shownAt}`}
+          kind={kind}
+          quiet={!result.heard}
+          ja={item.ja}
+          voice={item.voice}
+          why={judge.data}
+          note={result.ms !== null ? `${secs(result.ms)} 秒` : undefined}
+          onHear={() => hear(item, kind === "right" ? 1 : 0.85)}
+          onNext={next}
+        />
+      ) : (
+        <div className="dock" style={{ bottom: 0, zIndex: 20 }}>
+          <div className="dock-inner">
             <div className="row" style={{ flexWrap: "nowrap" }}>
-              <button onClick={giveUp} disabled={busy}>说不出来</button>
+              <button onClick={giveUp} disabled={busy}>答え</button>
               <div style={{ flex: 1 }}>
                 <HoldButton
-                  label={busy ? "识别中…" : "点一下说日语"}
+                  label={busy ? "…" : "🎙 日本語で"}
                   disabled={busy}
                   onStart={onStart}
                   onRecorded={onRecorded}
@@ -576,27 +527,9 @@ export default function Quick({ drill }: { drill?: string }) {
                 />
               </div>
             </div>
-          ) : again === "covered" ? (
-            <div className="row" style={{ flexWrap: "nowrap" }}>
-              <button onClick={() => setAgain("off")} disabled={busy}>算了</button>
-              <div style={{ flex: 1 }}>
-                <HoldButton label={busy ? "识别中…" : "再说一遍"} disabled={busy} onRecorded={onAgain} onError={setError} />
-              </div>
-            </div>
-          ) : (
-            <div className="row" style={{ flexWrap: "nowrap" }}>
-              {again === "off" && (
-                <button style={{ flex: 1, padding: 14 }} onClick={() => { stop(); setAgain("covered"); }}>
-                  盖住再说
-                </button>
-              )}
-              <button className="primary" style={{ flex: 1, padding: 14 }} onClick={next}>
-                {index + 1 < round.length ? "下一题 →" : "看结果"}
-              </button>
-            </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
     </main>
   );
 }

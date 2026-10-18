@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { Game as GameData } from "@/lib/game";
-import { confetti, sfx } from "@/lib/client/fx";
+import { bare, closeness, confetti, sfx } from "@/lib/client/fx";
 import { play, preload, ttsUrl, unlock } from "@/lib/client/player";
 import {
   dueSkills,
@@ -42,24 +42,6 @@ const shuffle = <T,>(xs: T[]) => {
   }
   return a;
 };
-// Punctuation and spaces don't count when comparing what was said or built.
-const bare = (s: string) => s.replace(/[\s、。，,.!！?？「」『』・〜~…]/g, "");
-
-// How much of the answer the learner said, by longest common subsequence (speech recognition writes
-// kanji or kana as it likes, so a near miss still counts).
-function closeness(said: string, want: string) {
-  const a = [...bare(said)];
-  const b = [...bare(want)];
-  if (!b.length) return 0;
-  let prev = new Array(b.length + 1).fill(0);
-  for (const ca of a) {
-    const cur = [0];
-    for (let j = 0; j < b.length; j++) cur.push(ca === b[j] ? prev[j] + 1 : Math.max(prev[j + 1], cur[j]));
-    prev = cur;
-  }
-  return prev[b.length] / Math.max(a.length, b.length);
-}
-
 const HEARD: Kind[] = ["meaning", "listen", "reading", "judge", "dictate"];
 const CHOICE: Kind[] = ["meaning", "listen", "reading", "pick", "fill"];
 const TILES: Kind[] = ["order", "dictate"];

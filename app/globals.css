@@ -19,6 +19,9 @@
   --ja: "Noto Sans JP", "Hiragino Sans", "PingFang SC", sans-serif;
   --serif: "Shippori Mincho", "Noto Serif SC", "Hiragino Mincho ProN", "Songti SC", serif;
   --radius: 22px;
+  --ok: #3d8b4f; --ok-bg: #e2f0dc; --ok-ink: #24632f;
+  --mid: #c48a12; --mid-bg: #fbefcf; --mid-ink: #8a5d00;
+  --no: #c8442c; --no-bg: #fbe1da; --no-ink: #9c2f1b;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -38,6 +41,9 @@
     --bad: #d4694f;
     --glass: rgba(29, 28, 25, 0.82);
     --shadow: 0 1px 1px rgba(0, 0, 0, 0.2), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+    --ok: #6fb17d; --ok-bg: #1d2e20; --ok-ink: #9fd3a9;
+    --mid: #d9a640; --mid-bg: #33280f; --mid-ink: #ecc779;
+    --no: #e0664c; --no-bg: #3a1d17; --no-ink: #f2a08c;
     color-scheme: dark;
   }
 }
@@ -1369,3 +1375,52 @@ button.today-go { width: 100%; border: none; cursor: pointer; }
 .rehearse-line .zh { display: block; font-size: 13px; color: var(--muted); }
 .link-quiet { display: block; margin: 12px auto 0; background: none; border: none; box-shadow: none; color: var(--muted); font-size: 13px; }
 .game-unsure { display: block; margin: 12px auto 0; }
+
+/* ---- 判定: one verdict bar for every practice page (components/Verdict.tsx) ---- */
+.streak { flex: none; font-family: var(--serif); font-weight: 800; font-size: 14px; color: #fff; background: var(--accent); border-radius: 999px; padding: 1px 10px; animation: bump 0.35s; }
+.flash { position: relative; transition: box-shadow 0.3s; }
+.flash .prompt.asked { font-size: 15px; color: var(--muted); margin-bottom: 6px; padding: 0 44px; }
+.flash.v-right { box-shadow: 0 0 0 3px var(--ok), 0 0 0 10px color-mix(in srgb, var(--ok) 15%, transparent); }
+.flash.v-wrong { animation: shake 0.4s; }
+@keyframes shake { 20%, 60% { transform: translateX(-7px); } 40%, 80% { transform: translateX(7px); } }
+.said { display: inline; background: none; border: 0; padding: 0; font-family: var(--ja); font-size: 26px; font-weight: 600; line-height: 1.45; color: var(--text); }
+.said-right, .said-close { text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 7px; text-decoration-color: var(--ok); }
+.said-close { text-decoration-color: var(--mid); }
+.said-wrong { font-size: 21px; color: var(--muted); text-decoration: line-through; text-decoration-color: var(--no); text-decoration-thickness: 2px; }
+.said-wait { color: var(--muted); }
+.vstamp { position: absolute; top: -12px; right: -6px; width: 72px; height: 72px; border-radius: 50%; border: 5px solid; display: grid; place-items: center; font-family: var(--serif); font-weight: 800; font-size: 32px; transform: rotate(-12deg); animation: stamp 0.32s cubic-bezier(0.3, 1.6, 0.6, 1); pointer-events: none; }
+.vstamp.right { border-color: var(--ok); color: var(--ok); }
+.vstamp.close { border-color: var(--mid); color: var(--mid); }
+.vstamp.wrong { border-color: var(--no); color: var(--no); }
+@keyframes stamp { from { transform: scale(2.4) rotate(-12deg); opacity: 0; } }
+.vsheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; border-radius: 24px 24px 0 0; padding: 20px 22px calc(env(safe-area-inset-bottom) + 20px); animation: rise 0.25s ease-out; }
+.vsheet-inner { max-width: 516px; margin: 0 auto; }
+.vsheet.wait { background: var(--soft); }
+.vsheet.right { background: var(--ok-bg); color: var(--ok-ink); --v: var(--ok); }
+.vsheet.close { background: var(--mid-bg); color: var(--mid-ink); --v: var(--mid); }
+.vsheet.wrong { background: var(--no-bg); color: var(--no-ink); --v: var(--no); }
+.vword { font-family: var(--serif); font-weight: 800; font-size: 30px; line-height: 1.15; display: flex; align-items: baseline; gap: 10px; }
+.vsheet.wait .vword { font-size: 18px; color: var(--muted); }
+.vnote { font-family: var(--sans); font-size: 13px; font-weight: 500; opacity: 0.75; }
+.vans { display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 12px; background: none; border: 0; padding: 0; text-align: left; font-family: var(--ja); font-size: 21px; font-weight: 700; color: var(--text); }
+.vplay { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--v); color: #fff; font-size: 12px; }
+.valong { margin-top: 8px; font-size: 15px; font-weight: 700; }
+.vbtns { display: flex; gap: 10px; margin-top: 16px; align-items: stretch; }
+.vbtns .vnext, .vbtns .hold { flex: 1; padding: 15px; border: 0; border-radius: 16px; background: var(--v); color: #fff; font-size: 17px; font-weight: 700; box-shadow: 0 4px 0 rgba(0, 0, 0, 0.18); }
+.vwhy { flex: none; padding: 15px 18px; border: 0; border-radius: 16px; background: color-mix(in srgb, var(--card) 70%, transparent); color: inherit; font-weight: 700; }
+.vskip { display: block; margin: 8px auto 0; background: none; border: 0; color: inherit; opacity: 0.7; font-size: 14px; }
+.vwhy-layer { position: fixed; inset: 0; z-index: 40; background: rgba(20, 18, 15, 0.45); display: flex; align-items: flex-end; animation: fade 0.2s; }
+.vwhy-sheet { width: 100%; max-width: 560px; margin: 0 auto; max-height: 80vh; overflow-y: auto; background: var(--card); border-radius: 24px 24px 0 0; padding: 12px 22px calc(env(safe-area-inset-bottom) + 24px); animation: rise 0.25s ease-out; }
+.vwhy-sheet .grab { width: 40px; height: 5px; border-radius: 3px; background: var(--soft); margin: 0 auto 12px; }
+.why-h { font-size: 13px; color: var(--faint); margin: 10px 0 6px; }
+.why-fix, .why-alt { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; background: none; border: 0; border-top: 1px solid var(--line); border-radius: 0; padding: 10px 0; text-align: left; color: var(--text); }
+.why-ja { font-family: var(--ja); font-size: 22px; font-weight: 700; color: var(--ok-ink); }
+.why-alt > span:first-child { font-family: var(--ja); font-size: 18px; }
+.why-zh { font-size: 14px; color: var(--muted); }
+.vmilestone { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(20, 18, 15, 0.45); pointer-events: none; animation: fade 0.15s; }
+.vmilestone > div { width: 200px; height: 200px; border-radius: 50%; border: 8px solid #fff; background: var(--accent); color: #fff; display: grid; place-content: center; text-align: center; font-family: var(--serif); transform: rotate(-8deg); animation: stamp 0.35s cubic-bezier(0.3, 1.6, 0.6, 1); box-shadow: 0 0 0 14px color-mix(in srgb, var(--accent) 35%, transparent); }
+.vmilestone b { font-size: 76px; line-height: 0.9; }
+.vmilestone span { font-size: 22px; font-weight: 800; letter-spacing: 0.1em; }
+@media (prefers-reduced-motion: reduce) {
+  .vstamp, .vmilestone > div, .flash.v-wrong, .vsheet, .streak { animation: none; }
+}
