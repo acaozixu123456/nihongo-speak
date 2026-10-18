@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { calls, callTalk, type Call as CallDef, type Prime } from "@/content/calls";
 import type { Feedback, Turn } from "@/lib/claude";
 import { play, stop, ttsUrl, unlock } from "@/lib/client/player";
-import { liveReply, stopLive, unlockLive } from "@/lib/client/live";
+import { LiveStopped, liveReply, stopLive, unlockLive } from "@/lib/client/live";
 import { transcribe } from "@/lib/client/recorder";
 import { knownTags, memories, primePoint, recordFeedback, recordPoints, recordSpeech, recordTalkTurn, remember, useProgress, wavSeconds } from "@/lib/client/progress";
 import FeedbackCard from "./FeedbackCard";
@@ -86,6 +86,8 @@ export default function Call({ call, round }: { call: CallDef; round?: RoundProp
   const [error, setError] = useState("");
   // Replies come from Gemini Live until it fails once in a call; then the old chain takes over.
   const liveOn = useRef(true);
+  // False once the call is hung up or the page left: answers still on their way are dropped.
+  const open = useRef(false);
 
   useEffect(() => {
     if (phase !== "live") return;
@@ -94,6 +96,7 @@ export default function Call({ call, round }: { call: CallDef; round?: RoundProp
   }, [phase]);
   useEffect(
     () => () => {
+      open.current = false;
       stop();
       stopLive();
     },
@@ -119,6 +122,7 @@ export default function Call({ call, round }: { call: CallDef; round?: RoundProp
     unlock();
     unlockLive();
     liveOn.current = true;
+    open.current = true;
     setPrime(primePoint(p));
     const first: Message = { role: "assistant", text: talk.opening.ja, zh: talk.opening.zh };
     setMessages([first]);
@@ -141,6 +145,7 @@ export default function Call({ call, round }: { call: CallDef; round?: RoundProp
     setBusy("stt");
     try {
       const { text } = await transcribe(wav);
+      if (!open.current) return;
       if (!text) {
         setBusy("");
         setError("没听清，再说一次");
@@ -151,6 +156,7 @@ export default function Call({ call, round }: { call: CallDef; round?: RoundProp
       setMessages(next);
       setBusy("ai");
       const reply = await post<{ ja: string; zh: string; finished: boolean }>("/api/chat", { scenarioId, talk, history: history(next) });
+      if (!open.current) return;
       setMessages([...next, { role: "assistant", text: reply.ja, zh: reply.zh }]);
       recordTalkTurn();
       setBusy("");
@@ -181,6 +187,11 @@ export default function Call({ call, round }: { call: CallDef; round?: RoundProp
       setSpeaking(false);
       return true;
     } catch (e) {
+      // Hung up or left while the answer was coming: nothing more to do.
+      if (e instanceof LiveStopped || !open.current) {
+        setSpeaking(false);
+        return true;
+      }
       console.warn("Gemini Live failed, falling back", e);
       // A refused request (no key, credit used up) won't get better in this call; a missed reply might.
       if (e instanceof Error && e.message.startsWith("live ")) liveOn.current = false;
@@ -191,6 +202,7 @@ export default function Call({ call, round }: { call: CallDef; round?: RoundProp
   }
 
   async function hangUp() {
+    open.current = false;
     stop();
     stopLive();
     setEndedAt(Date.now());
@@ -272,7 +284,7 @@ export default function Call({ call, round }: { call: CallDef; round?: RoundProp
                     .finally(() => setSpeaking(false));
                 } else say(last.text);
               }}
-              disabled={!last || !!busy}
+              disabled={!last || !!busy || speaking}
             >
               再听一遍
             </button>

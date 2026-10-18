@@ -12,6 +12,13 @@ const OUT_RATE = 24000;
 
 let ctx: AudioContext | null = null; // the shared context, as of the tap that picked up the call
 let sources: AudioBufferSourceNode[] = [];
+// Each answer belongs to one generation; stopLive() (hang-up, leaving the page, a new turn) ends it,
+// so nothing that arrives afterwards is played.
+let gen = 0;
+let request: AbortController | null = null;
+
+// Thrown by liveReply when the answer was stopped on purpose: not a failure to fall back from.
+export class LiveStopped extends Error {}
 
 export function unlockLive() {
   try {
@@ -22,6 +29,9 @@ export function unlockLive() {
 }
 
 export function stopLive() {
+  gen++;
+  request?.abort();
+  request = null;
   for (const s of sources) {
     try {
       s.stop();
@@ -40,15 +50,26 @@ export async function liveReply(
   wav: Blob,
   onStart: () => void, // the first sound of the answer is in
 ): Promise<LiveReply> {
+  stopLive();
+  const mine = gen;
+  const ctl = (request = new AbortController());
+  const gone = () => mine !== gen;
   const pcm = new Uint8Array(await wav.arrayBuffer()).subarray(44);
-  const res = await fetch("/api/live", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...body, audio: base64(pcm) }),
-  });
+  let res: Response;
+  try {
+    res = await fetch("/api/live", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...body, audio: base64(pcm) }),
+      signal: ctl.signal,
+    });
+  } catch (e) {
+    if (gone()) throw new LiveStopped();
+    throw e;
+  }
+  if (gone()) throw new LiveStopped();
   if (!res.ok || !res.body) throw new Error(`live ${res.status}`);
 
-  stopLive();
   ctx = currentAudio() ?? ctx;
   const live = ctx?.state === "running" ? ctx : null;
   let at = 0;
@@ -59,7 +80,15 @@ export async function liveReply(
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
   let rest = "";
   for (;;) {
-    const { value, done } = await reader.read();
+    let step: ReadableStreamReadResult<string>;
+    try {
+      step = await reader.read();
+    } catch (e) {
+      if (gone()) throw new LiveStopped();
+      throw e;
+    }
+    if (gone()) throw new LiveStopped();
+    const { value, done } = step;
     if (done) break;
     rest += value;
     const lines = rest.split("\n");
@@ -78,7 +107,9 @@ export async function liveReply(
       }
     }
   }
+  if (gone()) throw new LiveStopped();
   if (!chunks.length) throw new Error(error || "对方没有回答");
+  if (request === ctl) request = null;
 
   const audio = wavBlob(chunks);
   const played = live

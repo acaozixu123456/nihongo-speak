@@ -68,13 +68,15 @@ function epTopic(ep: Progress["episodes"][number]): Topic {
 
 const lifeTopic = (t: string): Topic => ({ title: t, about: t, keys: [], starters: ["実は、〜んですよ。", "それで、〜。", "結局、〜って感じでした。"] });
 
-// What there is to tell, first one first: today's episode when there is one, else something from the
-// learner's own day; then the other recent episodes and life topics, for practising off the route.
+// What there is to tell, first one first: today's episode once it has been heard, else something from
+// the learner's own day; then the other heard episodes and life topics, for practising off the route.
+// A story not heard yet can't be retold.
 function topicsFor(p: Progress): Topic[] {
-  const ep = todaysEpisode(p);
+  const today = todaysEpisode(p);
+  const ep = today?.heard ? today : null;
   const day = Number(dayKey().replace(/-/g, ""));
   const life = LIFE_TOPICS.map((_, i) => lifeTopic(LIFE_TOPICS[(day + i) % LIFE_TOPICS.length]));
-  const eps = p.episodes.filter((e) => e !== ep).slice(0, 8).map(epTopic);
+  const eps = p.episodes.filter((e) => e !== ep && e.heard).slice(0, 8).map(epTopic);
   return ep ? [epTopic(ep), ...life.slice(0, 1), ...eps, ...life.slice(1)] : [life[0], ...eps, ...life.slice(1)];
 }
 

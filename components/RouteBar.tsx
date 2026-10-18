@@ -9,7 +9,9 @@ const SEE_MS = 1800; // time to look at the result before the next stop is annou
 const COUNT = 3;
 
 // On top of whichever page is today's current stop: × back to 今日, and one segment per stop.
-// When a page reports its part done, the next stop is announced and opens after 3 seconds.
+// When a page reports its part done, the next stop is announced and opens after 3 seconds, unless the
+// learner touches the page meanwhile (another round, a sentence to hear): then the page stays, and the
+// next stop waits as a small link in the bar.
 // After the last stop nothing moves by itself (there may be feedback to read): one button ends the day.
 export default function RouteBar() {
   const r = useRoute();
@@ -19,6 +21,7 @@ export default function RouteBar() {
   const [pending, setPending] = useState(false);
   const [count, setCount] = useState<number | null>(null);
   const [waiting, setWaiting] = useState(false);
+  const [held, setHeld] = useState(false);
   const timers = useRef<number[]>([]);
   const clear = () => {
     timers.current.forEach(clearTimeout);
@@ -37,6 +40,7 @@ export default function RouteBar() {
     const onNext = () => {
       clear();
       setPending(true);
+      setHeld(false);
       if (finished(read())) return;
       timers.current.push(
         window.setTimeout(() => {
@@ -45,9 +49,18 @@ export default function RouteBar() {
         }, SEE_MS),
       );
     };
+    // Any touch on the page itself stops the count; the announcement stays as a button.
+    const onTouch = (e: PointerEvent) => {
+      if (!timers.current.length || (e.target as Element | null)?.closest?.(".route-next, .route-bar")) return;
+      clear();
+      setCount(null);
+      setHeld(true);
+    };
     window.addEventListener(NEXT, onNext);
+    window.addEventListener("pointerdown", onTouch, true);
     return () => {
       window.removeEventListener(NEXT, onNext);
+      window.removeEventListener("pointerdown", onTouch, true);
       clear();
     };
   }, []);
@@ -57,6 +70,7 @@ export default function RouteBar() {
     clear();
     setPending(false);
     setCount(null);
+    setHeld(false);
     setWaiting(false);
   }, [here]);
 
@@ -84,6 +98,11 @@ export default function RouteBar() {
             <i key={i} className={i < r.at ? "f" : i === r.at ? "c" : ""} />
           ))}
         </div>
+        {held && up && (
+          <button className="route-go" onClick={go}>
+            {up.ja} ›
+          </button>
+        )}
       </div>
       {pending && finished(r) && (
         <div className="route-end">

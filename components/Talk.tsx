@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Scenario } from "@/content/scenarios";
 import type { Feedback, Hint, Turn } from "@/lib/claude";
-import { play, ttsUrl, unlock } from "@/lib/client/player";
+import { play, stop, ttsUrl, unlock } from "@/lib/client/player";
 import { transcribe } from "@/lib/client/recorder";
 import Link from "next/link";
 import {
@@ -53,8 +53,19 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
     bottom.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, busy, hint, feedback]);
 
+  // A reply that comes back after the page was left (or the tab switched) is not read out.
+  const here = useRef(active);
+  here.current = active;
+  useEffect(
+    () => () => {
+      here.current = false;
+      stop();
+    },
+    [],
+  );
+
   const history = (list: Message[]): Turn[] => list.map(({ role, text }) => ({ role, text }));
-  const say = (text: string) => play(ttsUrl(text, talk.aiVoice), 1).catch(() => {});
+  const say = (text: string) => (here.current ? play(ttsUrl(text, talk.aiVoice), 1).catch(() => {}) : undefined);
 
   function start() {
     unlock();
