@@ -1,6 +1,7 @@
 import "server-only";
 import * as z from "zod/v4";
 import { COACH, makeRadioWithClaude } from "@/lib/claude";
+import { inJapanese } from "@/lib/variant";
 import { vertexAccess, vertexConfigured } from "@/lib/vertex-tts";
 
 // 练一练: a short Duolingo-style round built from what the learner met in 趣味电台: words, key
@@ -46,7 +47,7 @@ const SYSTEM = `${COACH}
 - kind が weak の項目は、学習者が会話で何度も間違えた文法・表現（注に実際の間違いと正しい言い方）。レベルに関わらず fill・judge・order・say から2つ選び、その文法を自分で正しく使わせる。judge では学習者がしがちな誤用の文を出し、explain_zh でなぜ間違いかを一言で。
 - fill・order・say の文は元の文のコピーではなく、学習者の日常や職場（日本在住、IT系）で実際に使う新しい場面の短い文（N3程度）にする。
 - 間違いの選択肢は、ありがちな勘違い（似た語、似た文型、助詞違い、似た意味の中国語）にする。明らかに無関係なものは出さない。
-- 中国語は簡体字。`;
+- 中国語は簡体字。zh・explain_zh、meaning/listen の answer と options は必ず中国語だけで書く（日本語を混ぜると答えが見えてしまう）。日本語の語を引くときは「」に入れる。`;
 
 const prompt = (topic: string | undefined, items: GameItem[]) => `${topic ? `番組のテーマ：${topic}\n` : ""}項目：
 ${items.map((x) => `- [${x.kind}・レベル${x.level}] ${x.ja}${x.note ? `（${x.note}）` : ""}：${x.zh}`).join("\n")}`;
@@ -93,8 +94,13 @@ async function batch(topic: string | undefined, items: GameItem[]): Promise<Batc
   const content = prompt(topic, items);
   const t = Date.now();
   // The model sometimes copies an item with its note; point each question back at the item itself.
+  // A Chinese prompt or choice with Japanese in it gives the answer away; such a question is dropped.
+  const zhOk = (q: Game["questions"][number]) =>
+    !inJapanese(q.explain_zh) &&
+    !inJapanese(q.zh, 2) &&
+    (q.kind !== "meaning" && q.kind !== "listen" ? true : ![q.answer, ...q.options].some((x) => inJapanese(x, 2)));
   const fix = (qs: Game["questions"]) =>
-    qs.map((q) => ({ ...q, about: items.find((x) => q.about === x.ja || q.about.startsWith(x.ja) || q.about.includes(x.ja))?.ja ?? q.about }));
+    qs.filter(zhOk).map((q) => ({ ...q, about: items.find((x) => q.about === x.ja || q.about.startsWith(x.ja) || q.about.includes(x.ja))?.ja ?? q.about }));
   if (vertexConfigured()) {
     try {
       return { questions: fix((await withGemini(content)).questions), by: `gemini ${Date.now() - t}ms` };

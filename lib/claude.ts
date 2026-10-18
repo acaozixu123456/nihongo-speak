@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import * as z from "zod/v4";
 import type { Scenario } from "@/content/scenarios";
-import { variantOk } from "@/lib/variant";
+import { inJapanese, japaneseZh, variantOk } from "@/lib/variant";
 
 // Only the role-play part of a scenario is needed here.
 type Talk = Pick<Scenario, "talk">;
@@ -19,8 +19,20 @@ const ZH_RULE = `
 
 【出力の言語】中国語の項目（名前が zh・_zh・Zh で終わるもの：講評、説明、理由、訳）は、必ず簡体字の中国語で書く。日本語で書いてはいけない。
 日本語の項目（ja、better、reading、kana、例文、言い換え）は日本語のまま。`;
-const parse: typeof client.messages.parse = ((params, options) =>
-  client.messages.parse({ ...params, system: `${params.system ?? ""}${ZH_RULE}` }, options)) as typeof client.messages.parse;
+// …and still writes some of them in Japanese now and then. Such an answer is asked for once more, with
+// the fields named; the second answer is used only if it is better. Long writing (radio scripts,
+// scenarios) isn't asked again: it would not fit in the request's time.
+const parse: typeof client.messages.parse = (async (params: Parameters<typeof client.messages.parse>[0], options?: Parameters<typeof client.messages.parse>[1]) => {
+  const system = `${params.system ?? ""}${ZH_RULE}`;
+  const first = await client.messages.parse({ ...params, system }, options);
+  const bad = params.max_tokens > 4000 ? [] : japaneseZh(first.parsed_output);
+  if (!bad.length) return first;
+  console.warn("Chinese fields in Japanese, asking again:", bad.join(" "));
+  const again = await client.messages
+    .parse({ ...params, system: `${system}\n前回は ${bad.join("、")} を日本語で書いてしまいました。これらは必ず中国語（簡体字）で書くこと。` }, options)
+    .catch(() => null);
+  return again && japaneseZh(again.parsed_output).length < bad.length ? again : first;
+}) as unknown as typeof client.messages.parse;
 
 export type Turn = { role: "user" | "assistant"; text: string };
 
@@ -318,7 +330,10 @@ ${w.examples.map((e) => `- 言った：${e.said} → 正しくは：${e.better}`
   });
   checkStop(res.stop_reason);
   if (!res.parsed_output) throw new Error("AI 返回格式不对，请重试");
-  return res.parsed_output;
+  // The Chinese is the question: one with Japanese in it shows the answer, so it isn't asked.
+  const items = res.parsed_output.items.filter((x) => !inJapanese(x.zh, 2));
+  if (!items.length) throw new Error("AI 返回格式不对，请重试");
+  return { ...res.parsed_output, items };
 }
 
 // ---- Haiku coach: quick feedback on every other kind of speaking ----
@@ -553,23 +568,17 @@ const RetellFixSchema = z.object({
 });
 export type RetellFix = z.infer<typeof RetellFixSchema>;
 
-// Chinese with the Japanese it quotes taken out: a line still full of kana was written in Japanese.
-const inJapanese = (s: string) => (s.replace(/「[^」]*」/g, "").match(/[ぁ-んァ-ヶ]/g)?.length ?? 0) >= 5;
 
 export async function retellFix(a: { topic: string; said: string; known?: string[]; carry?: { focus_zh: string; better: string } }) {
-  // Haiku sometimes writes the tip in Japanese anyway (the learner saw a long Japanese paragraph);
-  // ask again once, then fall back to a plain Chinese line around the corrected words.
-  for (let i = 0; i < 2; i++) {
-    const f = await retellFixOnce(a, i > 0);
-    if (!inJapanese(f.focus_zh) && !inJapanese(f.point.zh)) return f;
-    if (i === 1)
-      return {
-        ...f,
-        focus_zh: f.fix.better ? `下一遍这样说：「${f.fix.better}」` : "下一遍多讲一点细节。",
-        point: { ...f.point, zh: inJapanese(f.point.zh) ? "" : f.point.zh },
-      };
-  }
-  throw new Error("unreachable");
+  // parse() already asks once more when the tip comes back in Japanese; if it still does, fall back to a
+  // plain Chinese line around the corrected words.
+  const f = await retellFixOnce(a, false);
+  if (!inJapanese(f.focus_zh) && !inJapanese(f.point.zh)) return f;
+  return {
+    ...f,
+    focus_zh: f.fix.better ? `下一遍这样说：「${f.fix.better}」` : "下一遍多讲一点细节。",
+    point: { ...f.point, zh: inJapanese(f.point.zh) ? "" : f.point.zh },
+  };
 }
 
 function retellFixOnce(a: { topic: string; said: string; known?: string[]; carry?: { focus_zh: string; better: string } }, again: boolean) {

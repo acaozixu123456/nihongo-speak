@@ -31,7 +31,7 @@ export default function Home() {
       </Link>
     </div>
   );
-  const tag = <p className="tagline">每天 10 分钟，练日语的听和说</p>;
+  const tag = <p className="tagline">每天练一点日语的听和说</p>;
   if (!hydrated) return <main className="page">{top}</main>;
 
   if (finished(r)) {

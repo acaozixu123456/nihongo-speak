@@ -57,10 +57,21 @@ export const THINK_MS = 4000;
 
 const zh = (text: string, pauseMs = 300): Part => ({ voice: ZH, text, pauseMs });
 
-function withIntro(clips: Clip[], intro: string): Clip[] {
+// Chinese narration that quotes Japanese in 「」: the quotes are read by the Japanese voice, so the
+// Chinese voice never reads kana or reads kanji the Chinese way.
+function zhMixed(text: string, pauseMs = 300): Part[] {
+  const parts: Part[] = text
+    .split(/(「[^」]*」)/)
+    .filter((t) => t.replace(/[「」\s]/g, ""))
+    .map((t) => (t.startsWith("「") ? { voice: JA, text: t.slice(1, -1), pauseMs: 150 } : { voice: ZH, text: t, pauseMs: 150 }));
+  if (parts.length) parts[parts.length - 1] = { ...parts[parts.length - 1], pauseMs };
+  return parts;
+}
+
+function withIntro(clips: Clip[], intro: string | Part[]): Clip[] {
   if (!clips.length) return clips;
   const [first, ...rest] = clips;
-  return [{ ...first, parts: [zh(intro, 600), ...first.parts] }, ...rest];
+  return [{ ...first, parts: [...(typeof intro === "string" ? [zh(intro, 600)] : intro), ...first.parts] }, ...rest];
 }
 
 function quickClips(p: Progress, n: number, used: Set<string>): Clip[] {
@@ -124,7 +135,7 @@ function fixClips(p: Progress, r: number): Clip[] {
         ],
       },
     ],
-    `你说错过的句子：${w.tag}。`,
+    [zh("你说错过的句子：", 150), { voice: JA, text: w.tag.replace(/〜/g, ""), pauseMs: 600 }],
   );
 }
 
@@ -157,7 +168,7 @@ function podcastClips(ep: Episode): Clip[] {
     const c = clips[clips.length - 1];
     if (s.kind === "zh") {
       c.sub = s.text;
-      c.parts.push(zh(s.text, 400));
+      c.parts.push(...zhMixed(s.text, 400));
     } else {
       c.show = s.text;
       c.sub = s.zh;

@@ -426,7 +426,7 @@ export default function Retell() {
           </button>
         ) : (
           <button className="today-go retell-go" onClick={begin} disabled={phase === "starting" || !!busy}>
-            {phase === "starting" ? "准备…" : busy ? "…" : round === 0 ? "开始讲" : `讲给${nameOf(listener)}`}
+            {phase === "starting" || busy ? "…" : round === 0 ? "話す" : `${nameOf(listener)}に話す`}
           </button>
         )}
       </div>
@@ -435,10 +435,7 @@ export default function Retell() {
         <p className="muted retell-note">隔一天再讲一遍，记得更牢。只讲一遍，想起多少讲多少，然后再讲今天的。</p>
       )}
       {!warming && round === 0 && !talking && !error && (
-        <p className="muted retell-note">
-          {againTake ? "上次的故事讲完了。现在讲今天的：" : ""}
-          不打分。用上面的开头句起个头，卡住了就说「えっと」接着讲。同一件事讲三遍给三个人，一遍比一遍顺。
-        </p>
+        <p className="muted retell-note">{againTake ? "上次的故事讲完了，现在讲今天的。" : "不打分。卡住了就说「えっと」接着讲。"}</p>
       )}
 
       {round === 1 && !talking && (

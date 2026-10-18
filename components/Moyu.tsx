@@ -231,8 +231,8 @@ export default function Moyu() {
       <Link href="/" className="back">← 今日</Link>
       <header className="page-mast">
         <div>
-          <h1>摸鱼模式</h1>
-          <p className="muted">戴上耳机一直听 · 不用开口 · 锁屏不停</p>
+          <h1>流す</h1>
+          <p className="muted">戴上耳机一直听，锁屏不停</p>
         </div>
       </header>
 
@@ -245,11 +245,7 @@ export default function Moyu() {
             <div className="moyu-show">{now.clip.show}</div>
             {now.clip.sub && <div className="moyu-sub">{now.clip.sub}</div>}
           </>
-        ) : (
-          <p className="moyu-sub">
-            轮着放：趣味电台、心里瞬间说、复习收藏、错句对比、偷听场景对话、今天的播客。每轮约 10 分钟，放完自动换新内容。
-          </p>
-        )}
+        ) : null}
         {phase === "loading" && <p className="moyu-sub">正在准备下一段…</p>}
         {error && <p className="error">{error}</p>}
       </div>
@@ -259,7 +255,7 @@ export default function Moyu() {
           ‹ 再听
         </button>
         <button className="moyu-play" onClick={toggle} disabled={phase === "loading"} aria-label={playing ? "暂停" : "播放"}>
-          {phase === "idle" ? "开始听" : playing ? "❚❚" : "▶"}
+          {phase === "idle" ? "▶" : playing ? "❚❚" : "▶"}
         </button>
         <button className="ghost" onClick={skip} disabled={phase === "idle"} aria-label="跳过">
           跳过 ›
@@ -276,9 +272,6 @@ export default function Moyu() {
 
       <p className="moyu-foot">
         今天听了 {minutes} 分钟{stuck > 0 && ` · 卡住 ${stuck} 句`}
-      </p>
-      <p className="moyu-hint">
-        耳机上「下一首」= 会了，跳过；「上一首」= 再听一遍，这句会记下来，下班后说出来。
       </p>
 
       <audio

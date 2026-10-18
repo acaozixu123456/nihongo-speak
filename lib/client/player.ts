@@ -48,7 +48,7 @@ export function ttsUrl(text: string, voice: string) {
   // so it gets a new address instead of the copy the phone and the CDN kept. yomi=2: that reading
   // often didn't come back, so many such words were still kept read in Chinese. yomi=3: a wrong
   // reading (木炭 as たんざん) could be kept too.
-  const kanjiOnly = voice.startsWith("ja-JP") && !/[\u3040-\u30ff]/.test(text);
+  const kanjiOnly = voice.startsWith("ja-JP") && !/[\u3040-\u30f5\u30f7-\u30fa\u30fd-\u30ff]/.test(text);
   return `/api/tts?${new URLSearchParams({ text, voice, v: "2", ...(kanjiOnly ? { yomi: "3" } : {}) })}`;
 }
 

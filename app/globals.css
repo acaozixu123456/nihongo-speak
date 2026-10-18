@@ -945,7 +945,9 @@ button.entry { width: 100%; background: none; border: 0; border-bottom: 1px soli
 .game-wait { display: flex; align-items: center; gap: 10px; margin-top: 24px; }
 .game-kind { margin-top: 32px; }
 .game-q { margin: 16px 0 24px; min-height: 80px; }
-.game-big { font-size: 22px; line-height: 1.7; }
+.game-big { font-size: 24px; line-height: 1.7; }
+/* The Chinese question: readable, but smaller than the Japanese it asks for. */
+.game-zh { font-size: 17px; line-height: 1.6; }
 .game-q .zh { margin-top: 8px; }
 .game-ear { width: 84px; height: 84px; border-radius: 50%; font-size: 28px; background: var(--accent); border-color: var(--accent); color: #fff; }
 .game-blank { display: inline-block; min-width: 3em; border-bottom: 2px solid var(--accent); text-align: center; color: var(--accent); }
@@ -956,7 +958,7 @@ button.entry { width: 100%; background: none; border: 0; border-bottom: 1px soli
 .game-choice.wrong { border-color: var(--bad); color: var(--bad); opacity: 1; }
 .game-line { min-height: 56px; display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0 12px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
 .game-pool { display: flex; flex-wrap: wrap; gap: 8px; }
-.tile { border-radius: 10px; padding: 9px 13px; font-size: 16px; box-shadow: 0 2px 0 var(--line); }
+.tile { border-radius: 10px; padding: 9px 13px; font-size: 18px; box-shadow: 0 2px 0 var(--line); }
 .game-pool .tile:disabled { opacity: 0.25; }
 .game-line .tile:disabled { opacity: 1; }
 .game-say { display: grid; gap: 10px; }
@@ -995,14 +997,15 @@ button.entry { width: 100%; background: none; border: 0; border-bottom: 1px soli
 .game-choice.right { background: color-mix(in srgb, var(--good) 12%, var(--card)); animation: bump 0.35s; }
 .game-choices.two { grid-template-columns: 1fr 1fr; }
 .game-choices.two .game-choice { text-align: center; padding: 20px 10px; font-size: 18px; }
+.game-choice.jp { font-size: 19px; font-family: var(--ja); }
 .tile.pop { animation: bump 0.2s; }
 .game-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; padding: 18px 20px calc(env(safe-area-inset-bottom) + 18px); border-radius: 22px 22px 0 0; background: var(--card); box-shadow: 0 -8px 30px rgba(0,0,0,0.12); animation: sheet-up 0.28s cubic-bezier(.2,.9,.3,1.2); max-width: 640px; margin: 0 auto; }
 .game-sheet.ok { background: color-mix(in srgb, var(--good) 14%, var(--card)); }
 .game-sheet.no { background: color-mix(in srgb, var(--bad) 12%, var(--card)); }
-.game-sheet b { display: block; font-size: 20px; margin-bottom: 6px; }
+.game-sheet b { display: block; font-size: 15px; margin-bottom: 6px; }
 .game-sheet.ok b { color: var(--good); }
 .game-sheet.no b { color: var(--bad); }
-.game-sheet .ja { font-size: 17px; }
+.game-sheet .ja { font-size: 21px; }
 .game-sheet p { margin: 8px 0 0; font-size: 14px; color: var(--muted); }
 .game-sheet .game-next { margin-top: 14px; }
 @keyframes sheet-up { from { transform: translateY(100%); } }
@@ -1320,12 +1323,12 @@ a.me-card:active, a.tile:active { transform: scale(0.985); }
 @keyframes making-pulse { 50% { opacity: 0.35; } }
 
 /* 三回話す */
-.retell-topic { font-family: var(--serif); font-size: 22px; font-weight: 600; line-height: 1.45; }
+.retell-topic { font-size: 15px; line-height: 1.5; color: var(--muted); }
 .today-big.hurry { color: var(--accent); }
 .retell-keys { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 4px; }
-.retell-keys span { font-family: var(--ja); font-size: 16px; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; }
+.retell-keys span { font-family: var(--ja); font-size: 20px; font-weight: 600; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; }
 .retell-keys small { margin-left: 6px; font-size: 11px; color: var(--muted); }
-.retell-starters { margin: 14px 0 0; font-family: var(--ja); font-size: 15px; line-height: 1.9; color: var(--muted); }
+.retell-starters { margin: 14px 0 0; font-family: var(--ja); font-size: 17px; line-height: 1.9; }
 .retell-focus { display: block; margin-top: 14px; padding: 8px 12px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-ink); font-size: 14px; }
 button.today-go { width: 100%; border: none; cursor: pointer; }
 .retell-stop { background: var(--text); color: var(--bg); }
