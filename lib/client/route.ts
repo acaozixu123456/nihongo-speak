@@ -102,7 +102,12 @@ export function plan(p: Progress, quiet: boolean): Stop[] {
     ...speak,
     { key: "call", ja: "電話", meta: call.who, href: `/call/${call.id}`, min: 3 },
   ];
-  if (!ep) return [rest[0], ...episode, ...rest.slice(1)];
+  // No episode yet: open with something that doesn't need it while it is written, and keep 三回話す
+  // after the song so the story told is the one just heard.
+  if (!ep) {
+    const lead = rest.find((s) => s.key !== "retell")!;
+    return [lead, ...episode, ...rest.filter((s) => s !== lead)];
+  }
   // Tell the story while it is fresh: right after the song, before 復習.
   const retell = rest.filter((s) => s.key === "retell");
   return [...episode, ...retell, ...rest.filter((s) => s.key !== "retell")];
