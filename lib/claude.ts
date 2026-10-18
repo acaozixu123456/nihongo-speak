@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import * as z from "zod/v4";
 import type { Scenario } from "@/content/scenarios";
-import { inJapanese, japaneseZh, variantOk } from "@/lib/variant";
+import { inJapanese, japaneseZh, variantOk, zhIsTranslation } from "@/lib/variant";
 
 // Only the role-play part of a scenario is needed here.
 type Talk = Pick<Scenario, "talk">;
@@ -118,6 +118,7 @@ const FeedbackSchema = z.object({
   fix: z.object({
     you_said: z.string().describe("focus_zh を一番よく表す、学習者が実際に言った日本語。該当がなければ空文字"),
     better: z.string().describe("その場面でより自然な言い方。you_said が空なら空文字"),
+    zh: z.string().describe("better の中国語訳（簡体字）。説明ではなく訳だけ。中国語を見て日本語を言う復習に使う。better が空なら空文字"),
     why_zh: z.string().describe("なぜそう言うのか（中国語、短く）。空ならば空文字"),
   }),
   point: z.object({
@@ -152,7 +153,21 @@ export async function feedback(s: Talk, history: Turn[], known?: string[]) {
   });
   checkStop(res.stop_reason);
   if (!res.parsed_output) throw new Error("AI 返回格式不对，请重试");
-  return res.parsed_output;
+  const f = res.parsed_output;
+  return { ...f, fix: { ...f.fix, zh: await cardZh(f.fix.better, f.fix.zh) } };
+}
+
+// The Chinese a saved sentence is reviewed from. Haiku sometimes writes a note about the mistake
+// instead of a translation; ask once for just the translation, and give up (no card) if that fails too.
+const TranslationSchema = z.object({ zh: z.string().describe("中国語訳（簡体字）。訳だけ。説明・注釈・日本語は書かない") });
+async function cardZh(ja: string, zh: string) {
+  if (!ja || zhIsTranslation(zh)) return ja ? zh : "";
+  try {
+    const t = await haikuFirst(TranslationSchema, "日本語の文を自然な中国語（簡体字）に訳してください。", ja, 300);
+    return zhIsTranslation(t.zh) ? t.zh : "";
+  } catch {
+    return "";
+  }
 }
 
 export type Reply = z.infer<typeof ReplySchema>;
@@ -586,7 +601,8 @@ type FixArgs = { topic: string; said: string; known?: string[]; carry?: { focus_
 export async function retellFix(a: FixArgs) {
   // parse() already asks once more when the tip comes back in Japanese; if it still does, fall back to a
   // plain Chinese line around the corrected words.
-  const f = await retellFixOnce(a, false);
+  const r = await retellFixOnce(a, false);
+  const f = { ...r, stall: { ...r.stall, zh: await cardZh(r.stall.better, r.stall.zh) } };
   if (!inJapanese(f.focus_zh) && !inJapanese(f.point.zh)) return f;
   return {
     ...f,

@@ -629,6 +629,8 @@ button.today-btn:disabled { opacity: 1; }
 button.today-btn:disabled .today-go { opacity: 0.6; }
 .weak-top { display: block; font-family: var(--ja); font-size: 24px; font-weight: 600; line-height: 1.45; margin: 14px 0 8px; }
 .today .weak-ex { display: block; color: var(--muted); }
+.today .weak-better { color: var(--text); font-size: 16px; }
+.weak-why { display: block; font-size: 12px; color: var(--muted); margin-top: 8px; }
 .weak-n { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .steps3 { display: flex; gap: 6px; margin-top: 20px; }
 .steps3 i { flex: 1; border-top: 2px solid var(--line); }

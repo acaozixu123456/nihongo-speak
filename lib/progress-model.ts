@@ -1,5 +1,6 @@
 import type { Scenario } from "@/content/scenarios";
 import type { Radio } from "@/lib/radio";
+import { zhIsTranslation } from "@/lib/variant";
 
 // The learner's progress. Shared by the browser (which keeps it in localStorage)
 // and the server (which keeps a synced copy for backup and reminders).
@@ -273,8 +274,8 @@ export function merge(a: Progress, b: Progress): Progress {
   const cards = new Map<string, Card>();
   for (const c of [...a.cards, ...b.cards]) {
     const prev = cards.get(c.id);
-    // The copy reviewed more recently has the later due date.
-    if (!prev || c.due > prev.due) cards.set(c.id, c);
+    // The copy reviewed more recently has the later due date; on a tie, the one whose Chinese was repaired.
+    if (!prev || c.due > prev.due || (c.due === prev.due && zhIsTranslation(c.zh) && !zhIsTranslation(prev.zh))) cards.set(c.id, c);
   }
   // A card saved again after being removed lives in the newer copy's list.
   const live = [...cards.values()].filter((c) => !removedCards.includes(c.id) || newer.cards.some((n) => n.id === c.id));

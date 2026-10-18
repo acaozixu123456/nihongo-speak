@@ -446,7 +446,7 @@ export default function Retell() {
         if (st && f.stall.better) {
           // The words that were missing: kept for 瞬間 (say it fast from the Chinese) and the review.
           setStall(st);
-          if (!hasCard(p, f.stall.better)) toggleCard({ ja: f.stall.better, zh: f.stall.zh || f.focus_zh, voice: RADIO_VOICE.A, scenarioId: "retell" });
+          if (f.stall.zh && !hasCard(p, f.stall.better)) toggleCard({ ja: f.stall.better, zh: f.stall.zh, voice: RADIO_VOICE.A, scenarioId: "retell" });
         } else {
           const pt = pointOf(f);
           if (pt && pt.tag !== carry?.tag) recordPoints([{ tag: pt.tag, zh: pt.zh, ok: false }], [pt]);
@@ -613,6 +613,10 @@ export default function Retell() {
   const focus = stall && fix?.stall.better ? `卡住的地方这样说：「${fix.stall.better}」` : fix?.focus_zh;
   const talking = phase === "talk";
   const shownT = shownTopic!;
+  // The props come off one at a time: keys and starters for the first telling, keys for the second,
+  // nothing but the one point for the third.
+  const showKeys = warming || round < 2;
+  const showStarters = warming || round === 0;
 
   return (
     <main className="page">
@@ -631,7 +635,7 @@ export default function Retell() {
           )}
           {talking && <span className={`today-big ${left < 10 ? "hurry" : ""}`}>{clock(left)}</span>}
         </span>
-        {shownT.keys.length > 0 && (
+        {showKeys && shownT.keys.length > 0 && (
           <div className="retell-keys">
             {shownT.keys.map((k) => (
               <span key={k.ja}>
@@ -641,11 +645,13 @@ export default function Retell() {
             ))}
           </div>
         )}
-        <div className="retell-starters">
-          {shownT.starters.map((s) => (
-            <div key={s}>{s}</div>
-          ))}
-        </div>
+        {showStarters && (
+          <div className="retell-starters">
+            {shownT.starters.map((s) => (
+              <div key={s}>{s}</div>
+            ))}
+          </div>
+        )}
         {!warming && round === 0 && carry && <span className="retell-focus">这次留意：{carry.focus_zh}</span>}
         {/* Under the card while the fix is being read; inside it only while telling, so it shows once. */}
         {round > 0 && focus && (talking || round === 2) && <span className="retell-focus">只注意：{focus}</span>}
