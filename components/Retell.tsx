@@ -742,7 +742,7 @@ export default function Retell() {
           ) : null}
         </div>
       )}
-      {round === 2 && !talking && <p className="muted retell-note">最后一遍，时间短一点，挑最想说的讲。</p>}
+      {round === 2 && !talking && !busy && <p className="muted retell-note">最后一遍，时间短一点，挑最想说的讲。</p>}
       {error && <p className="error">{error}</p>}
     </main>
   );
