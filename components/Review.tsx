@@ -286,7 +286,7 @@ export default function Review() {
             <div className="row" style={{ flexWrap: "nowrap" }}>
               <button onClick={() => setRevealed(true)} disabled={busy}>答え</button>
               <div style={{ flex: 1 }}>
-                <HoldButton label={busy ? "…" : "🎙 日本語で"} disabled={busy} onRecorded={onRecorded} onError={setError} />
+                <HoldButton label={busy ? "聞き取り中…" : "🎙 日本語で"} disabled={busy} onRecorded={onRecorded} onError={setError} />
               </div>
             </div>
           </div>

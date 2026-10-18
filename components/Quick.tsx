@@ -511,7 +511,7 @@ export default function Quick({ drill }: { drill?: string }) {
               <button onClick={giveUp} disabled={busy}>答え</button>
               <div style={{ flex: 1 }}>
                 <HoldButton
-                  label={busy ? "…" : "🎙 日本語で"}
+                  label={busy ? "聞き取り中…" : "🎙 日本語で"}
                   disabled={busy}
                   onStart={onStart}
                   onRecorded={onRecorded}

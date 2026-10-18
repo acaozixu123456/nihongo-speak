@@ -108,8 +108,26 @@ let finish: (() => void) | null = null;
 // Bumped by every stop(), so a recording still loading when another tap comes in never starts.
 let turn = 0;
 
+// True while a tapped sound is still being fetched (made on demand, it can take a few seconds),
+// so the page can say so instead of sitting silent. AudioWait in the root layout shows it.
+let waiting = false;
+const waiters = new Set<() => void>();
+function setWaiting(v: boolean) {
+  if (waiting === v) return;
+  waiting = v;
+  waiters.forEach((f) => f());
+}
+export const isWaiting = () => waiting;
+export function onWaiting(f: () => void) {
+  waiters.add(f);
+  return () => {
+    waiters.delete(f);
+  };
+}
+
 export function stop() {
   turn++;
+  setWaiting(false);
   const a = el();
   a.pause();
   finish?.();
@@ -135,7 +153,14 @@ export function play(src: string, playbackRate = rate): Promise<void> {
       a.onended = a.onerror = a.onplaying = null;
       reject(e);
     };
-    load(src).then((url) => {
+    // A recording already kept answers at once; only a real wait is shown.
+    const slow = setTimeout(() => mine === turn && setWaiting(true), 400);
+    const loaded = load(src);
+    loaded.finally(() => {
+      clearTimeout(slow);
+      if (mine === turn) setWaiting(false);
+    }).catch(() => {});
+    loaded.then((url) => {
       if (mine !== turn) return;
       a.onended = done;
       a.onerror = () => fail(new Error("音频加载失败"));

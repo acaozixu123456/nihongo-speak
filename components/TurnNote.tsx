@@ -45,7 +45,7 @@ export default function TurnNote({
       </div>
     );
   }
-  if (!data) return <div className="turn-note muted judge-wait">…</div>;
+  if (!data) return <div className="turn-note muted judge-wait">点评中…</div>;
   if (data.verdict === "good") return <div className="turn-note good">✓ {data.why_zh}</div>;
   return (
     <div className={`turn-note ${data.verdict === "off" ? "bad" : "warn"}`}>

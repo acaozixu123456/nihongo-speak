@@ -3,6 +3,7 @@ import "./globals.css";
 import Boot from "@/components/Boot";
 import RouteBar from "@/components/RouteBar";
 import AskAi from "@/components/AskAi";
+import AudioWait from "@/components/AudioWait";
 
 export const metadata: Metadata = {
   title: "日语听说练习",
@@ -36,6 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {children}
         <RouteBar />
         <AskAi />
+        <AudioWait />
         <Boot />
       </body>
     </html>
