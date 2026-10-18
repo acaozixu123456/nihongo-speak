@@ -432,12 +432,12 @@ ${before.map((t) => `${t.role === "user" ? "学習者" : "相手"}：${t.text}`)
 
 // 复习: a fresh sentence built on the same pattern, so a card isn't memorised as one fixed string.
 const VariantSchema = z.object({
-  zh: z
-    .string()
-    .describe("ja をそのまま中国語に訳した文（1文、40字以内）。学習者はこれを見て日本語で言う。出題の説明・指示・文法の解説・「翻訳して」などは絶対に書かない"),
   ja: z
     .string()
     .describe("元の文と同じ文法・表現を使い、内容や場面を少し変えた自然な日本語の1文。元の文が短い一言でも、何について言うのかが分かる具体的な文にする（40字以内）"),
+  zh: z
+    .string()
+    .describe("上の ja を一語も省かずそのまま中国語に訳した文（1文、40字以内）。ja の内容（誰が・何を・どうした）が全部入っていること。学習者はこれを見て日本語で言う。出題の説明・指示・文法の解説・「翻訳して」などは絶対に書かない"),
   reading: z.string().describe("ja の全文をひらがなで"),
   pattern_zh: z.string().describe("元の文と共通する文法・表現（中国語、短く）"),
 });
