@@ -405,7 +405,7 @@ export default function Retell() {
             {shownT.keys.map((k) => (
               <span key={k.ja}>
                 {k.ja}
-                {k.kana && k.kana !== k.ja && <small>{k.kana}</small>}
+                {k.kana && /[一-龯々]/.test(k.ja) && <small>{k.kana}</small>}
               </span>
             ))}
           </div>
@@ -416,7 +416,8 @@ export default function Retell() {
           ))}
         </div>
         {!warming && round === 0 && carry && <span className="retell-focus">上次没改过来，这次只注意：{carry.focus_zh}</span>}
-        {round > 0 && fix?.focus_zh && (shown || talking || !fix.fix.better) && <span className="retell-focus">只注意：{fix.focus_zh}</span>}
+        {/* Under the card while the fix is being read; inside it only while telling, so it shows once. */}
+        {round > 0 && fix?.focus_zh && (talking || round === 2) && <span className="retell-focus">只注意：{fix.focus_zh}</span>}
         {talking ? (
           <button className="today-go retell-stop" onClick={finish}>
             <span className="rec-dot" /> 说完了
