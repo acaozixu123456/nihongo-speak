@@ -155,7 +155,7 @@ export default function Review() {
         <Link href="/" className="back">← 今日</Link>
         <header className="page-mast">
           <div>
-            <h1>复习</h1>
+            <h1>復習</h1>
             <p className="muted">按 1、3、7、14 天的间隔再说一遍</p>
           </div>
         </header>
@@ -176,7 +176,7 @@ export default function Review() {
         <Link href="/" className="back">← 今日</Link>
         <header className="page-mast">
           <div>
-            <h1>复习</h1>
+            <h1>復習</h1>
             <p className="muted">按 1、3、7、14 天的间隔再说一遍</p>
           </div>
         </header>
@@ -186,7 +186,7 @@ export default function Review() {
               <div className="score-big">{due.length}</div>
               <p>句今天该复习了</p>
               <p className="muted">看中文，用日语说出来，再对照答案。</p>
-              <button className="primary next-cta" onClick={begin}>开始</button>
+              <button className="primary next-cta" onClick={begin}>始める</button>
             </>
           ) : (
             <>
@@ -206,7 +206,7 @@ export default function Review() {
         <Link href="/" className="back">← 今日</Link>
         <header className="page-mast">
           <div>
-            <h1>复习</h1>
+            <h1>復習</h1>
             <p className="muted">按 1、3、7、14 天的间隔再说一遍</p>
           </div>
         </header>
@@ -218,7 +218,7 @@ export default function Review() {
               <Link href="/weak">看 AI 找出的薄弱点 →</Link>
             </p>
           )}
-          <Link href="/" className="btn primary next-cta" style={{ display: "block" }}>回到今日 →</Link>
+          <Link href="/" className="btn primary next-cta" style={{ display: "block" }}>今日へ</Link>
         </div>
       </main>
     );

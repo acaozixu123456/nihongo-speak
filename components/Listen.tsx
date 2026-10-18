@@ -106,9 +106,9 @@ export default function Listen({ scenario, active, onNext }: { scenario: Scenari
         </div>
         <div className="row" style={{ marginTop: 10 }}>
           {current === null ? (
-            <button className="primary" onClick={() => playFrom(0, false)}>整段播放</button>
+            <button className="primary" onClick={() => playFrom(0, false)}>通して聞く</button>
           ) : (
-            <button onClick={halt}>■ 停止</button>
+            <button onClick={halt}>■ 止める</button>
           )}
         </div>
         {error && <p className="error">{error}</p>}
@@ -120,7 +120,7 @@ export default function Listen({ scenario, active, onNext }: { scenario: Scenari
           <p className="muted" style={{ margin: "4px 0 0" }}>
             听不出的句子点开再听几遍。觉得差不多了，就开口跟着说。
           </p>
-          <button className="primary next-cta" onClick={onNext}>去跟读 →</button>
+          <button className="primary next-cta" onClick={onNext}>まねる →</button>
         </div>
       )}
 
@@ -137,7 +137,7 @@ export default function Listen({ scenario, active, onNext }: { scenario: Scenari
                   toggleReveal(i);
                 }}
               >
-                {revealed.has(i) ? "隐藏" : "看字"}
+                {revealed.has(i) ? "隠す" : "見る"}
               </button>
             </div>
             <div className={`ja ${visible ? "" : "hidden-text"}`}>{line.ja}</div>

@@ -131,7 +131,7 @@ export default function Shadow({ scenario, active, onNext }: Props) {
           </p>
         )}
         {scored.length >= target && (
-          <button className="primary next-cta" onClick={onNext}>跟读完成，去和 AI 对话 →</button>
+          <button className="primary next-cta" onClick={onNext}>会話へ →</button>
         )}
       </div>
 
@@ -169,7 +169,7 @@ export default function Shadow({ scenario, active, onNext }: Props) {
         <div className="kana">{line.kana}</div>
         {showZh && <div className="zh">{line.zh}</div>}
         <div className="row" style={{ marginTop: 10 }}>
-          <button className="primary" onClick={listen}>听原声</button>
+          <button className="primary" onClick={listen}>お手本を聞く</button>
           {attempt && (
             <button
               onClick={() => {

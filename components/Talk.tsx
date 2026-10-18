@@ -188,7 +188,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
             <div className="ja">{m.text}</div>
             {shownZh.has(i) && <div className="zh">{m.zh}</div>}
             <div className="row" style={{ marginTop: 6 }}>
-              <button className="small" onClick={() => { unlock(); say(m.text); }}>再听</button>
+              <button className="small" onClick={() => { unlock(); say(m.text); }}>もう一度</button>
               <button className="small" onClick={() => toggleZh(i)}>{shownZh.has(i) ? "隐藏中文" : "中文"}</button>
               {m.zh && <Star {...card} ja={m.text} zh={m.zh} />}
             </div>
@@ -229,7 +229,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
             <div key={i} style={{ marginTop: 10 }}>
               <div className="ja">{s.ja}</div>
               <div className="zh">{s.zh}</div>
-              <button className="small" onClick={() => { unlock(); say(s.ja); }}>听一下</button>
+              <button className="small" onClick={() => { unlock(); say(s.ja); }}>聞く</button>
             </div>
           ))}
         </div>
@@ -238,7 +238,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
       {busy === "feedback" && <p className="muted">正在点评…</p>}
       {feedback && (
         <FeedbackCard feedback={feedback} voice={talk.aiVoice} scenarioId={scenario.id}>
-          <Link href="/scenes" className="btn primary" style={{ flex: 1 }}>回到场景 →</Link>
+          <Link href="/scenes" className="btn primary" style={{ flex: 1 }}>場面へ</Link>
           <button onClick={start}>再来一次</button>
         </FeedbackCard>
       )}
@@ -262,7 +262,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
                 }}
               >
                 <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="用日语输入" />
-                <button className="primary" type="submit" disabled={!!busy}>发送</button>
+                <button className="primary" type="submit" disabled={!!busy}>送る</button>
                 <button type="button" onClick={() => setTyping(false)}>语音</button>
               </form>
             ) : (

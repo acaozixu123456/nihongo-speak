@@ -286,7 +286,7 @@ export default function Quick({ drill }: { drill?: string }) {
         </div>
         <header className="page-mast">
           <div>
-            <h1>弱点强化</h1>
+            <h1>苦手</h1>
             <p className="muted">针对一个薄弱点的瞬间说</p>
           </div>
         </header>
@@ -324,7 +324,7 @@ export default function Quick({ drill }: { drill?: string }) {
             )}
             {error && (
               <p className="error">
-                {error} <button className="small" onClick={makeDrill}>重试</button>
+                {error} <button className="small" onClick={makeDrill}>もう一回</button>
               </p>
             )}
           </div>
@@ -438,13 +438,13 @@ export default function Quick({ drill }: { drill?: string }) {
         </div>
         {drill ? (
           <>
-            <button className="primary next-cta" onClick={() => begin()}>这个点再练一轮</button>
+            <button className="primary next-cta" onClick={() => begin()}>もう一組</button>
             <p style={{ textAlign: "center" }}>
               <Link href="/weak">回薄弱点 →</Link>
             </p>
           </>
         ) : (
-          <button className="primary next-cta" onClick={() => begin()}>再来一轮</button>
+          <button className="primary next-cta" onClick={() => begin()}>もう一組</button>
         )}
         <p style={{ textAlign: "center" }}>
           <Link href="/" className="muted">回到今日</Link>

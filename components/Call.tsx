@@ -354,10 +354,10 @@ export default function Call({ call, round }: { call: CallDef; round?: RoundProp
             round.round < round.total ? (
               <button className="primary next-cta" onClick={round.onNext}>第 {round.round + 1} 遍{round.next ? ` · ${round.next}` : ""}</button>
             ) : (
-              <button className="primary next-cta" onClick={round.onNext}>演完了</button>
+              <button className="primary next-cta" onClick={round.onNext}>終わり</button>
             )
           ) : (
-            <button className="primary next-cta" onClick={pickUp}>再打一次</button>
+            <button className="primary next-cta" onClick={pickUp}>もう一度かける</button>
           )}
         </>
       )}

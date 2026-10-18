@@ -77,7 +77,7 @@ export default function NewScenario(props: { topic?: string; category?: "work" |
       <Link href="/scenes" className="back">← 場面</Link>
       <header className="page-mast">
         <div>
-          <h1>重来一次</h1>
+          <h1>やり直し</h1>
           <p className="muted">把今天没说出来的话，变成场景再练一次</p>
         </div>
       </header>
@@ -99,11 +99,11 @@ export default function NewScenario(props: { topic?: string; category?: "work" |
           <div className="photo-pick">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={photo} alt="照片" />
-            <button className="small" onClick={() => setPhoto(null)}>不用这张</button>
+            <button className="small" onClick={() => setPhoto(null)}>外す</button>
           </div>
         ) : (
           <button style={{ width: "100%", marginTop: 10 }} onClick={() => file.current?.click()}>
-            拍照或选一张截图
+            写真を選ぶ
           </button>
         )}
         <div className="suggest">
@@ -114,7 +114,7 @@ export default function NewScenario(props: { topic?: string; category?: "work" |
           ))}
         </div>
         <button className="primary next-cta" onClick={generate} disabled={(!topic.trim() && !photo) || busy}>
-          {busy ? "AI 正在还原现场，大约半分钟…" : "还原现场，重来一次"}
+          {busy ? "AI 正在还原现场，大约半分钟…" : "やり直す"}
         </button>
         {error && <p className="error">{error}</p>}
       </div>

@@ -278,7 +278,7 @@ export default function Game({ id }: { id: string }) {
     return (
       <main className="page">
         {back}
-        <h1 className="ep-head">练一练</h1>
+        <h1 className="ep-head">練習</h1>
         <p className="muted game-wait">
           <span className="spin" /> AI 正在出题…
         </p>
@@ -292,7 +292,7 @@ export default function Game({ id }: { id: string }) {
     return (
       <main className="page">
         {back}
-        <h1 className="ep-head">今天没有要复习的</h1>
+        <h1 className="ep-head">今日の練習はなし</h1>
         <p className="muted">听完一期、练一练之后，学过的内容会按记忆曲线回到这里；说话时常错的点也会混进来。</p>
       </main>
     );
@@ -574,7 +574,7 @@ function Question({ q, again, onAnswer, onDone }: { q: Q; again: boolean; onAnsw
           {heard !== null && heard && <p className="muted">听到：{heard}</p>}
           <HoldButton label={busy ? "识别中…" : "点一下说话"} disabled={busy} onRecorded={onRecorded} onError={setError} />
           <button className="small ghost" onClick={() => decide(false, true, true)}>
-            不会，看答案
+            わからない・答えを見る
           </button>
         </div>
       )}
@@ -583,10 +583,10 @@ function Question({ q, again, onAnswer, onDone }: { q: Q; again: boolean; onAnsw
       {verdict === null && q.kind !== "say" && q.kind !== "match" && (
         <>
           <button className="btn primary game-next" disabled={choice ? !chosen : !built.length} onClick={check}>
-            检查
+            確認
           </button>
           <button className="small ghost game-unsure" onClick={() => decide(false, true, true)}>
-            {q.kind === "listen" || q.kind === "dictate" ? "没听清 / 不确定，看答案" : "不确定，看答案"}
+            {q.kind === "listen" || q.kind === "dictate" ? "聞き取れない・答えを見る" : "わからない・答えを見る"}
           </button>
         </>
       )}
