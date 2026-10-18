@@ -15,22 +15,38 @@ export type Heard = { runs: HeardRun[]; reaction: string };
 
 const MODEL = "gemini-3.8-flash";
 // Pieces written down at once; a telling has up to a few dozen.
-const PARALLEL = 8;
+const PARALLEL = 16;
+// Writing down what was heard needs no thinking; with the model's default it took ~8s a piece.
+// Dropped (and not asked for again) if this model turns the setting away.
+let thinking: object | null = { thinkingLevel: "minimal" };
 
 type Reply = { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[] };
 
 async function ask<T>(parts: object[], schema: object, timeoutMs: number): Promise<T> {
   const { project, token } = await vertexAccess();
   const url = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/${MODEL}:generateContent`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts }],
-      generationConfig: { temperature: 0, maxOutputTokens: 4096, responseMimeType: "application/json", responseSchema: schema },
-    }),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  const send = (t: object | null) =>
+    fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts }],
+        generationConfig: {
+          temperature: 0,
+          maxOutputTokens: 4096,
+          responseMimeType: "application/json",
+          responseSchema: schema,
+          ...(t && { thinkingConfig: t }),
+        },
+      }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  let res = await send(thinking);
+  if (res.status === 400 && thinking) {
+    console.warn(`Gemini hear: thinking setting refused: ${(await res.text()).slice(0, 200)}`);
+    thinking = null;
+    res = await send(null);
+  }
   if (!res.ok) throw new Error(`Gemini hear ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const reply = (await res.json()) as Reply;
   const out = (reply.candidates?.[0]?.content?.parts ?? [])
