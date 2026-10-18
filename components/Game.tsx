@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { Game as GameData } from "@/lib/game";
-import { bare, closeness, confetti, sfx } from "@/lib/client/fx";
+import { bare, closeness, confetti, sfx, verdict as judged } from "@/lib/client/fx";
 import { play, preload, ttsUrl, unlock } from "@/lib/client/player";
 import {
   dueSkills,
@@ -354,12 +354,12 @@ export default function Game({ id }: { id: string }) {
           <div style={{ width: `${(Math.min(done, total) / total) * 100}%` }} />
         </div>
         <span className={`game-combo ${combo >= 2 ? "on" : ""}`} key={combo}>
-          {combo >= 2 ? `${combo} 连对` : ""}
+          {combo >= 2 ? `${combo} 連` : ""}
         </span>
       </div>
       {cheer && (
         <div className="game-cheer" key={cheer.key}>
-          {cheer.n} 连对！
+          {cheer.n} 連続！
         </div>
       )}
       <Question
@@ -459,8 +459,8 @@ function Question({ q, again, onAnswer, onDone }: { q: Q; again: boolean; onAnsw
   function decide(ok: boolean, sayAfter = true, soft = false) {
     setVerdict(ok);
     setUnsure(soft);
-    if (!soft) sfx(ok ? "right" : "wrong");
-    if (!ok && !soft) navigator.vibrate?.(120);
+    // The same ピンポン, haptics and day-long run as every other practice page; the round cheers its own run.
+    judged(ok ? "right" : "wrong", soft, false);
     onAnswer(ok);
     if (sayAfter) setTimeout(() => say(spoken(q)), 550);
   }

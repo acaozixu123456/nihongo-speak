@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Scenario } from "@/content/scenarios";
 import { play, setRate, ttsUrl, unlock } from "@/lib/client/player";
 import { transcribe, type SttResult } from "@/lib/client/recorder";
 import { hasCard, recordShadow, recordSpeech, shadowTarget, toggleCard, useProgress, wavSeconds } from "@/lib/client/progress";
 import HoldButton from "./HoldButton";
+import { sfx, verdict } from "@/lib/client/fx";
 import ShadowCoach from "./ShadowCoach";
 import { RatePicker } from "./Listen";
 
@@ -13,6 +14,43 @@ type Attempt = { wavUrl: string; result: SttResult };
 
 function tone(score: number) {
   return score >= 80 ? "good" : score >= 60 ? "warn" : "bad";
+}
+
+// The score rolls up from 0 with a soft tick, then the verdict lands: ◯ 合格 at 80, △ at 60.
+function Score({ value, best }: { value: number; best?: number }) {
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      setShown(value);
+      verdict(value >= 80 ? "right" : value >= 60 ? "close" : "wrong");
+      return;
+    }
+    const start = performance.now();
+    const ms = 700;
+    let last = 0;
+    let raf = 0;
+    const step = (t: number) => {
+      const k = Math.min(1, (t - start) / ms);
+      const v = Math.round(value * (1 - (1 - k) ** 3));
+      setShown(v);
+      if (v - last >= 8) {
+        last = v;
+        sfx("tick");
+      }
+      if (k < 1) raf = requestAnimationFrame(step);
+      else verdict(value >= 80 ? "right" : value >= 60 ? "close" : "wrong");
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+  const done = shown === value;
+  return (
+    <div className="sscore">
+      <b className={tone(value)}>{shown}</b>
+      {done && value >= 80 && <span className="vstamp right sstamp">合格</span>}
+      {done && best !== undefined && value > best && <span className="sbest">+{value - best} 自己ベスト</span>}
+    </div>
+  );
 }
 
 type Props = { scenario: Scenario; active: boolean; onNext: () => void };
@@ -26,6 +64,7 @@ export default function Shadow({ scenario, active, onNext }: Props) {
   const progress = useProgress();
   const best = progress.scenarios[scenario.id]?.shadow ?? {};
   const [busy, setBusy] = useState(false);
+  const [prevBest, setPrevBest] = useState<number | undefined>(undefined);
   const [error, setError] = useState("");
 
   const line = scenario.lines[index];
@@ -56,6 +95,7 @@ export default function Shadow({ scenario, active, onNext }: Props) {
         if (prev[index]) URL.revokeObjectURL(prev[index].wavUrl);
         return { ...prev, [index]: { wavUrl, result } };
       });
+      setPrevBest(best[index]);
       if (result.scores) {
         const pron = result.scores.pron;
         setPassed(pron >= 80);
@@ -78,9 +118,6 @@ export default function Shadow({ scenario, active, onNext }: Props) {
   return (
     <div>
       <div className="card">
-        <p className="muted" style={{ marginTop: 0 }}>
-          先听原声，再点按钮模仿着说。注意语调的高低和停顿，不只是读对假名。80 分以上算过关。
-        </p>
         <RatePicker
           rate={rate}
           onChange={(r) => {
@@ -120,8 +157,9 @@ export default function Shadow({ scenario, active, onNext }: Props) {
           {scores && scores.words.length > 0
             ? scores.words.map((w, i) => (
                 <span
-                  key={i}
-                  className={`word ${w.errorType !== "None" || w.accuracy < 60 ? "bad" : w.accuracy < 80 ? "warn" : ""}`}
+                  key={`${attempt?.wavUrl}-${i}`}
+                  className={`word reveal ${w.errorType !== "None" || w.accuracy < 60 ? "bad" : w.accuracy < 80 ? "warn" : ""}`}
+                  style={{ animationDelay: `${i * 70}ms` }}
                 >
                   {w.word}
                 </span>
@@ -148,23 +186,14 @@ export default function Shadow({ scenario, active, onNext }: Props) {
 
       {attempt && (
         <div className="card">
-          {scores ? (
+          {scores && (
             <>
-              <div className="score">
-                <b key={attempt.wavUrl} className={tone(scores.pron)}>{scores.pron}</b>
-                <span>发音 · 流畅 {scores.fluency} · 完整 {scores.completeness}</span>
-              </div>
-              <p className="muted" style={{ marginBottom: 0 }}>
-                {passed
-                  ? "过关！可以去下一句了。"
-                  : "上面句子里标红的词发音偏差较大，标黄的可以再练练。先听原声再试一次。"}
-              </p>
+              <Score key={attempt.wavUrl} value={scores.pron} best={prevBest} />
               {passed && index < scenario.lines.length - 1 && (
-                <button className="primary next-cta" onClick={() => go(1)}>下一句 →</button>
+                <button className="primary next-cta" onClick={() => go(1)}>次へ →</button>
               )}
             </>
-          ) : null}
-          <p className="muted" style={{ marginBottom: 0 }}>识别结果：{attempt.result.text}</p>
+          )}
           <ShadowCoach ja={line.ja} kana={line.kana} result={attempt.result} />
         </div>
       )}
