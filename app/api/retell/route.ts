@@ -5,7 +5,7 @@ import { hearRuns } from "@/lib/gemini-hear";
 export const maxDuration = 60;
 
 type Body =
-  | { kind: "hear"; clips: string[]; listener: string; topic: string }
+  | { kind: "hear"; clips: string[]; listener: string; topic: string; lite?: boolean }
   | { kind: "fix"; topic: string; said: string; known?: string[]; carry?: { focus_zh: string; better: string }; stall?: { before: string; after: string; secs: number } }
   | { kind: "uptake"; natural: string[]; said: string }
   | { kind: "end"; topic: string; first: string; last: string; focus?: string }
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "录音不对" }, { status: 400 });
     }
     try {
-      return NextResponse.json(await hearRuns({ clips, listener: String(b.listener ?? ""), topic: String(b.topic ?? "").slice(0, 200) }));
+      return NextResponse.json(await hearRuns({ clips, listener: String(b.listener ?? ""), topic: String(b.topic ?? "").slice(0, 200), ...(b.lite === true && { model: "gemini-3.8-flash-lite" }) }));
     } catch (e) {
       console.error(e);
       return NextResponse.json({ error: "Gemini 没听清" }, { status: 502 });

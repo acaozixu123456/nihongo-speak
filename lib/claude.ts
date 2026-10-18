@@ -659,6 +659,24 @@ export async function retellUptake(a: { natural: string[]; said: string }) {
   return used.filter((u) => a.natural.some((n) => n.includes(u))).slice(0, 3);
 }
 
+// 三回話す: Gemini writes each piece of a telling down; reading the pieces is text only, and Haiku does
+// it in about half the time Gemini took (3-4s against 7s), while the learner waits.
+const RetellReadSchema = z.object({
+  cut: z.array(z.boolean()).describe("各部分について順に：文の途中で止まっていれば true、文や節の切れ目なら false"),
+  reaction: z.string().describe("聞き手が話を聞き終わってすぐ言う一言（日本語、15〜30字）"),
+});
+
+export async function retellRead(a: { pieces: string[]; topic: string; listener: string }) {
+  return haikuFirst(
+    RetellReadSchema,
+    `日本語学習者がテーマ「${a.topic}」について人に話しました。1秒以上黙ったところで区切った文字起こしです（間違いもそのまま）。
+cut：各部分（${a.pieces.length} 個、順に）について、その部分が文の途中で止まっている（言葉に詰まった、次の部分で同じ文が続く）なら true、文や節の切れ目（〜です。〜ました。〜て、〜けど、〜から、〜ので、〜たら などのあと）で止まったなら false。最後は false。
+reaction：聞き手（${a.listener}）が、話を聞き終わってすぐ言う一言の日本語。学習者がはっきり言った内容に具体的に触れる驚きや感想。15〜30字。質問で終わらない。`,
+    a.pieces.map((t, i) => `【${i + 1}】${t}`).join("\n"),
+    1000,
+  );
+}
+
 // 三回話す's speed is counted in morae, the unit Japanese speech rate is measured in: the transcript
 // writes the same word as 今日 (2 characters) one time and きょう (3) the next, so characters drift.
 const RetellKanaSchema = z.object({ kana: z.string().describe("文字起こし全体の読み。ひらがなとカタカナと「ー」だけで、ひと続きに書く") });
