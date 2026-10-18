@@ -177,9 +177,29 @@ function secondNote(a: Take | null, b: Take, text: string | undefined, better: s
 // One thing said well, in the learner's own words (tap: hear it said by a native voice).
 function Good({ ja, onHear }: { ja: string; onHear: (ja: string) => void }) {
   return (
-    <div className="good-line" onClick={() => onHear(ja)}>
-      <b>✓</b>「{ja}」
-    </div>
+    <button className="good-card" onClick={() => onHear(ja)}>
+      <span className="good-tag">言えた</span>
+      <span className="good-ja">{ja}</span>
+      <Play />
+    </button>
+  );
+}
+
+const Play = () => (
+  <i className="play-dot" aria-hidden>
+    <svg viewBox="0 0 12 12" width="11" height="11">
+      <path d="M3 1.5v9l7.5-4.5z" fill="currentColor" />
+    </svg>
+  </i>
+);
+
+// A Japanese line to hear: the text and a round play button.
+function Say({ ja, big, onHear }: { ja: string; big?: boolean; onHear: (ja: string) => void }) {
+  return (
+    <button className={`say ${big ? "big" : ""}`} onClick={() => onHear(ja)}>
+      <span>{ja}</span>
+      <Play />
+    </button>
   );
 }
 function WaitCard(a: {
@@ -666,13 +686,14 @@ export default function Retell() {
       {round === 2 && !talking && !busy && takes[1] && (
         <div className="retell-fix">
           {said && (
-            <div className="ja">
-              {nameOf(said.who)}：{said.text}
+            <div className="bubble">
+              <span className="bubble-who">{nameOf(said.who)}</span>
+              {said.text}
             </div>
           )}
           {takes[1]?.good && <Good ja={takes[1].good} onHear={hear} />}
           {secondNote(takes[0], takes[1], texts.current[1], stall && fix?.stall.better ? fix.stall.better : fix?.fix.better, !!focus).map((l) => (
-            <p key={l} className="small-text">
+            <p key={l} className="small-text fb-note">
               {l}
             </p>
           ))}
@@ -686,59 +707,68 @@ export default function Retell() {
           ) : busy ? null : fix ? (
             <>
               {carry && carried !== null && (
-                <p className="small-text">
+                <p className="small-text fb-note">
                   {carried === "right" ? "✓ 上次那一点，这次说对了" : carried === "wrong" ? "△ 上次那一点还没改过来，明天再来" : "上次那一点这次没用到，明天接着留意"}
                 </p>
               )}
               {take0?.good && <Good ja={take0.good} onHear={hear} />}
-              <span className="kicker">下一遍只改这一件事</span>
-              {stall && fix.stall.better ? (
-                <>
-                  <div className="ja" onClick={hearStall}>
-                    你在这里卡了 {stall.secs} 秒：{fix.stall.you_said || stall.before}…… ▶
-                  </div>
-                  {!shown ? (
-                    <>
-                      <p className="muted">你想说的是什么？先自己想一想，再点开看。</p>
-                      <button className="retell-reveal" onClick={() => setShown(true)}>
+              <div className="fix-card">
+                <div className="fix-head">
+                  <span className="kicker">次はここだけ</span>
+                  {stall && fix.stall.better && <span className="fix-badge">卡了 {stall.secs} 秒</span>}
+                </div>
+                {stall && fix.stall.better ? (
+                  <>
+                    <span className="fix-label">你说的</span>
+                    <button className="say mine" onClick={hearStall}>
+                      <span>{fix.stall.you_said || stall.before}……</span>
+                      <Play />
+                    </button>
+                    {!shown ? (
+                      <button className="fix-reveal" onClick={() => setShown(true)}>
                         想好了，看答案
                       </button>
-                    </>
-                  ) : (
-                    <>
-                      <div className="ja" onClick={() => hear(fix.stall.better)}>
-                        → {fix.stall.better} ▶
+                    ) : (
+                      <div className="fix-answer">
+                        <span className="fix-label">这样说</span>
+                        <Say ja={fix.stall.better} big onHear={hear} />
+                        {fix.stall.zh && <p className="fix-zh">{fix.stall.zh}</p>}
+                        {fix.stall.around && (
+                          <>
+                            <span className="fix-label">想不起来时，绕着说</span>
+                            <Say ja={fix.stall.around} onHear={hear} />
+                          </>
+                        )}
+                        <span className="fix-saved">✓ 已存入フレーズ帳</span>
                       </div>
-                      {fix.stall.zh && <p className="muted">{fix.stall.zh}</p>}
-                      {fix.stall.around && (
-                        <div onClick={() => hear(fix.stall.around)}>
-                          <p className="muted">想不起那个词时，也可以绕着说：</p>
-                          <div className="ja">{fix.stall.around} ▶</div>
+                    )}
+                  </>
+                ) : fix.fix.better ? (
+                  <>
+                    {fix.fix.you_said && (
+                      <>
+                        <span className="fix-label">你说的</span>
+                        <div className="say mine static">
+                          <span>{fix.fix.you_said}</span>
                         </div>
-                      )}
-                      <p className="muted">已收进フレーズ帳，瞬間里会练到。</p>
-                    </>
-                  )}
-                </>
-              ) : fix.fix.better && !shown ? (
-                <>
-                  {fix.fix.you_said && <div className="ja">你说：{fix.fix.you_said}</div>}
-                  <p className="muted">这句可以说得更好。先自己想一想怎么说，再点开看。</p>
-                  <button className="retell-reveal" onClick={() => setShown(true)}>
-                    想好了，看答案
-                  </button>
-                </>
-              ) : (
-                <>
-                  <p className="focus-one">{fix.focus_zh}</p>
-                  {fix.fix.better && (
-                    <div onClick={() => hear(fix.fix.better)}>
-                      {fix.fix.you_said && <div className="muted">你说：{fix.fix.you_said}</div>}
-                      <div className="ja">→ {fix.fix.better} ▶</div>
-                    </div>
-                  )}
-                </>
-              )}
+                      </>
+                    )}
+                    {!shown ? (
+                      <button className="fix-reveal" onClick={() => setShown(true)}>
+                        想好了，看答案
+                      </button>
+                    ) : (
+                      <div className="fix-answer">
+                        <span className="fix-label">这样说</span>
+                        <Say ja={fix.fix.better} big onHear={hear} />
+                        <p className="fix-zh">{fix.focus_zh}</p>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="fix-zh">{fix.focus_zh}</p>
+                )}
+              </div>
             </>
           ) : take0 ? (
             <p className="muted">讲得不错，内容不用改，再讲一遍给下一个人。</p>
