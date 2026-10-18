@@ -620,6 +620,20 @@ export function retellCarry(p: Progress): RetellPoint | null {
 
 export const retellToday = (p: Progress) => (p.retells ?? []).some((r) => r.date === dayKey());
 
+// What an ordinary first telling looked like lately: the median of the last five earlier days, so one
+// easy or hard story doesn't swing the comparison. Null until there is something to compare with.
+export function retellUsual(p: Progress, of: (r: Retell) => number | undefined): number | null {
+  const xs = (p.retells ?? [])
+    .filter((r) => r.date !== dayKey())
+    .map(of)
+    .filter((x): x is number => typeof x === "number")
+    .slice(-5)
+    .sort((a, b) => a - b);
+  if (!xs.length) return null;
+  const m = xs.length >> 1;
+  return xs.length % 2 ? xs[m] : Math.round(((xs[m - 1] + xs[m]) / 2) * 10) / 10;
+}
+
 // ---- 予行演習 ----
 
 export function saveRehearsal(r: Rehearsal) {

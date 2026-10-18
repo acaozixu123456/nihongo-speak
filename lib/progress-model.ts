@@ -112,16 +112,24 @@ export const MEMORIES_KEPT = 5;
 // 三回話す: one day's telling, as characters per minute for each of the three times. The first time is
 // always a new story, so how it moves across days shows real progress, not just repetition.
 // `next` is the one point still not said right at the end of the day, shown before the next day's first telling.
-export type RetellPoint = { tag: string; zh: string; focus_zh: string; you_said: string; better: string };
+// skips: days in a row the point didn't come up at all; it is dropped from the reminder after a few.
+export type RetellPoint = { tag: string; zh: string; focus_zh: string; you_said: string; better: string; skips?: number };
 // mps: morae per second over the stretch actually spoken; pauses: silences of a second or more inside
-// it, per telling. again: that day's one telling of an earlier day's story first, in the same units.
+// it, per telling; perMin: the same per minute (tellings differ in length); stalls: per minute, only
+// those in the middle of a sentence, the measure that depends least on the story told (Huensch 2023).
+// texts: what was said, word for word; natural: the last telling said naturally, checked the next
+// day. again: that day's one telling of an earlier day's story first, in the same units.
 export type Retell = {
   date: string;
   topic: string;
   cpm: number[];
   mps?: number[];
   pauses?: number[];
-  again?: { topic: string; mps?: number; pauses: number };
+  perMin?: number[];
+  stalls?: number[];
+  texts?: string[];
+  natural?: string[];
+  again?: { topic: string; mps?: number; pauses: number; stalls?: number; uptake?: string[] };
   next?: RetellPoint;
 };
 export const RETELLS_KEPT = 60;

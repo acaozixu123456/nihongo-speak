@@ -550,9 +550,21 @@ ${a.before ? `直前のセリフ：${a.before}\n` : ""}選ばれた部分を含�
 
 // ---- 三回話す: tell today's episode three times, to three people ----
 
-// After the first telling: the one point to fix in the next two, from what the learner actually said.
-// Corrected between the first and second telling only, and on one form, as in Tran & Saito's 4/3/2 + delayed CF.
+// After the first telling: the one thing to work on in the next two, from what the learner actually said.
+// Corrected between the first and second telling only, and on one thing, as in Tran & Saito's 4/3/2 +
+// delayed CF. When the learner got stuck mid-sentence, that is the one thing: the words they were
+// looking for, preferring ones the next story can use too (de Jong & Perfetti), and a way around the
+// word with easy words (communication strategies, Dörnyei 1995).
+const Carried = z
+  .enum(["right", "wrong", "unused"])
+  .describe("注意点を使う場面で正しく言えた：right。間違えた：wrong。使う場面がなかった・避けた：unused（right にしない）。注意点がなければ unused");
 const RetellFixSchema = z.object({
+  stall: z.object({
+    you_said: z.string().describe("詰まる直前に学習者が言った言葉（文字起こしのまま、短く）。詰まった箇所が示されていなければ空文字"),
+    better: z.string().describe("学習者がそこで言おうとしたことの自然な言い方（日本語、1文、N3程度）。次の話でも使える汎用的な言い回しを優先。示されていなければ空文字"),
+    around: z.string().describe("詰まったのが特定の単語なら、その単語を使わず簡単な言葉で言い換えた言い方（日本語）。不要なら空文字"),
+    zh: z.string().describe("better の意味（簡体字の中国語、短く）。示されていなければ空文字"),
+  }),
   fix: z.object({
     you_said: z.string().describe("学習者が実際に言った日本語（その一節だけ）。直すところがなければ空文字"),
     better: z.string().describe("その一節の自然な言い方。you_said が空なら空文字"),
@@ -564,12 +576,14 @@ const RetellFixSchema = z.object({
     tag: z.string().describe("その文法・表現の名前（日本語、短く）。文法の名前で言えなければ、直した言葉そのもの（例：「〜てしまう」「おいしかった」）。you_said が空なら空文字"),
     zh: z.string().describe("その文法・表現が何か（中国語、1文）。tag が空なら空文字"),
   }),
-  carried: z.boolean().describe("前の日から持ち越した注意点が、1回目で正しく使えていれば true。使う場面がなく誤りもなければ true。持ち越しがなければ true"),
+  carried: Carried,
 });
 export type RetellFix = z.infer<typeof RetellFixSchema>;
+export type RetellStall = { before: string; after: string; secs: number };
 
+type FixArgs = { topic: string; said: string; known?: string[]; carry?: { focus_zh: string; better: string }; stall?: RetellStall };
 
-export async function retellFix(a: { topic: string; said: string; known?: string[]; carry?: { focus_zh: string; better: string } }) {
+export async function retellFix(a: FixArgs) {
   // parse() already asks once more when the tip comes back in Japanese; if it still does, fall back to a
   // plain Chinese line around the corrected words.
   const f = await retellFixOnce(a, false);
@@ -581,24 +595,26 @@ export async function retellFix(a: { topic: string; said: string; known?: string
   };
 }
 
-function retellFixOnce(a: { topic: string; said: string; known?: string[]; carry?: { focus_zh: string; better: string } }, again: boolean) {
+function retellFixOnce(a: FixArgs, again: boolean) {
   return haikuFirst(
     RetellFixSchema,
     `${COACH}
 学習者はラジオで聞いた話を、自分の言葉で人に話しています（同じ話をあと2回、別の人に話します）。
-1回目の録音の文字起こしを見て、次の2回で直すべきことを1つだけ選んでください。意味が通じなくなる誤り ＞ 何度も出る誤り ＞ 不自然さ の順。
+1回目の録音の文字起こし（聞こえたとおりの逐語。（…2.1秒…）は1秒以上黙ったところ、（…詰まった 2.1秒…）は文の途中で黙ったところ）を見て：
+- 詰まった箇所が示されていれば、そこで言おうとしたことを stall に書く。
+- 次の2回で直すべきことを1つだけ fix に選ぶ。意味が通じなくなる誤り ＞ 何度も出る誤り ＞ 不自然さ の順。弱点記録にある誤りが今日も出ていれば優先。
 話の中身や長さは評価しない。言い直し・えっと・繰り返しは誤りとして扱わない。
-前の日から持ち越した注意点があれば、それが正しく使えたかも見る。まだ直っていなければ、それを今日の1つに選んでよい。
-focus_zh と point.zh は学習者が画面で読む説明なので、必ず簡体字の中国語で、短く書く。${again ? "\n前回の答えは focus_zh が日本語になっていた。今度は必ず中国語で書くこと。" : ""}${knownLine(a.known)}`,
+前の日から持ち越した注意点があれば、それが正しく使えたかを carried に書く。まだ直っていなければ、それを今日の1つに選んでよい。
+focus_zh・point.zh・stall.zh は学習者が画面で読む説明なので、必ず簡体字の中国語で、短く書く。${again ? "\n前回の答えは focus_zh が日本語になっていた。今度は必ず中国語で書くこと。" : ""}${knownLine(a.known)}`,
     `話のテーマ：${a.topic}
-${a.carry ? `前の日から持ち越した注意点：${a.carry.focus_zh}（正しい形の例：${a.carry.better}）\n` : ""}1回目：${a.said}`,
+${a.carry ? `前の日から持ち越した注意点：${a.carry.focus_zh}（正しい形の例：${a.carry.better}）\n` : ""}${a.stall ? `一番長く詰まった箇所（${a.stall.secs}秒）：「${a.stall.before}」（詰まる）「${a.stall.after}」\n` : ""}1回目：${a.said}`,
   );
 }
 
 // After the third telling: whether the point stuck, and the learner's own story said naturally, to hear
 // as "this is you, a little further on" rather than as a correction.
 const RetellEndSchema = z.object({
-  used: z.boolean().describe("3回目で、指摘した点が正しく使えていれば true。その文法を使う場面がなかった場合も、誤りがなければ true"),
+  used: Carried.describe("3回目で、指摘した点を使う場面で正しく言えた：right。間違えた：wrong。使う場面がなかった・避けた：unused。指摘がなければ unused"),
   praise_zh: z.string().describe("1回目から3回目で良くなった具体的な一点（中国語、1文）。お世辞ではなく、実際の違いを"),
   natural: z
     .array(
@@ -616,12 +632,31 @@ export function retellEnd(a: { topic: string; first: string; last: string; focus
   return haikuFirst(
     RetellEndSchema,
     `${COACH}
-学習者はラジオで聞いた話を、同じ内容で3回、別の人に話しました。1回目と3回目の文字起こしを見てください。`,
+学習者はラジオで聞いた話を、同じ内容で3回、別の人に話しました。1回目と3回目の文字起こし（聞こえたとおりの逐語）を見てください。`,
     `話のテーマ：${a.topic}
 1回目のあとに伝えた注意：${a.focus || "（なし）"}
 1回目：${a.first}
 3回目：${a.last}`,
   );
+}
+
+// The day after: which of yesterday's natural sentences the learner now used when telling the story
+// again. Using a corrected form oneself is what predicts keeping it (Loewen 2005).
+const RetellUptakeSchema = z.object({
+  used: z
+    .array(z.string())
+    .describe("昨日の自然な言い方の中にあって、今日の話で学習者がほぼ同じ形で使った言い回し（自然な言い方からそのまま抜き出す、2〜15字）。話題の名詞だけのものは入れない。なければ空配列"),
+});
+
+export async function retellUptake(a: { natural: string[]; said: string }) {
+  const { used } = await haikuFirst(
+    RetellUptakeSchema,
+    `${COACH}
+学習者は昨日話した話を、今日もう一度話しました。昨日、学習者の話を自然な言い方に直したものを見せています。今日の文字起こしと比べてください。`,
+    `昨日の自然な言い方：\n${a.natural.map((x) => `・${x}`).join("\n")}\n今日：${a.said}`,
+    1000,
+  );
+  return used.filter((u) => a.natural.some((n) => n.includes(u))).slice(0, 3);
 }
 
 // 三回話す's speed is counted in morae, the unit Japanese speech rate is measured in: the transcript
