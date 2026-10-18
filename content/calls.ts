@@ -49,7 +49,10 @@ export type Prime = { tag: string; pattern?: string; better?: string };
 export function primeRule(prime?: Prime | null) {
   if (!prime) return "";
   const form = prime.pattern ? `${prime.tag}（${prime.pattern}）` : prime.tag;
-  return `\n\nさりげない練習（学習者には言わない）：学習者は「${form}」をよく間違える${prime.better ? `（正しい例：${prime.better}）` : ""}。会話の中で、あなた自身がこの形を自然に1〜2回使う（毎回ちがう動詞や言葉で）。使ったすぐ後に、学習者が答えるときも同じ形を使いたくなる質問をする。説明したり、言わせようとしたり、直したりはしない。`;
+  return `\n\n【この会話でのさりげない練習（学習者には言わない）】学習者は「${form}」をよく間違える${prime.better ? `（正しい例：${prime.better}）` : ""}。
+- あなたの次の発話から、この形を自然に使う。1回の発話に1回まで、会話全体で2〜3回。毎回ちがう動詞や言葉で。
+- 使ったら、学習者が答えるときも同じ形を使いたくなる質問をつなげる。
+- 説明したり、言わせようとしたり、直したりはしない。`;
 }
 
 // The call's role-play settings with the character's personality, what they remember, and the point to prime.
