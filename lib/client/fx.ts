@@ -73,6 +73,7 @@ const SOUNDS: Record<string, Note[]> = {
     { f: 1319, at: 0.42, len: 0.5, type: "sine", vol: 0.06 },
   ],
   stamp: [{ f: 140, at: 0, len: 0.18, type: "sine", vol: 0.25, to: 60 }],
+  tick: [{ f: 1800, at: 0, len: 0.025, type: "sine", vol: 0.04 }],
 };
 
 export function sfx(name: keyof typeof SOUNDS) {
@@ -184,14 +185,15 @@ export function buzz(times = 1) {
 
 // Returns today's run after this answer, and whether it just reached a milestone worth a big stamp.
 // quiet: nothing was said (gave up, peeked); the run ends without the buzzer.
-export function verdict(kind: Kind, quiet = false): { streak: number; milestone: boolean } {
+// celebrate: false for pages (练一练) that cheer their own run.
+export function verdict(kind: Kind, quiet = false, celebrate = true): { streak: number; milestone: boolean } {
   const s = readStreak();
   const n = kind === "right" ? s.n + 1 : 0;
   saveStreak({ day: s.day, n, best: Math.max(s.best, n) });
   if (quiet) return { streak: n, milestone: false };
   tone(kind, s.n);
   buzz(kind === "wrong" ? 2 : 1);
-  const milestone = kind === "right" && MILESTONES.includes(n);
+  const milestone = celebrate && kind === "right" && MILESTONES.includes(n);
   if (milestone) {
     setTimeout(() => sfx("combo"), 500);
     confetti(n >= 10 ? 90 : 50);

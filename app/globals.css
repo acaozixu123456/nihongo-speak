@@ -1424,3 +1424,11 @@ button.today-go { width: 100%; border: none; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .vstamp, .vmilestone > div, .flash.v-wrong, .vsheet, .streak { animation: none; }
 }
+/* 跟读: the score rolls up, words colour in left to right, 合格 lands at 80. */
+.sscore { position: relative; display: flex; align-items: baseline; gap: 12px; min-height: 76px; }
+.sscore b { font-family: var(--serif); font-size: 64px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.sscore .sstamp { position: absolute; top: -4px; right: 4px; width: 76px; height: 76px; font-size: 20px; }
+.sbest { font-size: 13px; font-weight: 700; color: var(--ok-ink); }
+.word.reveal { animation: wordin 0.35s both; }
+@keyframes wordin { from { color: var(--faint); background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .word.reveal { animation: none; } }
