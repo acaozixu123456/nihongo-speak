@@ -462,6 +462,9 @@ function Question({ q, again, onAnswer, onDone }: { q: Q; again: boolean; onAnsw
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [verdict, setVerdict] = useState<boolean | null>(null);
+  // unsure: the learner said they don't know rather than guessing. Counts as a miss (it comes back at
+  // the end and the item is rescheduled for tomorrow), but without the buzzer and shake of a wrong pick.
+  const [unsure, setUnsure] = useState(false);
 
   // Questions you hear start by playing.
   useEffect(() => {
@@ -471,10 +474,11 @@ function Question({ q, again, onAnswer, onDone }: { q: Q; again: boolean; onAnsw
   const choice = CHOICE.includes(q.kind) || q.kind === "judge";
   const answerText = TILES.includes(q.kind) ? built.map((i) => q.pool[i]).join("") : "";
 
-  function decide(ok: boolean, sayAfter = true) {
+  function decide(ok: boolean, sayAfter = true, soft = false) {
     setVerdict(ok);
-    sfx(ok ? "right" : "wrong");
-    if (!ok) navigator.vibrate?.(120);
+    setUnsure(soft);
+    if (!soft) sfx(ok ? "right" : "wrong");
+    if (!ok && !soft) navigator.vibrate?.(120);
     onAnswer(ok);
     if (sayAfter) setTimeout(() => say(spoken(q)), 550);
   }
@@ -506,12 +510,12 @@ function Question({ q, again, onAnswer, onDone }: { q: Q; again: boolean; onAnsw
   const fillParts = q.kind === "fill" ? q.ja.split(/＿+|_+/) : [];
 
   return (
-    <div className={`game-card ${verdict === false ? "shake" : ""}`}>
+    <div className={`game-card ${verdict === false && !unsure ? "shake" : ""}`}>
       <div className="kicker game-kind">
         {again ? "再来一次 · " : ""}
         {PROMPT[q.kind]}
       </div>
-      {verdict !== null && <div className={`game-mark ${verdict ? "ok" : "no"}`}>{verdict ? "◯" : "✕"}</div>}
+      {verdict !== null && !unsure && <div className={`game-mark ${verdict ? "ok" : "no"}`}>{verdict ? "◯" : "✕"}</div>}
 
       {q.kind === "match" ? (
         <Match pairs={q.pairs!} onDone={(ok) => decide(ok, false)} />
@@ -587,7 +591,7 @@ function Question({ q, again, onAnswer, onDone }: { q: Q; again: boolean; onAnsw
         <div className="game-say">
           {heard !== null && heard && <p className="muted">听到：{heard}</p>}
           <HoldButton label={busy ? "识别中…" : "点一下说话"} disabled={busy} onRecorded={onRecorded} onError={setError} />
-          <button className="small ghost" onClick={() => decide(false)}>
+          <button className="small ghost" onClick={() => decide(false, true, true)}>
             不会，看答案
           </button>
         </div>
@@ -595,14 +599,19 @@ function Question({ q, again, onAnswer, onDone }: { q: Q; again: boolean; onAnsw
       {error && <p className="error">{error}</p>}
 
       {verdict === null && q.kind !== "say" && q.kind !== "match" && (
-        <button className="btn primary game-next" disabled={choice ? !chosen : !built.length} onClick={check}>
-          检查
-        </button>
+        <>
+          <button className="btn primary game-next" disabled={choice ? !chosen : !built.length} onClick={check}>
+            检查
+          </button>
+          <button className="small ghost game-unsure" onClick={() => decide(false, true, true)}>
+            {q.kind === "listen" || q.kind === "dictate" ? "没听清 / 不确定，看答案" : "不确定，看答案"}
+          </button>
+        </>
       )}
 
       {verdict !== null && (
         <div className={`game-sheet ${verdict ? "ok" : "no"}`}>
-          <b>{verdict ? PRAISE[Math.floor(Math.random() * PRAISE.length)] : "正确答案"}</b>
+          <b>{verdict ? PRAISE[Math.floor(Math.random() * PRAISE.length)] : unsure ? "没关系，记住这个" : "正确答案"}</b>
           {q.kind !== "match" && (
             <div className="ja" onClick={() => say(spoken(q))}>
               {q.kind === "meaning" || q.kind === "listen" ? `${q.ja} = ${q.answer}` : q.kind === "reading" ? `${q.ja}（${q.answer}）` : spoken(q)}

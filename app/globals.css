@@ -1365,3 +1365,4 @@ button.today-go { width: 100%; border: none; cursor: pointer; }
 .rehearse-line .ja { display: block; font-size: 17px; }
 .rehearse-line .zh { display: block; font-size: 13px; color: var(--muted); }
 .link-quiet { display: block; margin: 12px auto 0; background: none; border: none; box-shadow: none; color: var(--muted); font-size: 13px; }
+.game-unsure { display: block; margin: 12px auto 0; }
