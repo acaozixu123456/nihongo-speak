@@ -366,6 +366,7 @@ export default function Game({ id }: { id: string }) {
         key={`${round}-${done}`}
         q={q}
         again={done >= total}
+        from={fromOf(items.current, q, ep?.id)}
         onAnswer={(ok) => {
           if (!ok) return setCombo(0);
           const n = combo + 1;
@@ -438,7 +439,15 @@ function say(ja: string) {
   play(ttsUrl(ja, VOICE)).catch(() => {});
 }
 
-function Question({ q, again, onAnswer, onDone }: { q: Q; again: boolean; onAnswer: (ok: boolean) => void; onDone: (ok: boolean) => void }) {
+// Where a question that isn't from this episode comes from, so an unfamiliar word doesn't look like a mistake.
+function fromOf(items: SkillItem[], q: Q, epId?: string) {
+  const it = q.about ? items.find((x) => skillKey(x.ja) === skillKey(q.about)) : undefined;
+  if (!it) return "";
+  if (it.kind === "weak") return "苦手";
+  return epId && it.ep !== epId ? "前の回" : "";
+}
+
+function Question({ q, again, from, onAnswer, onDone }: { q: Q; again: boolean; from: string; onAnswer: (ok: boolean) => void; onDone: (ok: boolean) => void }) {
   const [chosen, setChosen] = useState<string | null>(null);
   const [built, setBuilt] = useState<number[]>([]);
   const [heard, setHeard] = useState<string | null>(null);
@@ -496,6 +505,7 @@ function Question({ q, again, onAnswer, onDone }: { q: Q; again: boolean; onAnsw
     <div className={`game-card ${verdict === false && !unsure ? "shake" : ""}`}>
       <div className="kicker game-kind">
         {again ? "再来一次 · " : ""}
+        {from ? `${from} · ` : ""}
         {PROMPT[q.kind]}
       </div>
       {verdict !== null && !unsure && <div className={`game-mark ${verdict ? "ok" : "no"}`}>{verdict ? "◯" : "✕"}</div>}

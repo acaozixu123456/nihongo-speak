@@ -92,13 +92,13 @@ export function plan(p: Progress, quiet: boolean): Stop[] {
   // 話す is 三回話す (today's story, three times) once a day; the saved sentences come back as their own
   // short stop when due, and 瞬間 only once the day's telling is done.
   const speak: Stop[] = retellToday(p)
-    ? [cards > 0 ? { key: "review", ja: "話す", meta: `復習 ${cards}文`, href: "/review", min: 3 } : { key: "quick", ja: "話す", meta: `瞬間 ${QUICK_N}問`, href: "/quick", min: 3 }]
+    ? [cards > 0 ? { key: "review", ja: "復習", meta: `${cards}文`, href: "/review", min: 3 } : { key: "quick", ja: "話す", meta: `瞬間 ${QUICK_N}問`, href: "/quick", min: 3 }]
     : [
         { key: "retell", ja: "話す", meta: "三回", href: "/retell", min: 5 },
-        ...(cards > 0 ? [{ key: "review" as const, ja: "文", meta: `${cards}文`, href: "/review", min: 2 }] : []),
+        ...(cards > 0 ? [{ key: "review" as const, ja: "復習", meta: `${cards}文`, href: "/review", min: 2 }] : []),
       ];
   const rest: Stop[] = [
-    ...(skills > 0 ? [{ key: "skills" as const, ja: "復習", meta: `${Math.min(skills, 12)}個`, href: "/practice", min: 3 }] : []),
+    ...(skills > 0 ? [{ key: "skills" as const, ja: "練習", meta: `前の ${Math.min(skills, 12)}問`, href: "/practice", min: 3 }] : []),
     ...speak,
     { key: "call", ja: "電話", meta: call.who, href: `/call/${call.id}`, min: 3 },
   ];
@@ -108,7 +108,7 @@ export function plan(p: Progress, quiet: boolean): Stop[] {
     const lead = rest.find((s) => s.key !== "retell")!;
     return [lead, ...episode, ...rest.filter((s) => s !== lead)];
   }
-  // Tell the story while it is fresh: right after the song, before 復習.
+  // Tell the story while it is fresh: right after the song, before the older 練習.
   const retell = rest.filter((s) => s.key === "retell");
   return [...episode, ...retell, ...rest.filter((s) => s.key !== "retell")];
 }

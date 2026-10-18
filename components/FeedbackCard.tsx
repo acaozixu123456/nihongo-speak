@@ -50,7 +50,7 @@ export default function FeedbackCard({
           <div className="zh">{fix.why_zh}</div>
           <div className="row">
             <button className="small" onClick={() => say(fix.better)}>听一下</button>
-            <Star {...card} ja={fix.better} zh={fix.you_said ? `换个更自然的说法：${fix.you_said}` : fix.why_zh} />
+            {fix.zh && <Star {...card} ja={fix.better} zh={fix.zh} />}
           </div>
         </div>
       )}
