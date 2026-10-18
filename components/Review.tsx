@@ -210,13 +210,20 @@ export default function Review() {
       </div>
 
       <div className="card flash">
-        {scenario && <div className="muted">{scenario.titleZh}</div>}
-        {fromRadio && <div className="muted">趣味电台 · {fromRadio.title_zh}</div>}
-        {ask && ask.ja !== card.ja && (
-          <div className="small-text y">换了个新句子 · 同样考「{ask.pattern}」</div>
+        {/* One grey line of context; the Chinese sentence is the only thing that stands out. */}
+        <div className="meta">
+          {[
+            fromRadio ? `趣味电台 · ${fromRadio.title_zh}` : scenario?.titleZh,
+            ask && ask.ja !== card.ja && ask.pattern ? `新句子 · ${ask.pattern}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </div>
+        {wantVariant && !variant && !variantFailed && !heard ? (
+          <div className="prompt judge-wait muted">出个新句子…</div>
+        ) : (
+          <div className="prompt">{ask?.zh ?? card.zh}</div>
         )}
-        {wantVariant && !variant && !variantFailed && !heard && <div className="small-text judge-wait">AI 正在出一个新句子…</div>}
-        <div className="prompt">{ask?.zh ?? card.zh}</div>
         {revealed ? (
           <>
             <div className="answer">{ask?.ja ?? card.ja}</div>
@@ -245,12 +252,10 @@ export default function Review() {
             <button style={{ marginTop: 12 }} onClick={() => listen(card, ask?.ja)}>听原声</button>
           </>
         ) : (
-          <>
-            <p className="muted">用日语怎么说？点下面的按钮说出来。</p>
-            {ask && ask.ja !== card.ja && (
-              <button className="small" onClick={() => setPlain(true)}>还是考原句</button>
-            )}
-          </>
+          ask &&
+          ask.ja !== card.ja && (
+            <button className="link-btn" onClick={() => setPlain(true)}>换回原句</button>
+          )
         )}
       </div>
       {error && <p className="error">{error}</p>}
