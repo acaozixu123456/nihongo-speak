@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { retellEnd, retellFix, retellKana, retellUptake } from "@/lib/claude";
+import { retellEnd, retellFix, retellKana, retellKeys, retellUptake } from "@/lib/claude";
 import { hearRuns } from "@/lib/gemini-hear";
 
 export const maxDuration = 60;
@@ -9,7 +9,8 @@ type Body =
   | { kind: "fix"; topic: string; said: string; known?: string[]; carry?: { focus_zh: string; better: string }; stall?: { before: string; after: string; secs: number } }
   | { kind: "uptake"; natural: string[]; said: string }
   | { kind: "end"; topic: string; first: string; last: string; focus?: string }
-  | { kind: "kana"; texts: string[] };
+  | { kind: "kana"; texts: string[] }
+  | { kind: "keys"; topic: string; keys: { ja: string; kana?: string }[]; pool?: { ja: string; kana?: string }[]; said: string[] };
 
 const text = (s: unknown, n: number): s is string => typeof s === "string" && s.trim().length > 0 && s.length <= n;
 
@@ -65,6 +66,16 @@ export async function POST(request: Request) {
           ? { before: st.before.slice(-80), after: st.after.slice(0, 80), secs: Math.round(st.secs * 10) / 10 }
           : undefined;
       return NextResponse.json(await retellFix({ topic: b.topic, said: b.said, known, carry, stall }));
+    }
+    if (b.kind === "keys") {
+      const words = (x: unknown, n: number) =>
+        (Array.isArray(x) ? x : [])
+          .filter((k): k is { ja: string; kana?: string } => !!k && text(k.ja, 30))
+          .slice(0, n)
+          .map((k) => ({ ja: k.ja, kana: typeof k.kana === "string" ? k.kana.slice(0, 40) : undefined }));
+      const said = Array.isArray(b.said) ? b.said.filter((t) => text(t, 3000)).slice(0, 3) : [];
+      if (!said.length) return NextResponse.json({ error: "没有听到内容" }, { status: 400 });
+      return NextResponse.json(await retellKeys({ topic: b.topic, keys: words(b.keys, 3), pool: words(b.pool, 15), said }));
     }
     if (b.kind === "end") {
       if (!text(b.first, 3000) || !text(b.last, 3000)) return NextResponse.json({ error: "没有听到内容" }, { status: 400 });

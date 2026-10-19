@@ -601,11 +601,6 @@ const RetellFixSchema = z.object({
     zh: z.string().describe("その文法・表現が何か（中国語、1文）。tag が空なら空文字"),
   }),
   carried: Carried,
-  hints: z
-    .array(z.string().describe("ヒント（日本語、12字以内）。そこで出てこなかった語（例：「くぼみ」）か、その部分の言い出し（例：「だから真ん中を…」）だけ。完全な文にしない"))
-    .describe(
-      "2回目に話すとき、3秒黙ったときだけ画面に出すヒント。1回目で詰まった箇所（…詰まった…）や、本題にあったのに言えずに飛ばした・言いよどんだ部分から、2回目も詰まりそうな所を話の順に最大3個。1回目で詰まらず話せていれば空配列",
-    ),
 });
 export type RetellFix = z.infer<typeof RetellFixSchema>;
 export type RetellStall = { before: string; after: string; secs: number };
@@ -632,7 +627,6 @@ function retellFixOnce(a: FixArgs, again: boolean) {
 学習者はラジオで聞いた話を、自分の言葉で人に話しています（同じ話をあと2回、別の人に話します）。
 1回目の録音の文字起こし（聞こえたとおりの逐語。（…2.1秒…）は1秒以上黙ったところ、（…詰まった 2.1秒…）は文の途中で黙ったところ）を見て：
 - 詰まった箇所が示されていれば、そこで言おうとしたことを stall に書く。
-- 2回目にまた詰まりそうな所のヒントを hints に書く（話の順に最大3個、語か言い出しだけ。答えの文を全部見せない）。
 - 次の2回で直すべきことを1つだけ fix に選ぶ。意味が通じなくなる誤り ＞ 何度も出る誤り ＞ 不自然さ の順。弱点記録にある誤りが今日も出ていれば優先。
 話の中身や長さは評価しない。言い直し・えっと・繰り返しは誤りとして扱わない。
 前の日から持ち越した注意点があれば、それが正しく使えたかを carried に書く。まだ直っていなければ、それを今日の1つに選んでよい。
@@ -642,6 +636,46 @@ ${a.carry ? `前の日から持ち越した注意点：${a.carry.focus_zh}（正
     3000,
     "medium",
   );
+}
+
+// Before each telling after the first: the keywords on screen, renewed. A word the learner already uses
+// right without effort has done its job, so it gives its place to one they haven't reached for yet.
+const RetellKeysSchema = z.object({
+  done: z.array(z.string()).describe("今のキーワードのうち、もう使えているので外す語（キーワードの表記のまま）。なければ空配列"),
+  add: z
+    .array(z.object({ ja: z.string().describe("語（表記どおり、短く）"), kana: z.string().describe("読み（ひらがな）") }))
+    .describe("外した語の代わりに出す新しいキーワード。done と同じ数まで。この話を話すのに役立つのに、学習者がまだ使っていない語"),
+});
+export type RetellKeys = { keys: { ja: string; kana: string }[]; done: string[] };
+
+export async function retellKeys(a: { topic: string; keys: { ja: string; kana?: string }[]; pool: { ja: string; kana?: string }[]; said: string[] }): Promise<RetellKeys> {
+  const r = await haikuFirst(
+    RetellKeysSchema,
+    `${COACH}
+学習者は同じ話を3回、別の人に話します。画面には話の助けになるキーワード（最大3個）が出ています。次に話す前に、キーワードを入れ替えるかを決めてください。
+- 外すのは、もう使えている語だけ：これまでの全部の回で、その語（または同じ意味の自然な言い方）を正しく、迷わずに使えている語。1回しか話していなければ、はっきり自然に言えている場合だけ。
+- 使っていない・間違えた・詰まった語は残す。
+- 外した数だけ、新しいキーワードを add に入れる。候補の語を優先し、学習者がまだ使っていない、この話を言うのに役立つ語。学習者が言おうとして言えなかった語があれば、それを優先。すでにキーワードにある語や、学習者が使えている語は入れない。
+- 今のキーワードがなければ、学習者が言おうとして言えなかった語・言えたらもっと話せる語を最大3個 add に入れる（done は空）。
+- 入れ替える必要がなければ done も add も空配列。`,
+    `話のテーマ：${a.topic}
+今のキーワード：${a.keys.length ? a.keys.map((k) => k.ja).join("、") : "（なし）"}
+候補の語：${a.pool.map((k) => k.ja).join("、") || "（なし）"}
+${a.said.map((t, i) => `${i + 1}回目：${t}`).join("\n")}`,
+    1000,
+    "low",
+  );
+  const done = r.done.filter((d) => a.keys.some((k) => k.ja === d));
+  const kept = a.keys.filter((k) => !done.includes(k.ja)).map((k) => ({ ja: k.ja, kana: k.kana ?? "" }));
+  const add = r.add
+    .filter((k) => k.ja.trim() && k.ja.length <= 16 && !kept.some((x) => x.ja === k.ja) && !done.includes(k.ja))
+    .slice(0, 3 - kept.length)
+    .map((k) => ({ ja: k.ja.trim(), kana: k.kana.trim() }));
+  // A word only goes once there is one to take its place, and the new one takes its place in the row.
+  const gone = done.slice(0, add.length);
+  let j = 0;
+  const keys = a.keys.map((k) => (gone.includes(k.ja) ? add[j++] : { ja: k.ja, kana: k.kana ?? "" }));
+  return { keys: [...keys, ...add.slice(j)].slice(0, 3), done: gone };
 }
 
 // After the third telling: whether the point stuck, and the learner's own story said naturally, to hear
