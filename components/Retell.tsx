@@ -32,9 +32,9 @@ import { Recorder, transcribeLong } from "@/lib/client/recorder";
 import SayAlong from "@/components/SayAlong";
 import { heardToday, stepDone, useOnRoute } from "@/lib/client/route";
 import { useHydrated } from "@/lib/client/hydrated";
-import { LIFE_TOPICS, latest, retellScore, topicLogs } from "@/lib/client/retell-history";
+import { LIFE_TOPICS, latest, retellList, retellScore, topicLogs } from "@/lib/client/retell-history";
 import { Star } from "./FeedbackCard";
-import { SenseiLine } from "./Sensei";
+import { SenseiFace, SenseiLine } from "./Sensei";
 
 // 三回話す: tell today's radio story three times, each time to a different person (so there is nothing
 // new to add, only saying it better), with the one thing to fix shown between the first and second time.
@@ -630,6 +630,7 @@ export default function Retell() {
     const usual = stalls ? before.current.stalls : null;
     const score = stalls ? retellScore({ date: "", topic: "", cpm: [], stalls }) : null;
     const prev = prior.current.score;
+    const nextPick = retellList(p, heardToday(p)).picks.find((r) => r.key !== topic.title);
     return (
       <main className="page">
         {back}
@@ -645,10 +646,9 @@ export default function Retell() {
                   {score > prev ? `↑ ${score - prev}` : score < prev ? `↓ ${prev - score}` : "±0"}　前回 {prev}
                 </span>
               )}
-              <span className="muted retell-score-zh">分数 = 第三遍讲得顺不顺（100 起，句中每分钟卡住一次 −15）</span>
             </>
           ) : (
-            <span className="muted retell-score-zh">这次没算出分数（没听清每一句）</span>
+            <span className="muted retell-score-zh">这次没算出分数</span>
           )}
         </div>
         <div className="today retell-end">
@@ -717,9 +717,20 @@ export default function Retell() {
             )}
           </>
         )}
+        {!onRoute && nextPick && (
+          <Link href={nextPick.href} className="retell-next">
+            <SenseiFace size={34} />
+            <span>
+              <small>先生のおすすめ · 次は</small>
+              <b>{nextPick.ja}</b>
+            </span>
+            {nextPick.score !== null && <em>{nextPick.score}</em>}
+            <i>›</i>
+          </Link>
+        )}
         {!onRoute && (
           <Link href="/retell/list" className="retell-pick">
-            別の話を選ぶ
+            一覧から選ぶ
           </Link>
         )}
       </main>
