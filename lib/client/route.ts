@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { calls } from "@/content/calls";
 import { makeRadio } from "./moyu";
-import { dayKey, dueCards, dueSkillCount, retellToday, teacherPlan, weakItems, weakList, type Progress } from "./progress";
+import { dayKey, dueSkillCount, todaysCards, retellToday, teacherPlan, weakItems, weakList, type Progress } from "./progress";
 
 // 今日のルート: one fixed line of stops for today (listen → practise → a song to unwind → speak → call), so opening the app
 // never asks what to do. Each page calls stepDone() when its part is over; the bar on top then moves
@@ -71,46 +71,47 @@ export function todaysEpisode(p: Progress) {
   return e && (!e.heard || e.date === dayKey()) ? e : null;
 }
 
+// The episode listened to today: the route's 聴く stop once it is behind, else one written and heard today.
+export function heardToday(p: Progress) {
+  const r = read();
+  const i = r ? r.stops.findIndex((s) => s.key === "listen") : -1;
+  const id = r && i >= 0 && i < r.at ? path(r.stops[i].href).split("/")[2] : undefined;
+  const ep = p.episodes.find((e) => e.id === id) ?? p.episodes[0];
+  return ep && ep.heard && (ep.id === id || ep.date === dayKey()) ? ep : null;
+}
+
 // The stops for today, from what is due. A route made before the new episode is written starts
 // with something else, so there is no waiting.
 export function plan(p: Progress, quiet: boolean): Stop[] {
   const ep = todaysEpisode(p);
   const epHref = ep ? `/ep/${ep.id}` : NEW_EP;
-  const listen: Stop = { key: "listen", ja: "聴く", meta: ep ? (ep.title_ja ?? ep.title_zh) : "新しい回", href: epHref, min: 6 };
+  // min: what each stop really takes, so the total on the start card is honest.
+  const listen: Stop = { key: "listen", ja: "聴く", meta: ep ? (ep.title_ja ?? ep.title_zh) : "新しい回", href: epHref, min: 7 };
   // The episode's 洗脑歌, as a break in the middle.
   const song: Stop = { key: "song", ja: "一休み", meta: "洗脑歌", href: `${epHref}/song`, min: 2 };
   if (quiet) return [listen, song, { key: "flow", ja: "流す", meta: "心の中で", href: "/moyu", min: 10 }];
 
-  // 練習's daily set: what is due, plus questions made from the points missed when speaking.
-  const skills = dueSkillCount(p) + weakItems(p, 3).length;
-  const cards = dueCards(p).length;
+  const cards = todaysCards(p).length;
+  const review: Stop[] = cards > 0 ? [{ key: "review", ja: "復習", meta: `${cards}文`, href: "/review", min: Math.ceil(cards / 2) }] : [];
   const day = Number(dayKey().replace(/-/g, ""));
   // The people who remember earlier calls come first.
   const pool = calls.filter((c) => c.person);
   const call = (pool.length ? pool : calls)[day % (pool.length || calls.length)];
-  const episode: Stop[] = [listen, { key: "game", ja: "練習", meta: "今の話", href: `${epHref}/game`, min: 3 }, song];
-  // 話す is 三回話す (today's story, three times) once a day; the saved sentences come back as their own
-  // short stop when due, and 瞬間 only once the day's telling is done.
-  const speak: Stop[] = retellToday(p)
-    ? [cards > 0 ? { key: "review", ja: "復習", meta: `${cards}文`, href: "/review", min: 3 } : { key: "quick", ja: "話す", meta: `瞬間 ${QUICK_N}問`, href: "/quick", min: 3 }]
-    : [
-        { key: "retell", ja: "話す", meta: "三回", href: "/retell", min: 5 },
-        ...(cards > 0 ? [{ key: "review" as const, ja: "復習", meta: `${cards}文`, href: "/review", min: 2 }] : []),
-      ];
-  const rest: Stop[] = [
-    ...(skills > 0 ? [{ key: "skills" as const, ja: "練習", meta: `前の ${Math.min(skills, 12)}問`, href: "/practice", min: 3 }] : []),
-    ...speak,
-    { key: "call", ja: "電話", meta: call.who, href: `/call/${call.id}`, min: 3 },
-  ];
-  // No episode yet: open with something that doesn't need it while it is written, and keep 三回話す
-  // after the song so the story told is the one just heard.
-  if (!ep) {
-    const lead = rest.find((s) => s.key !== "retell")!;
-    return [lead, ...episode, ...rest.filter((s) => s !== lead)];
-  }
-  // Tell the story while it is fresh: right after the song, before the older 練習.
-  const retell = rest.filter((s) => s.key === "retell");
-  return [...episode, ...retell, ...rest.filter((s) => s.key !== "retell")];
+  const phone: Stop = { key: "call", ja: "電話", meta: call.who, href: `/call/${call.id}`, min: 4 };
+  // The episode's 練習 also brings back older items that are due and the weak points, so there is no
+  // second practice round on a day with an episode.
+  const episode: Stop[] = [listen, { key: "game", ja: "練習", meta: "今の話", href: `${epHref}/game`, min: 5 }, song];
+  // 話す is 三回話す (today's story, three times) once a day, told while the story is fresh; on a
+  // second route the same day it is 瞬間 instead.
+  const speak: Stop = retellToday(p)
+    ? { key: "quick", ja: "話す", meta: `瞬間 ${QUICK_N}問`, href: "/quick", min: 3 }
+    : { key: "retell", ja: "話す", meta: "三回", href: "/retell", min: 10 };
+  // 電話 last: the call brings up today's story, so it comes after it has been told.
+  if (ep) return [...episode, speak, ...review, phone];
+  // No episode yet: open with something that doesn't need it while it is written.
+  const skills = dueSkillCount(p) + weakItems(p, 3).length;
+  const lead: Stop[] = skills > 0 ? [{ key: "skills", ja: "練習", meta: `前の ${Math.min(skills, 12)}問`, href: "/practice", min: 5 }] : review;
+  return [...lead, ...episode, speak, ...(lead === review ? [] : review), phone];
 }
 
 export const minutes = (stops: Stop[]) => stops.reduce((a, s) => a + s.min, 0);

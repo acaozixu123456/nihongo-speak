@@ -705,10 +705,11 @@ export function toggleCard(card: Omit<Card, "id" | "due" | "step">) {
   if (p.cards.some((c) => c.id === id)) {
     write({ ...p, cards: p.cards.filter((c) => c.id !== id), removedCards: [...p.removedCards, id] });
   } else {
-    // New cards are due right away so they show up in today's review.
+    // New cards come back tomorrow: asked again minutes after saving, a sentence is still in mind and
+    // the review proves nothing.
     write({
       ...p,
-      cards: [...p.cards, { ...card, id, due: dayKey(), step: 0 }],
+      cards: [...p.cards, { ...card, id, due: addDays(dayKey(), 1), step: 0 }],
       removedCards: p.removedCards.filter((r) => r !== id),
     });
   }
@@ -717,6 +718,15 @@ export function toggleCard(card: Omit<Card, "id" | "due" | "step">) {
 export function dueCards(p: Progress) {
   const today = dayKey();
   return p.cards.filter((c) => c.due <= today);
+}
+
+// Today's review: at most REVIEW_MAX cards, most overdue and least known first. The rest wait for
+// another day, so a missed day doesn't turn into a pile.
+export const REVIEW_MAX = 8;
+export function todaysCards(p: Progress) {
+  return dueCards(p)
+    .sort((a, b) => (a.due === b.due ? a.step - b.step : a.due < b.due ? -1 : 1))
+    .slice(0, REVIEW_MAX);
 }
 
 // A card that survived the 7-day interval counts as mastered.
@@ -739,7 +749,8 @@ export function reviewCard(id: string, remembered: boolean) {
 // The two hosts: Aoi and Keita map to bright Gemini voices and fall back to Azure's free ones.
 export const RADIO_VOICE = { A: "ja-JP-AoiNeural", B: "ja-JP-KeitaNeural" } as const;
 
-// Keep a new episode with its notes, and put its key sentences into review right away.
+// Keep a new episode with its notes, and put its key sentences into review from tomorrow (today
+// they are practised in the episode's own 練習).
 export function saveEpisode(radio: Radio): RadioEpisode {
   const p = read();
   const ep: RadioEpisode = { ...radio, id: `r${Date.now()}`, date: dayKey() };
@@ -747,7 +758,7 @@ export function saveEpisode(radio: Radio): RadioEpisode {
   const fresh = new Map<string, Card>();
   for (const ph of radio.phrases) {
     const id = cardId(ph.ja);
-    if (!skip.has(id)) fresh.set(id, { id, ja: ph.ja, zh: ph.zh, voice: RADIO_VOICE.A, scenarioId: `radio:${ep.id}`, due: dayKey(), step: 0 });
+    if (!skip.has(id)) fresh.set(id, { id, ja: ph.ja, zh: ph.zh, voice: RADIO_VOICE.A, scenarioId: `radio:${ep.id}`, due: addDays(dayKey(), 1), step: 0 });
   }
   write({ ...p, episodes: [ep, ...p.episodes].slice(0, EPISODES_KEPT), cards: [...p.cards, ...fresh.values()] });
   return ep;

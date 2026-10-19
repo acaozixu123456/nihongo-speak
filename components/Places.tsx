@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { dueCards, dueSkillCount, rehearsalToReport, useProgress, weakList } from "@/lib/client/progress";
+import { dueSkillCount, todaysCards, rehearsalToReport, useProgress, weakList } from "@/lib/client/progress";
 import { todaysEpisode } from "@/lib/client/route";
 import { useHydrated } from "@/lib/client/hydrated";
 import { scenarios } from "@/content/scenarios";
@@ -19,7 +19,7 @@ export default function Places() {
   const fresh = hydrated && p.episodes[0] && !p.episodes[0].heard;
   const skills = hydrated ? dueSkillCount(p) : 0;
   const weak = hydrated ? weakList(p).length : 0;
-  const cards = hydrated ? dueCards(p).length : 0;
+  const cards = hydrated ? todaysCards(p).length : 0;
   const report = hydrated && !!rehearsalToReport(p);
 
   const groups: { ja: string; zh: string; places: Place[] }[] = [

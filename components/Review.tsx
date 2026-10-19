@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { play, preload, stop, ttsUrl, unlock } from "@/lib/client/player";
 import { transcribe } from "@/lib/client/recorder";
-import { dueCards, findEpisode, findScenario, recordSpeech, reviewCard, useProgress, wavSeconds, type Card } from "@/lib/client/progress";
+import { findEpisode, todaysCards, findScenario, recordSpeech, reviewCard, useProgress, wavSeconds, type Card } from "@/lib/client/progress";
 import { useJudge } from "./AiJudge";
 import HoldButton from "./HoldButton";
 import { Stamp, StreakPill, VerdictSheet, kindByText, kindOf } from "./Verdict";
@@ -24,7 +24,7 @@ export default function Review() {
   const [error, setError] = useState("");
   const [again, setAgain] = useState(0);
 
-  const due = dueCards(p);
+  const due = todaysCards(p);
   const list = queue ?? due;
   const card = list[index];
   // A card seen before comes back as a new sentence on the same pattern, so it isn't memorised as one string.

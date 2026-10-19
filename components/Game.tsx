@@ -128,10 +128,10 @@ const STAMP = (rate: number) => (rate === 1 ? "満点" : rate >= 0.8 ? "合格" 
 type Result = { q: Q; ok: boolean };
 
 // What a round practises: an episode's own items (what was asked about first, then grammar, sentences,
-// words not yet solid) with a few older ones that are due again mixed in, or, for the daily round,
+// words not yet solid) with the top weak points and a few older ones that are due again mixed in, or, for the daily round,
 // what is due plus the grammar the learner keeps getting wrong when speaking (the weak points), so
 // mistakes turn into tomorrow's questions by themselves.
-const EP_ITEMS = 8;
+const EP_ITEMS = 6;
 const OLD_ITEMS = 3;
 const DAILY_ITEMS = 10;
 const WEAK_ITEMS = 3;
@@ -146,8 +146,10 @@ function roundItems(p: Progress, ep: RadioEpisode | null): SkillItem[] {
     .sort((a, b) => order[a.kind] - order[b.kind])
     .slice(0, EP_ITEMS);
   const mine = new Set(episodeItems(ep).map((x) => skillKey(x.ja)));
+  // On a day with an episode this is the only round, so the weak points come along too.
+  const weak = weakItems(p, 2).filter((x) => !mine.has(skillKey(x.ja)));
   const old = dueSkills(p, OLD_ITEMS, mine);
-  return own.length ? [...own, ...old] : [...episodeItems(ep).slice(0, EP_ITEMS), ...old];
+  return [...(own.length ? own : episodeItems(ep).slice(0, EP_ITEMS)), ...weak, ...old];
 }
 
 // 练一练: a Duolingo-style round made by AI. Each item gets two exercises from different angles,
