@@ -1,4 +1,5 @@
 import "server-only";
+import { AsyncLocalStorage } from "node:async_hooks";
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import * as z from "zod/v4";
@@ -8,8 +9,15 @@ import { inJapanese, japaneseZh, variantOk, zhIsTranslation } from "@/lib/varian
 // Only the role-play part of a scenario is needed here.
 type Talk = Pick<Scenario, "talk">;
 
-// Haiku everywhere: fast, and cheap enough to run on every utterance.
+// Haiku for quick plumbing (replies, readings, titles). Judging the learner's Japanese goes to Opus:
+// it decides what they learn. effort low where they wait on every line, medium for one review of a
+// whole telling. Opus thinks inside max_tokens, so its calls get extra room.
 const MODEL = "claude-haiku-5-5";
+const SMART = "claude-opus-5-5";
+type Effort = "low" | "medium" | "high";
+// Lets /api/compare run the same call on another model.
+export const smartModel = new AsyncLocalStorage<string>();
+const smart = (maxTokens: number) => ({ model: smartModel.getStore() ?? SMART, max_tokens: maxTokens + 12000 });
 // A key created outside any workspace must name one on every request.
 const workspace = process.env.ANTHROPIC_WORKSPACE_ID;
 const client = new Anthropic(workspace ? { defaultHeaders: { "anthropic-workspace-id": workspace } } : {});
@@ -25,7 +33,7 @@ const ZH_RULE = `
 const parse: typeof client.messages.parse = (async (params: Parameters<typeof client.messages.parse>[0], options?: Parameters<typeof client.messages.parse>[1]) => {
   const system = `${params.system ?? ""}${ZH_RULE}`;
   const first = await client.messages.parse({ ...params, system }, options);
-  const bad = params.max_tokens > 4000 ? [] : japaneseZh(first.parsed_output);
+  const bad = params.model === MODEL && params.max_tokens > 4000 ? [] : japaneseZh(first.parsed_output);
   if (!bad.length) return first;
   console.warn("Chinese fields in Japanese, asking again:", bad.join(" "));
   const again = await client.messages
@@ -138,8 +146,7 @@ export async function feedback(s: Talk, history: Turn[], known?: string[]) {
     .map((t) => `${t.role === "user" ? "学習者" : "相手"}：${t.text}`)
     .join("\n");
   const res = await parse({
-    model: MODEL,
-    max_tokens: 4000,
+    ...smart(4000),
     system: `あなたは日本在住の社会人向けの日本語コーチです。学習者は中国人、レベルはN4〜N3。
 場面：${s.talk.setup}
 学習者の役：${s.talk.userRole}
@@ -149,7 +156,7 @@ export async function feedback(s: Talk, history: Turn[], known?: string[]) {
 - 一番効果が大きいもの（意味が通じなくなる誤り ＞ 敬語のレベル ＞ 不自然さ ＞ より短く言える）を1つ。他は書かない。
 - 説明は中国語で、具体的に。${knownLine(known)}`,
     messages: [{ role: "user", content: transcript }],
-    output_config: { format: zodOutputFormat(FeedbackSchema) },
+    output_config: { effort: "medium", format: zodOutputFormat(FeedbackSchema) },
   });
   checkStop(res.stop_reason);
   if (!res.parsed_output) throw new Error("AI 返回格式不对，请重试");
@@ -277,8 +284,7 @@ export async function judgeAnswer(a: { zh: string; ja: string; where?: string; s
 
 async function judgeOnce(a: { zh: string; ja: string; where?: string; said: string; known?: string[] }) {
   const res = await parse({
-    model: MODEL,
-    max_tokens: 4000,
+    ...smart(4000),
     system: `あなたは日本在住の社会人向けの日本語コーチです。学習者は中国人、レベルはN4〜N3。
 学習者は中国語を見て、すぐに日本語で言う練習をしています。模範解答と一字一句同じである必要はありません。
 まず、学習者の発言が「言いたいこと（中国語）」と同じ内容かを確かめてください。別のことを言っている・大事な部分が抜けているなら、日本語として自然でも必ず off にする。
@@ -297,7 +303,7 @@ points は学習者の弱点を記録するために使います。同じ文法�
 学習者が言ったこと：${a.said}`,
       },
     ],
-    output_config: { format: zodOutputFormat(JudgeSchema) },
+    output_config: { effort: "low", format: zodOutputFormat(JudgeSchema) },
   });
   checkStop(res.stop_reason);
   if (!res.parsed_output) throw new Error(`AI 返回格式不对（${res.stop_reason}），请重试`);
@@ -327,8 +333,7 @@ export type Drill = z.infer<typeof DrillSchema>;
 
 export async function makeDrill(w: { tag: string; zh: string; examples: { said: string; better: string }[] }) {
   const res = await parse({
-    model: MODEL,
-    max_tokens: 4000,
+    ...smart(4000),
     system: `あなたは日本在住の社会人向けの日本語コーチです。学習者は中国人、レベルはN4〜N3。日本で働き、生活しています。
 学習者が話すときに何度も間違えた文法・表現について、短い説明と、中国語を見て瞬間的に日本語で言う練習問題を作ってください。
 - 練習文はその文法・表現を必ず使い、実際の職場や生活でそのまま使える自然な言い方にする。
@@ -341,7 +346,7 @@ export async function makeDrill(w: { tag: string; zh: string; examples: { said: 
 ${w.examples.map((e) => `- 言った：${e.said} → 正しくは：${e.better}`).join("\n") || "（記録なし）"}`,
       },
     ],
-    output_config: { format: zodOutputFormat(DrillSchema) },
+    output_config: { effort: "medium", format: zodOutputFormat(DrillSchema) },
   });
   checkStop(res.stop_reason);
   if (!res.parsed_output) throw new Error("AI 返回格式不对，请重试");
@@ -372,15 +377,15 @@ function knownLine(known?: string[]) {
     : "";
 }
 
-// Short coaching calls; one retry so the learner still gets feedback after a hiccup.
-async function haikuFirst<S extends z.ZodType>(schema: S, system: string, content: string, maxTokens = 3000): Promise<z.infer<S>> {
+// Short coaching calls; one retry so the learner still gets feedback after a hiccup. With an effort, the
+// call goes to Opus.
+async function haikuFirst<S extends z.ZodType>(schema: S, system: string, content: string, maxTokens = 3000, effort?: Effort): Promise<z.infer<S>> {
   const run = async () => {
     const res = await parse({
-      model: MODEL,
-      max_tokens: maxTokens,
+      ...(effort ? smart(maxTokens) : { model: MODEL, max_tokens: maxTokens }),
       system,
       messages: [{ role: "user", content }],
-      output_config: { format: zodOutputFormat(schema) },
+      output_config: { ...(effort && { effort }), format: zodOutputFormat(schema) },
     });
     checkStop(res.stop_reason);
     if (!res.parsed_output) throw new Error(`AI 返回格式不对（${res.stop_reason}），请重试`);
@@ -429,6 +434,8 @@ ${
 語ごと：${s.words.map((w) => `${w.word}(${w.accuracy}${w.errorType !== "None" ? `,${w.errorType}` : ""})`).join(" ")}`
     : "発音評価なし"
 }`,
+    3000,
+    "low",
   );
 }
 
@@ -457,6 +464,8 @@ export function checkTurn(s: Talk, history: Turn[], known?: string[]) {
 直前の会話：
 ${before.map((t) => `${t.role === "user" ? "学習者" : "相手"}：${t.text}`).join("\n") || "（なし）"}
 学習者の発言：${said}`,
+    3000,
+    "low",
   );
 }
 
@@ -484,6 +493,8 @@ zh は画面に大きく出る「言いたいこと」です。ja の中国語�
 元の文が短い一言なら、場面が分かる具体的な文に広げる。例：元の文「助かります！」→ ja「資料を送ってもらえると助かります。」zh「你能把资料发给我的话就帮大忙了。」`,
       `元の文：${c.ja}
 意味：${c.zh}`,
+      3000,
+      "low",
     );
   const first = await ask();
   if (variantOk(first)) return first;
@@ -624,6 +635,8 @@ function retellFixOnce(a: FixArgs, again: boolean) {
 focus_zh・point.zh・stall.zh は学習者が画面で読む説明なので、必ず簡体字の中国語で、短く書く。${again ? "\n前回の答えは focus_zh が日本語になっていた。今度は必ず中国語で書くこと。" : ""}${knownLine(a.known)}`,
     `話のテーマ：${a.topic}
 ${a.carry ? `前の日から持ち越した注意点：${a.carry.focus_zh}（正しい形の例：${a.carry.better}）\n` : ""}${a.stall ? `一番長く詰まった箇所（${a.stall.secs}秒）：「${a.stall.before}」（詰まる）「${a.stall.after}」\n` : ""}1回目：${a.said}`,
+    3000,
+    "medium",
   );
 }
 
@@ -653,6 +666,8 @@ export function retellEnd(a: { topic: string; first: string; last: string; focus
 1回目のあとに伝えた注意：${a.focus || "（なし）"}
 1回目：${a.first}
 3回目：${a.last}`,
+    3000,
+    "medium",
   );
 }
 
@@ -818,6 +833,7 @@ export function rehearseDebrief(a: { askZh: string; report: string }) {
     `学習者（日本に住む中国人、日本語 N4〜N3）が、前もって練習した会話を実際にしてきました。どうだったかの報告（中国語か日本語）を読んで、言えなかったことを次に言えるようにする。報告に言えなかったことが無ければ missed は空配列。`,
     `練習した会話：${a.askZh}\n報告：${a.report}`,
     2000,
+    "medium",
   );
 }
 
