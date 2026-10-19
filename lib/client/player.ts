@@ -24,6 +24,21 @@ function el() {
   return audio;
 }
 
+// Tells `f` when a sound starts and stops playing (so background music can dip under voices).
+export function onSound(f: (playing: boolean) => void) {
+  const a = el();
+  const on = () => f(a.src !== SILENCE);
+  const off = () => f(false);
+  a.addEventListener("playing", on);
+  a.addEventListener("pause", off);
+  a.addEventListener("ended", off);
+  return () => {
+    a.removeEventListener("playing", on);
+    a.removeEventListener("pause", off);
+    a.removeEventListener("ended", off);
+  };
+}
+
 export function unlock() {
   if (unlocked) return;
   const a = el();

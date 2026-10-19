@@ -6,6 +6,7 @@ import { calls, people } from "@/content/calls";
 import type { RetellEnd, RetellFix, RetellKeys } from "@/lib/claude";
 import type { Heard } from "@/lib/gemini-hear";
 import { play, stop as stopAudio, ttsUrl, unlock } from "@/lib/client/player";
+import { loadPause, startPause, stopPause } from "@/lib/client/bgm";
 import {
   dayKey,
   ensureReadings,
@@ -315,6 +316,10 @@ export default function Retell() {
     });
 
   useEffect(() => {
+    void loadPause();
+  }, []);
+
+  useEffect(() => {
     if (!hydrated || topics.length) return;
     const ts = topicsFor(p);
     keyRuns.current = Object.fromEntries(Object.entries(p.keyRuns ?? {}).map(([k, v]) => [k, v.n]));
@@ -335,6 +340,7 @@ export default function Retell() {
     () => () => {
       if (timer.current) clearInterval(timer.current);
       stopAudio();
+      void stopPause(0);
       rec.current?.stop().catch(() => {});
     },
     [],
@@ -355,6 +361,8 @@ export default function Retell() {
     stopAudio();
     setError("");
     setPhase("starting");
+    // The music between tellings is gone before the mic opens.
+    await stopPause(0.5);
     const r = new Recorder();
     // Set before the mic opens, so leaving the page meanwhile still shuts it.
     rec.current = r;
@@ -395,6 +403,8 @@ export default function Retell() {
       return;
     }
     const sec = wavSeconds(wav);
+    // Soft music fills the pause until the next telling starts (none after the last).
+    if (old || n < 2) void startPause();
     // The listener nods at once, like a person would, while the recording is being written down.
     const who = listener;
     play(ttsUrl(AIZUCHI[who], voiceOf(who)), 1).catch(() => {});
