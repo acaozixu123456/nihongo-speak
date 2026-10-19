@@ -1,5 +1,4 @@
 import "server-only";
-import { AsyncLocalStorage } from "node:async_hooks";
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import * as z from "zod/v4";
@@ -15,9 +14,8 @@ type Talk = Pick<Scenario, "talk">;
 const MODEL = "claude-haiku-5-5";
 const SMART = "claude-opus-5-5";
 type Effort = "low" | "medium" | "high";
-// Lets /api/compare run the same call on another model.
-export const smartModel = new AsyncLocalStorage<string>();
-const smart = (maxTokens: number) => ({ model: smartModel.getStore() ?? SMART, max_tokens: maxTokens + 12000 });
+// Compared on real answers (2026-10-19): only Opus took speech-recognition slips as slips, not mistakes.
+const smart = (maxTokens: number) => ({ model: SMART, max_tokens: maxTokens + 12000 });
 // A key created outside any workspace must name one on every request.
 const workspace = process.env.ANTHROPIC_WORKSPACE_ID;
 const client = new Anthropic(workspace ? { defaultHeaders: { "anthropic-workspace-id": workspace } } : {});
