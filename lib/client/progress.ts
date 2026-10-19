@@ -107,9 +107,17 @@ export function useProgress(): Progress {
 
 // The nightly plan (lib/teacher.ts), which comes with every sync: the order weak points are drilled
 // in, and tags it found to be duplicates or recognition slips.
-export type Teacher = { day: string; made: number; order: string[]; hide: string[]; why_zh: string; note_zh: string };
+export type TeacherGood = { before: string; after: string; mark: string; zh: string };
+export type TeacherFix = { tag: string; said: string; better: string; mark: string; zh: string };
+export type Teacher = { day: string; made: number; order: string[]; hide: string[]; why_zh: string; note_zh: string; good?: TeacherGood | null; fix?: TeacherFix | null };
 const TEACHER_KEY = "nihongo-speak:teacher";
 let teacher: Teacher | null | undefined;
+
+// The teacher's one thing to fix, while its weak point is still there to drill.
+export function teacherFix(p: Progress): TeacherFix | null {
+  const f = teacherPlan()?.fix;
+  return f && p.weak[f.tag] ? f : null;
+}
 
 export function teacherPlan(): Teacher | null {
   if (teacher === undefined) {

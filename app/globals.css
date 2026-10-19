@@ -1527,3 +1527,26 @@ button.today-go { width: 100%; border: none; cursor: pointer; }
 .pl.two .pl-text b, .pl.two .pl-text span { display: block; }
 .teacher-note { margin: 18px 0 6px; }
 .teacher-note p { margin: 0; line-height: 1.7; }
+
+/* ---- 先生のメモ: a green block for what is now right, a red one for the one thing to fix ---- */
+.memo-blk { border-radius: 16px; padding: 14px 16px; margin-top: 10px; }
+.memo-blk.m-good { background: var(--ok-bg); }
+.memo-blk.m-bad { background: var(--no-bg); }
+.memo-hd { display: flex; align-items: center; gap: 8px; font-family: var(--ja); font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+.m-good .memo-hd { color: var(--ok-ink); }
+.m-bad .memo-hd { color: var(--no-ink); }
+.memo-mk { display: inline-grid; place-items: center; width: 22px; height: 22px; flex: none; border-radius: 50%; color: #fff; font-size: 13px; }
+.m-good .memo-mk { background: var(--ok); }
+.m-bad .memo-mk { background: var(--no); }
+.memo-ln { display: flex; align-items: baseline; gap: 8px; font-family: var(--ja); line-height: 1.45; }
+.memo-t { flex: none; width: 36px; font-size: 11px; color: var(--muted); font-weight: 400; }
+.memo-ln.m-old, .memo-ln.m-wrong { font-size: 15px; color: var(--muted); }
+.memo-ln.m-wrong s { text-decoration-color: var(--no); text-decoration-thickness: 2px; }
+.memo-ln.m-new { font-size: 21px; font-weight: 700; margin-top: 4px; }
+.memo-ln.m-new mark { background: none; color: var(--ok-ink); border-bottom: 3px solid var(--ok); }
+.memo-ln.m-right { font-size: 24px; font-weight: 700; align-items: center; margin-top: 2px; }
+.memo-ln.m-right em { font-style: normal; color: var(--no); }
+.memo-play { margin-left: auto; background: var(--card); }
+.memo-zh { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.memo-go { display: block; text-align: center; margin-top: 14px; }
+.teacher-today .memo-blk { margin: 10px 0 16px; }

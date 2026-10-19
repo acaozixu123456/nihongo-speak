@@ -7,7 +7,12 @@ import { addDays, type Progress } from "@/lib/progress-model";
 // app's own ranking (misses minus half the hits) can't tell a duplicate tag or a speech-recognition
 // slip from a real mistake; this can. Kept beside state.json and handed out with every sync.
 
-export type Teacher = { day: string; made: number; order: string[]; hide: string[]; why_zh: string; note_zh: string };
+export type Good = { before: string; after: string; mark: string; zh: string };
+export type Fix = { tag: string; said: string; better: string; mark: string; zh: string };
+export type Memo = { day: string; good: Good | null; fix: Fix | null };
+// good/fix are what 記録 and 今日 show; past is the teacher's own last notes, read back the next night
+// so it can follow up instead of starting over.
+export type Teacher = { day: string; made: number; order: string[]; hide: string[]; why_zh: string; note_zh: string; good?: Good | null; fix?: Fix | null; past?: Memo[] };
 
 const PATH = "teacher.json";
 
@@ -21,7 +26,7 @@ export async function readTeacher(): Promise<Teacher | null> {
 
 // The record as the teacher reads it: every weak point with its latest mistakes, and the last week's
 // tellings in the learner's own words.
-function record(p: Progress, day: string) {
+function record(p: Progress, day: string, past: Memo[]) {
   const week = addDays(day, -7);
   const weak = Object.values(p.weak)
     .filter((w) => w.miss > 0)
@@ -43,15 +48,28 @@ function record(p: Progress, day: string) {
 ${weak.join("\n") || "（なし）"}
 
 この1週間の「三回話す」（ラジオで聞いた話を自分の言葉で話した文字起こし）：
-${tellings.join("\n") || "（なし）"}`;
+${tellings.join("\n") || "（なし）"}
+
+これまでのメモ（あなたが前に書いたもの、新しい順）：
+${past.map((m) => `- ${m.day}${m.good ? `\n    伸びた：${m.good.before} → ${m.good.after}` : ""}${m.fix ? `\n    直そう：${m.fix.said} → ${m.fix.better}（${m.fix.tag}）` : ""}`).join("\n") || "（なし）"}`;
 }
 
-export async function teach(p: Progress, day: string): Promise<Teacher> {
-  const plan = await teacherPlan(record(p, day));
+// A highlight the screen can find: the marked part must be inside the sentence, or nothing is marked.
+const marked = <T extends { mark: string }>(x: T, whole: string): T => ({ ...x, mark: x.mark && whole.includes(x.mark) ? x.mark : "" });
+
+export async function teach(p: Progress, day: string, last: Teacher | null = null): Promise<Teacher> {
+  const past = [...(last?.good || last?.fix ? [{ day: last.day, good: last.good ?? null, fix: last.fix ?? null }] : []), ...(last?.past ?? [])]
+    .filter((m) => m.day < day)
+    .slice(0, 7);
+  const plan = await teacherPlan(record(p, day, past));
   const tags = new Set(Object.keys(p.weak));
   const order = [...new Set(plan.order)].filter((t) => tags.has(t)).slice(0, 5);
   const hide = plan.hide.filter((t) => tags.has(t) && !order.includes(t));
-  const t: Teacher = { day, made: Date.now(), order, hide, why_zh: plan.why_zh, note_zh: plan.note_zh };
+  const good = plan.good?.after.trim() ? marked(plan.good, plan.good.after) : null;
+  // The fix is drilled through its weak point, so it has to be one the app still has.
+  const tag = plan.fix && tags.has(plan.fix.tag) ? plan.fix.tag : order[0];
+  const fix = plan.fix?.better.trim() && tag ? marked({ ...plan.fix, tag }, plan.fix.better) : null;
+  const t: Teacher = { day, made: Date.now(), order, hide, why_zh: plan.why_zh, note_zh: plan.note_zh, good, fix, past };
   await put(PATH, JSON.stringify(t), { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: "application/json" });
   return t;
 }

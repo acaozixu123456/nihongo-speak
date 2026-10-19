@@ -40,6 +40,7 @@ const SIZES = [5, 10, 20];
 const SIZE_KEY = "nihongo-speak:quick-size";
 const HINT_CHARS = 3;
 const ROUTE_SIZE = 5;
+const ROUTE_DRILL = 3;
 
 const secs = (ms: number) => (ms / 1000).toFixed(1);
 
@@ -146,9 +147,9 @@ export default function Quick({ drill }: { drill?: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needDrill]);
 
-  function begin(n = size) {
+  function begin(n?: number) {
     unlock();
-    setRound(weakPoint?.drill?.length ? drillRound(weakPoint) : quickRound(p, n));
+    setRound(weakPoint?.drill?.length ? drillRound(weakPoint).slice(0, n) : quickRound(p, n ?? size));
     setRetried(new Set());
     setOff(new Set());
     judged.current = new Set();
@@ -268,10 +269,12 @@ export default function Quick({ drill }: { drill?: string }) {
 
   // On today's route: a short round starts at once, and the route moves on after its summary.
   const onRoute = useOnRoute();
+  // The teacher's 直す stop: a few of the weak point's sentences, as soon as they are there.
+  const drillReady = !!weakPoint?.drill?.length;
   useEffect(() => {
-    if (onRoute && !round && !drill) begin(ROUTE_SIZE);
+    if (onRoute && !round && (!drill || drillReady)) begin(drill ? ROUTE_DRILL : ROUTE_SIZE);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onRoute]);
+  }, [onRoute, drillReady]);
   const over = !!round && !item;
   useEffect(() => {
     if (over) stepDone();
