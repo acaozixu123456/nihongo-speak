@@ -5,7 +5,7 @@ import { calls } from "@/content/calls";
 import { makeRadio } from "./moyu";
 import { dayKey, dueSkillCount, todaysCards, retellToday, teacherFix, teacherPlan, weakItems, weakList, type Progress } from "./progress";
 
-// 今日のルート: one fixed line of stops for today (listen → practise → a song to unwind → speak → call), so opening the app
+// 今日のルート: one fixed line of stops for today (listen → speak → the teacher), so opening the app
 // never asks what to do. Each page calls stepDone() when its part is over; the bar on top then moves
 // on to the next stop by itself.
 
@@ -87,7 +87,7 @@ export function plan(p: Progress, quiet: boolean): Stop[] {
   const epHref = ep ? `/ep/${ep.id}` : NEW_EP;
   // min: what each stop really takes, so the total on the start card is honest.
   const listen: Stop = { key: "listen", ja: "聴く", meta: ep ? (ep.title_ja ?? ep.title_zh) : "新しい回", href: epHref, min: 7 };
-  // The episode's 洗脑歌, as a break in the middle.
+  // The episode's 洗脑歌, sung right after it.
   const song: Stop = { key: "song", ja: "一休み", meta: "洗脑歌", href: `${epHref}/song`, min: 2 };
   if (quiet) return [listen, song, { key: "flow", ja: "流す", meta: "心の中で", href: "/moyu", min: 10 }];
 
@@ -105,18 +105,26 @@ export function plan(p: Progress, quiet: boolean): Stop[] {
   const speak: Stop = retellToday(p)
     ? { key: "quick", ja: "話す", meta: `瞬間 ${QUICK_N}問`, href: "/quick", min: 3 }
     : { key: "retell", ja: "話す", meta: "三回", href: "/retell", min: 10 };
-  // 三回話す is the stop that matters most, so it comes straight after 聴く: the story is fresh, and a
-  // short morning still gets to it. The song is the break after it; 電話 is last because it brings
-  // up today's story.
-  const episode: Stop[] = [listen, speak, song, game];
-  // The teacher's one point opens the day: a minute, while it is the first thing on the screen.
+  // Today follows the three cards on 今日: 聴く (the episode and its song), 話す (三回話す on the story
+  // just heard, then 電話, which brings it up too), and 先生 last: the teacher's one point, the
+  // episode's 練習 and the sentences due.
   const f = teacherFix(p);
   const fix: Stop[] = f ? [{ key: "fix", ja: "直す", meta: f.better, href: `/quick?drill=${encodeURIComponent(f.tag)}`, min: 1 }] : [];
-  if (ep) return [...fix, ...episode, ...review, phone];
+  const episode: Stop[] = [listen, song, speak, phone, ...fix, game];
+  if (ep) return [...episode, ...review];
   // No episode yet: open with something that doesn't need it while it is written.
   const skills = dueSkillCount(p) + weakItems(p, 3).length;
   const lead: Stop[] = skills > 0 ? [{ key: "skills", ja: "練習", meta: `前の ${Math.min(skills, 12)}問`, href: "/practice", min: 5 }] : review;
-  return [...fix, ...lead, ...episode, ...(lead === review ? [] : review), phone];
+  return [...lead, ...episode, ...(lead === review ? [] : review)];
+}
+
+// Which of the three cards on 今日 a stop belongs to.
+export type Pillar = "listen" | "speak" | "teacher";
+export const PILLARS: Pillar[] = ["listen", "speak", "teacher"];
+export function pillarOf(k: StopKey): Pillar {
+  if (k === "listen" || k === "song" || k === "flow") return "listen";
+  if (k === "retell" || k === "quick" || k === "call") return "speak";
+  return "teacher";
 }
 
 export const minutes = (stops: Stop[]) => stops.reduce((a, s) => a + s.min, 0);

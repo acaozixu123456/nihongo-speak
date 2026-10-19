@@ -1550,3 +1550,53 @@ button.today-go { width: 100%; border: none; cursor: pointer; }
 .memo-zh { font-size: 13px; color: var(--muted); margin-top: 6px; }
 .memo-go { display: block; text-align: center; margin-top: 14px; }
 .teacher-today .memo-blk { margin: 10px 0 16px; }
+
+/* ---- 今日: three cards in the order of the day (聴く, 話す, 先生) ---- */
+.top-quiet { position: relative; margin: 0; font-family: var(--ja); font-size: 13px; gap: 8px; }
+.top-quiet .sw { width: 34px; height: 20px; }
+.top-quiet .sw::after { width: 14px; height: 14px; }
+.top-quiet input:checked + .sw::after { left: 17px; }
+.pillars { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+.pil { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow); }
+.pil.next { border-color: var(--accent); }
+.pil-head, .sensei-head { display: flex; align-items: baseline; gap: 8px; }
+.pil-head b { font-family: var(--serif); font-size: 24px; font-weight: 600; letter-spacing: 0.04em; }
+.pil-head small, .sensei-head small { font-size: 13px; color: var(--muted); }
+.pil-more { margin-left: auto; font-family: var(--ja); font-size: 13px; color: var(--muted); text-decoration: none; padding: 6px 0 6px 10px; }
+.pil-what { margin-top: 10px; }
+.pil-t { font-family: var(--ja); font-size: 21px; font-weight: 700; line-height: 1.35; }
+.pil-t.muted { color: var(--muted); font-weight: 500; }
+.pil-m { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.pil-go { display: block; width: 100%; margin-top: 14px; padding: 12px; border: none; border-radius: 999px; background: var(--soft); color: var(--text); text-align: center; text-decoration: none; font-family: var(--ja); font-size: 16px; font-weight: 500; letter-spacing: 0.1em; cursor: pointer; }
+.pil-go.on { background: var(--accent-fill); color: #fff; }
+.pil-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.pil-chips a { font-family: var(--ja); font-size: 13px; padding: 4px 11px; border-radius: 999px; border: 1px solid var(--line); color: var(--text); text-decoration: none; }
+.pil-chips em { font-style: normal; color: var(--muted); margin-left: 4px; }
+.pil.done { display: flex; align-items: center; gap: 10px; padding: 12px 18px; background: transparent; box-shadow: none; }
+.pil.done b { flex: none; white-space: nowrap; font-family: var(--serif); font-size: 20px; font-weight: 600; color: var(--muted); }
+.pil-ok { display: inline-grid; place-items: center; width: 22px; height: 22px; flex: none; border-radius: 50%; background: var(--ok); color: #fff; font-size: 13px; font-weight: 700; }
+.pil-sum { font-family: var(--ja); font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.pil .one-fix { margin-top: 12px; }
+
+/* 森先生 */
+.sensei-head { align-items: center; gap: 12px; }
+.sensei-head b { font-family: var(--serif); font-size: 22px; font-weight: 600; letter-spacing: 0.04em; }
+.sensei-head small { margin-left: -4px; }
+.sensei-face { flex: none; border-radius: 50%; }
+.sensei-say { position: relative; background: var(--soft); border-radius: 16px; padding: 11px 14px 10px; margin-top: 12px; }
+.sensei-say::before { content: ""; position: absolute; left: 22px; top: -7px; border: 8px solid transparent; border-top: 0; border-bottom-color: var(--soft); }
+.sensei-ja { display: flex; align-items: flex-start; gap: 10px; font-family: var(--ja); font-size: 17px; line-height: 1.6; }
+.sensei-ja span { flex: 1; }
+.sensei-ja .bag-play { flex: none; background: var(--card); }
+.sensei-zh { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+/* 先生 page */
+.sensei-hero { display: flex; flex-direction: column; align-items: center; text-align: center; margin: 4px 0 4px; }
+.sensei-hero b { font-family: var(--serif); font-size: 28px; font-weight: 600; letter-spacing: 0.06em; margin-top: 8px; }
+.sensei-hero small { font-family: var(--ja); font-size: 13px; color: var(--muted); }
+.sensei-letter { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 16px 18px; margin: 16px 0 14px; box-shadow: var(--shadow); }
+.sensei-letter::before { content: ""; position: absolute; left: 50%; margin-left: -8px; top: -9px; width: 16px; height: 16px; background: var(--card); border-left: 1px solid var(--line); border-top: 1px solid var(--line); transform: rotate(45deg); }
+.sensei-letter .ja { font-family: var(--ja); font-size: 16px; line-height: 1.75; margin: 0; }
+.sensei-letter .zh { font-size: 13px; color: var(--muted); margin: 6px 0 0; line-height: 1.6; }
+.sensei-letter .sig { text-align: right; font-family: var(--serif); font-size: 15px; color: var(--muted); margin-top: 6px; }
+.teacher-note + .me-card, .sensei-letter + .me-card, .sensei-say + .me-card { margin-top: 16px; }

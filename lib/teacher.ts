@@ -12,7 +12,7 @@ export type Fix = { tag: string; said: string; better: string; mark: string; zh:
 export type Memo = { day: string; good: Good | null; fix: Fix | null };
 // good/fix are what 記録 and 今日 show; past is the teacher's own last notes, read back the next night
 // so it can follow up instead of starting over.
-export type Teacher = { day: string; made: number; order: string[]; hide: string[]; why_zh: string; note_zh: string; good?: Good | null; fix?: Fix | null; past?: Memo[] };
+export type Teacher = { day: string; made: number; order: string[]; hide: string[]; why_zh: string; note_zh: string; letter_ja?: string; good?: Good | null; fix?: Fix | null; past?: Memo[] };
 
 const PATH = "teacher.json";
 
@@ -69,7 +69,7 @@ export async function teach(p: Progress, day: string, last: Teacher | null = nul
   // The fix is drilled through its weak point, so it has to be one the app still has.
   const tag = plan.fix && tags.has(plan.fix.tag) ? plan.fix.tag : order[0];
   const fix = plan.fix?.better.trim() && tag ? marked({ ...plan.fix, tag }, plan.fix.better) : null;
-  const t: Teacher = { day, made: Date.now(), order, hide, why_zh: plan.why_zh, note_zh: plan.note_zh, good, fix, past };
+  const t: Teacher = { day, made: Date.now(), order, hide, why_zh: plan.why_zh, note_zh: plan.note_zh, letter_ja: plan.letter_ja, good, fix, past };
   await put(PATH, JSON.stringify(t), { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: "application/json" });
   return t;
 }
