@@ -1688,7 +1688,7 @@ button.today-go { width: 100%; border: none; cursor: pointer; }
 
 /* ゆるっと日本ラジオ on air: the picture floats on top, the show below as a chat (components/Episode.tsx). */
 .radio-start { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 58px; margin: 24px 0 8px; border: 0; border-radius: 29px; background: var(--accent-fill); color: #fff; font-family: var(--ja); font-size: 19px; font-weight: 500; box-shadow: 0 12px 26px -12px rgba(181, 69, 46, 0.6); }
-.page.on-air { padding-bottom: 170px; }
+.page.on-air { padding-bottom: calc(env(safe-area-inset-bottom) + 280px); }
 .radio-float {
   position: sticky; top: calc(env(safe-area-inset-top) + 8px); z-index: 12; height: 132px; margin: 8px -6px 0; border-radius: 20px; overflow: hidden;
   background: linear-gradient(170deg, #f3dcbd 0%, #edc69c 60%, #dba47c 100%) center 40% / cover; box-shadow: 0 14px 26px -12px rgba(60, 45, 25, 0.5);
@@ -1755,3 +1755,4 @@ body.in-route .radio-float { top: calc(env(safe-area-inset-top) + 56px); }
 .retell-hint span { flex: none; font-size: 12px; font-weight: 400; letter-spacing: 0.04em; }
 @keyframes hint-in { from { opacity: 0; transform: translateY(6px); } }
 .fb-note.hint-none { color: var(--ok-ink); font-weight: 500; }
+.easy-err { position: absolute; top: 46px; right: 10px; padding: 3px 10px; border-radius: 10px; background: rgba(251, 249, 244, 0.95); color: var(--no-ink); font-size: 12px; }
