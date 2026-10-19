@@ -134,6 +134,8 @@ export type Retell = {
   good?: string[];
   again?: { topic: string; mps?: number; pauses: number; stalls?: number; uptake?: string[] };
   next?: RetellPoint;
+  // Times this story was told three times that day (one record per day and story).
+  runs?: number;
 };
 export const RETELLS_KEPT = 60;
 
@@ -306,7 +308,14 @@ export function merge(a: Progress, b: Progress): Progress {
     people[k] = [...new Map(all.map((m) => [`${m.date} ${m.ja}`, m])).values()].sort((x, y) => (x.date < y.date ? -1 : 1)).slice(-MEMORIES_KEPT);
   }
 
-  const retells = [...new Map([...(a.retells ?? []), ...(b.retells ?? [])].map((r) => [`${r.date} ${r.topic}`, r])).values()]
+  const byDay = new Map<string, Retell>();
+  for (const r of [...(a.retells ?? []), ...(b.retells ?? [])]) {
+    const k = `${r.date} ${r.topic}`;
+    const was = byDay.get(k);
+    const runs = Math.max(was?.runs ?? 1, r.runs ?? 1);
+    byDay.set(k, runs > 1 ? { ...r, runs } : r);
+  }
+  const retells = [...byDay.values()]
     .sort((x, y) => (x.date < y.date ? -1 : 1))
     .slice(-RETELLS_KEPT);
 
