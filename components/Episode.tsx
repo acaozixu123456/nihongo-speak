@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { makingText, radioClips, useRadioMaking, type Clip, type ClipState, type RadioPart } from "@/lib/client/moyu";
 import { mixRadio, type Mixed } from "@/lib/client/radio-mix";
 import { play, preload, SILENCE, ttsUrl, unlock } from "@/lib/client/player";
-import { ensureEasy, ensureTitleJa, findEpisode, hasEasy, markHeard, RADIO_VOICE, useProgress } from "@/lib/client/progress";
+import { easyLine, ensureEasy, ensureTitleJa, findEpisode, hasEasy, markHeard, RADIO_VOICE, useProgress } from "@/lib/client/progress";
 import { setAudioSession } from "@/lib/client/recorder";
 import { useHydrated } from "@/lib/client/hydrated";
 import Earworm from "./Earworm";
@@ -28,7 +28,6 @@ const PART_NAME: Record<RadioPart, string> = { open: "開幕", letter: "お便�
 type Phase = "idle" | "loading" | "playing" | "paused";
 const ZH_KEY = "nihongo-speak:ep-zh";
 const RATE_KEY = "nihongo-speak:ep-rate";
-const EASY_KEY = "nihongo-speak:ep-easy";
 // Slower speeds for when the hosts run too fast to follow.
 const RATES = [1, 0.85, 0.7];
 
@@ -85,13 +84,13 @@ export default function Episode({ id }: { id: string }) {
   const [tab, setTab] = useState<Tab>("script");
   const [showZh, setShowZhState] = useState(false);
   const [rate, setRateState] = useState(1);
-  // やさしく: every hard line shown in easy Japanese; flipped: lines switched one at a time.
-  const [easyOn, setEasyOnState] = useState(false);
+  // やさしく: lines (by index in the script) long-pressed and shown in easy Japanese, the ones being
+  // made, and a short note when a line is easy enough already or couldn't be made.
   const [flipped, setFlipped] = useState<Set<number>>(new Set());
+  const [making, setMaking] = useState<Set<number>>(new Set());
+  const [easyNote, setEasyNote] = useState<{ i: number; text: string } | null>(null);
   // The line being spoken has been scrolled out of view.
   const [away, setAway] = useState(false);
-  // The easy versions couldn't be made just now.
-  const [easyErr, setEasyErr] = useState(false);
   const chat = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
   // How each clip is getting on while the episode's audio is being made.
@@ -107,7 +106,6 @@ export default function Episode({ id }: { id: string }) {
       setShowZhState(localStorage.getItem(ZH_KEY) === "1");
       const r = Number(localStorage.getItem(RATE_KEY));
       if (RATES.includes(r)) setRateState(r);
-      setEasyOnState(localStorage.getItem(EASY_KEY) === "1");
     } catch {}
     // Scrolling by hand pauses the follow-along for a few seconds.
     const hand = () => (touched.current = Date.now());
@@ -130,6 +128,32 @@ export default function Episode({ id }: { id: string }) {
     if (!speaking || !open || Date.now() - touched.current < 4000) return;
     notes.current?.querySelector<HTMLElement>(".sline.now")?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [speaking, open]);
+
+  // 长按一句 → やさしく (from the 问 AI bar): that line in easy Japanese, made now if it has none yet.
+  const lineEp = ep?.id;
+  useEffect(() => {
+    if (!lineEp) return;
+    const id = lineEp;
+    const onEasy = async (e: Event) => {
+      const ja = (e as CustomEvent<string>).detail;
+      const i = findEpisode(p, id)?.lines.findIndex((l) => l.ja === ja) ?? -1;
+      if (i < 0) return;
+      setEasyNote(null);
+      setMaking((m) => new Set(m).add(i));
+      const easy = await easyLine(id, i);
+      setMaking((m) => {
+        const n = new Set(m);
+        n.delete(i);
+        return n;
+      });
+      if (easy) setFlipped((f) => new Set(f).add(i));
+      else setEasyNote({ i, text: easy === "" ? "这句已经很简单了" : "没做出来，再试一次" });
+    };
+    window.addEventListener("ask-easy", onEasy);
+    return () => window.removeEventListener("ask-easy", onEasy);
+    // p is read when the event comes; only the episode matters here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lineEp]);
 
   // The chat follows the newest line, unless the learner scrolled back to read; then a button
   // brings them back to it.
@@ -212,21 +236,6 @@ export default function Episode({ id }: { id: string }) {
     setShowZhState(on);
     try {
       localStorage.setItem(ZH_KEY, on ? "1" : "0");
-    } catch {}
-  }
-
-  function setEasyOn(on: boolean) {
-    setEasyOnState(on);
-    setFlipped(new Set());
-    setEasyErr(false);
-    if (on && !hasEasy(episode))
-      ensureEasy(episode).then((ok) => {
-        if (ok) return;
-        setEasyOnState(false);
-        setEasyErr(true);
-      });
-    try {
-      localStorage.setItem(EASY_KEY, on ? "1" : "0");
     } catch {}
   }
 
@@ -376,8 +385,6 @@ export default function Episode({ id }: { id: string }) {
   const mixed = prep.current;
   const shown = mixed && far >= 0 ? mixed.clips.slice(0, far + 1) : [];
   const lineAt = new Map(ep.lines.map((l, i) => [l.ja, i]));
-  const easing = easyOn && !hasEasy(ep);
-  const hardN = ep.lines.filter((l) => l.easy).length;
   const next = mixed && at >= 0 ? mixed.clips[at + 1] : undefined;
 
   return (
@@ -401,11 +408,6 @@ export default function Episode({ id }: { id: string }) {
       ) : (
         <>
           <div className={`radio-float ${cover ? "drawn" : ""}`} style={cover ? { backgroundImage: `url(${cover})` } : undefined}>
-            <button className={`easy-t ${easyOn ? "on" : ""}`} onClick={() => setEasyOn(!easyOn)}>
-              {easing && <span className="spin" />}
-              やさしく{easyOn && !easing ? ` ✓ ${hardN}文` : ""}
-            </button>
-            {easyErr && <span className="easy-err">没做出来，再点一次</span>}
             <div className="float-bar">
               <span>{title}</span>
               <div className={`radio-waves ${playingNow ? "on" : ""}`} aria-hidden>
@@ -429,7 +431,7 @@ export default function Episode({ id }: { id: string }) {
               if (!w) return <div key={i} className="chat-chip">{c.part === "song" ? "♪ 洗脳歌" : c.show}</div>;
               const li = lineAt.get(c.show);
               const easy = li === undefined ? "" : (ep.lines[li].easy ?? "");
-              const asEasy = !!easy && easyOn !== flipped.has(li!);
+              const asEasy = !!easy && flipped.has(li!);
               const isNow = i === at;
               const nw = next && i === at && (next.line ? (next.line.voice === RADIO_VOICE.A ? "A" : "B") : next.sub === "ハル" ? "A" : next.sub === "ケン" ? "B" : null);
               const flipIt = (e: React.MouseEvent) => {
@@ -438,13 +440,19 @@ export default function Episode({ id }: { id: string }) {
               };
               return (
                 <div key={i} className="msg-wrap">
-                  <div className={`msg ${w === "A" ? "l" : "r"} ${isNow ? "cur" : "old"}`} data-line={c.show} data-before={shown[i - 1]?.show ?? ""} onClick={() => seekClip(i)}>
+                  <div
+                    className={`msg ${w === "A" ? "l" : "r"} ${isNow ? "cur" : "old"}`}
+                    data-line={c.show}
+                    data-before={shown[i - 1]?.show ?? ""}
+                    data-easy-line={li === undefined ? undefined : c.show}
+                    onClick={() => seekClip(i)}
+                  >
                     <span className={`av av-${w}`}>{w === "A" ? "春" : "健"}</span>
                     <div className={`bub ${asEasy ? "easyb" : ""}`}>
                       {asEasy ? (
                         <>
-                          <button className="easy-lab" onClick={flipIt}>
-                            やさしく
+                          <button className="easy-lab" onClick={flipIt} aria-label="原文に戻す">
+                            やさしく ×
                           </button>
                           <span className="easy-ja">{easy}</span>
                           <span className="orig">{c.show}</span>
@@ -454,11 +462,12 @@ export default function Episode({ id }: { id: string }) {
                       ) : (
                         c.show
                       )}
-                      {!asEasy && easy && (
-                        <button className="hard" onClick={flipIt}>
-                          やさしく
-                        </button>
+                      {li !== undefined && making.has(li) && (
+                        <span className="easy-making">
+                          <span className="spin" /> やさしく…
+                        </span>
                       )}
+                      {li !== undefined && easyNote?.i === li && <span className="easy-making">{easyNote.text}</span>}
                       {isNow && mixed && <Bar audio={audio} from={mixed.starts[i]} to={mixed.ends[i]} />}
                       {c.back && <span className="react">{c.back.text}</span>}
                     </div>

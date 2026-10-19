@@ -832,6 +832,32 @@ export function ensureEasy(ep: RadioEpisode): Promise<boolean> {
   return going;
 }
 
+// One line said more easily, on a long press: the saved easy version, else asked for now and kept.
+// Resolves to the easy line, or "" when the line is easy enough already (null: it couldn't be made).
+export async function easyLine(epId: string, i: number): Promise<string | null> {
+  const ep = read().episodes.find((e) => e.id === epId);
+  const line = ep?.lines[i];
+  if (!ep || !line) return null;
+  if (line.easy) return line.easy;
+  try {
+    const r = await fetch("/api/radio-easy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ one: line.ja, before: ep.lines[i - 1]?.ja ?? "" }),
+    });
+    const d = r.ok ? ((await r.json()) as { easy?: string }) : null;
+    if (typeof d?.easy !== "string") return null;
+    const easy = d.easy.trim() === line.ja.trim() ? "" : d.easy.trim();
+    if (easy) {
+      const p = read();
+      write({ ...p, episodes: p.episodes.map((e) => (e.id === epId ? { ...e, lines: e.lines.map((l, j) => (j === i ? { ...l, easy } : l)) } : e)) });
+    }
+    return easy;
+  } catch {
+    return null;
+  }
+}
+
 // ---- Custom scenarios ----
 
 export function addCustom(s: CustomScenario) {
