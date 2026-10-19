@@ -10,6 +10,7 @@ import { LiveStopped, liveReply, stopLive, unlockLive } from "@/lib/client/live"
 import { transcribe } from "@/lib/client/recorder";
 import { knownTags, memories, primePoint, recordFeedback, recordPoints, recordSpeech, recordTalkTurn, remember, useProgress, wavSeconds } from "@/lib/client/progress";
 import FeedbackCard from "./FeedbackCard";
+import { SenseiLine } from "./Sensei";
 import HoldButton from "./HoldButton";
 
 // audio: Gemini Live's own recording of the line, for 再听一遍.
@@ -352,7 +353,7 @@ export default function Call({ call, round }: { call: CallDef; round?: RoundProp
               </div>
             </div>
           </div>
-          {busy === "feedback" && <p className="muted judge-wait">正在点评这通电话…</p>}
+          {busy === "feedback" && <SenseiLine wait ja="うん、うん。電話、聞いていましたよ…" zh="我在听这通电话…" />}
           {feedback && <FeedbackCard feedback={feedback} voice={talk.aiVoice} scenarioId={scenarioId} />}
           <h2>通话记录</h2>
           <div className="card">
