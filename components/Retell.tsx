@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { calls, people } from "@/content/calls";
-import type { RetellEnd, RetellFix } from "@/lib/claude";
+import type { RetellEnd, RetellFix, RetellKeys } from "@/lib/claude";
 import type { Heard } from "@/lib/gemini-hear";
 import { play, stop as stopAudio, ttsUrl, unlock } from "@/lib/client/player";
 import {
@@ -27,7 +27,6 @@ import {
 } from "@/lib/client/progress";
 import { flowOf, moraRate, runClips, wavSlice, type Flow } from "@/lib/client/fluency";
 import { Recorder, transcribeLong } from "@/lib/client/recorder";
-import { watchQuiet } from "@/lib/client/silence";
 import SayAlong from "@/components/SayAlong";
 import { heardToday, stepDone, useOnRoute } from "@/lib/client/route";
 import { useHydrated } from "@/lib/client/hydrated";
@@ -44,7 +43,8 @@ import { SenseiLine } from "./Sensei";
 // is the honest measure of progress. A point still not said right at the end of a day comes back before
 // the next day's first telling, on a new story, until it is said right there.
 // The radio's ハル retells the story in three sentences before this (a model to notice against, Hanaoka
-// & Izumi), and the keywords are the story's skeleton. The fix is first a prompt to find the better way
+// & Izumi), and the keywords are the story's skeleton; they stay up every time, and before each retelling
+// the ones already used well give their place to new ones. The fix is first a prompt to find the better way
 // yourself (Lyster & Saito), then the answer. The end pairs what you said with the natural version
 // (Lynch's reformulation). Speed is morae per second with long pauses counted, and a day after a
 // telling the old story is told once more before the new one (spaced repetition, Bui et al. 2019).
@@ -69,7 +69,9 @@ const REACTIONS: Record<string, string[]> = {
   sato: ["マジですか、それ初めて聞きました。", "へえー、なんか得した気分です。"],
 };
 
-type Topic = { title: string; about: string; keys: { ja: string; kana?: string }[]; starters: string[]; ep?: string };
+type Key = { ja: string; kana?: string };
+// pool: more words from the story, for the keywords that take a learned one's place.
+type Topic = { title: string; about: string; keys: Key[]; pool: Key[]; starters: string[]; ep?: string };
 
 const LIFE_TOPICS = ["今天上班（或今天一天）做了什么", "这个周末做了什么，或打算做什么", "最近吃过的好吃的东西", "最近让你吃惊或开心的一件事"];
 
@@ -82,12 +84,13 @@ function epTopic(ep: Progress["episodes"][number]): Topic {
     title: ep.title_zh,
     about: `${ep.title_zh}\n${(main.length ? main : ep.lines.map((l) => l.ja)).join("").slice(0, 600)}`,
     keys: epKeys(ep),
+    pool: [...(ep.story?.keys ?? []), ...(ep.words ?? [])].map((w) => ({ ja: w.ja, kana: w.kana })),
     ep: ep.id,
     starters: ["今日ラジオで、〜って話を聞いたんですけど。", "びっくりしたのは、〜ってことです。", "だから、〜らしいですよ。"],
   };
 }
 
-const lifeTopic = (t: string): Topic => ({ title: t, about: t, keys: [], starters: ["実は、〜んですよ。", "それで、〜。", "結局、〜って感じでした。"] });
+const lifeTopic = (t: string): Topic => ({ title: t, about: t, keys: [], pool: [], starters: ["実は、〜んですよ。", "それで、〜。", "結局、〜って感じでした。"] });
 
 // What there is to tell, first one first: today's episode once it has been heard, else something from
 // the learner's own day; then the other heard episodes and life topics, for practising off the route.
@@ -119,10 +122,7 @@ const chars = (s: string) => s.replace(/[\s、。，,.!！?？「」…]/g, "").
 
 // perMin: long silences per minute; stalls: those in the middle of a sentence, per minute (only when
 // Gemini wrote the telling down).
-// hints: how many times a hint came up during the telling (second telling only).
-type Take = { text: string; sec: number; cpm: number; span: number; pauses: number; perMin: number; stalls?: number; mps?: number; good?: string; hints?: number };
-// Quiet this long in the second telling brings up the next hint.
-const HINT_AFTER_S = 3;
+type Take = { text: string; sec: number; cpm: number; span: number; pauses: number; perMin: number; stalls?: number; mps?: number; good?: string };
 // The longest silence in the middle of a sentence in the first telling, where it is in the recording.
 type Stall = { before: string; after: string; secs: number; from: number; to: number };
 const STALL_MIN_S = 1.5;
@@ -296,12 +296,16 @@ export default function Retell() {
   const [shown, setShown] = useState(false);
   // Readings of each telling, asked for as soon as it is transcribed (index 3: the telling of the old story).
   const kana = useRef<Promise<string | undefined>[]>([]);
-  // The second telling's hints, written from where the first one got stuck: the one up now, the next
-  // to show, how many came up, and the microphone watch that brings them.
-  const [hint, setHint] = useState<string | null>(null);
-  const hintNext = useRef(0);
-  const hintsUsed = useRef<number | null>(null);
-  const quietStop = useRef<(() => void) | null>(null);
+  // The keywords as renewed before each telling after the first (words already used well swapped for
+  // new ones), the ones just taken off and the ones just put on; null: the topic's own.
+  const [keyed, setKeyed] = useState<(RetellKeys & { fresh: string[] }) | null>(null);
+  // A renewal's outcome; when nothing changed, the last one's marks come off.
+  const renew = (k: RetellKeys | null) =>
+    setKeyed((was) => {
+      if (!k) return was && { ...was, done: [], fresh: [] };
+      const before = was?.keys ?? topic!.keys;
+      return { ...k, fresh: k.keys.filter((x) => !before.some((b) => b.ja === x.ja)).map((x) => x.ja) };
+    });
 
   useEffect(() => {
     if (!hydrated || topics.length) return;
@@ -321,7 +325,6 @@ export default function Retell() {
   useEffect(
     () => () => {
       if (timer.current) clearInterval(timer.current);
-      quietStop.current?.();
       stopAudio();
       rec.current?.stop().catch(() => {});
     },
@@ -357,24 +360,6 @@ export default function Retell() {
     startedAt.current = Date.now();
     setLeft(limit);
     setPhase("talk");
-    hintsUsed.current = null;
-    const hints = round === 1 && !warming ? (fix?.hints ?? []).filter(Boolean) : [];
-    if (hints.length && r.input) {
-      hintsUsed.current = 0;
-      hintNext.current = 0;
-      let up = false;
-      quietStop.current = watchQuiet(r.input, (quiet) => {
-        if (quiet === 0 && up) {
-          // Speaking again: the hint goes.
-          up = false;
-          setHint(null);
-        } else if (quiet >= HINT_AFTER_S && !up && hintNext.current < hints.length) {
-          up = true;
-          setHint(hints[hintNext.current++]);
-          hintsUsed.current = (hintsUsed.current ?? 0) + 1;
-        }
-      });
-    }
     timer.current = window.setInterval(() => {
       const l = limit - (Date.now() - startedAt.current) / 1000;
       setLeft(l);
@@ -385,9 +370,6 @@ export default function Retell() {
   async function finish() {
     if (timer.current) clearInterval(timer.current);
     timer.current = null;
-    quietStop.current?.();
-    quietStop.current = null;
-    setHint(null);
     const r = rec.current;
     rec.current = null;
     if (!r) return;
@@ -446,7 +428,6 @@ export default function Retell() {
       perMin: perMinute(flow.pauses, span),
       ...(heard && { stalls: perMinute(heard.runs.filter((r) => r.cut).length, span) }),
       ...(heard?.good && { good: heard.good }),
-      ...(!old && n === 1 && hintsUsed.current !== null && { hints: hintsUsed.current }),
     };
     const slot = old ? 3 : n;
     kana.current[slot] = heard
@@ -468,6 +449,15 @@ export default function Retell() {
     texts.current[n] = text;
     const next = takes.map((t, i) => (i === n ? take : t));
     setTakes(next);
+    // Before the next telling, keywords already used well give their place to new ones. After the
+    // first it is decided while the fix is (and waited for with it); after the second it comes in
+    // while the learner reads, and a telling already under way keeps the words it started with.
+    const swap =
+      n < 2
+        ? post<RetellKeys>({ kind: "keys", topic: topic!.about, keys: keyed?.keys ?? topic!.keys, pool: topic!.pool, said: texts.current.slice(0, n + 1) })
+            .then((k) => (k.done.length || k.keys.length !== (keyed?.keys ?? topic!.keys).length ? k : null))
+            .catch(() => null)
+        : null;
     if (n === 0) {
       setBusy("fix");
       const st = heard ? stallOf(heard, flow) : null;
@@ -498,6 +488,7 @@ export default function Retell() {
       } catch {
         // The tellings still work without the one point.
       }
+      renew(await swap);
       setBusy("");
       setRound(1);
       return;
@@ -505,6 +496,9 @@ export default function Retell() {
     if (n === 1) {
       setBusy("");
       setRound(2);
+      swap?.then((k) => {
+        if (!rec.current) renew(k);
+      });
       return;
     }
     // Third time: done.
@@ -527,7 +521,6 @@ export default function Retell() {
       pauses: all.map((t) => t.pauses),
       perMin: all.map((t) => t.perMin),
       ...(stalls && { stalls }),
-      ...(all[1]?.hints !== undefined && { hints: all[1].hints }),
       texts: texts.current.slice(0, 3),
       ...(all.some((t) => t.good) && { good: all.flatMap((t) => (t.good ? [t.good] : [])) }),
       ...(again &&
@@ -662,9 +655,8 @@ export default function Retell() {
   // Keys from the episode as it is now: its readings may have been checked since the topic was picked.
   const shownEp = shownT.ep ? p.episodes.find((e) => e.id === shownT.ep) : undefined;
   const shownKeys = shownEp ? epKeys(shownEp) : shownT.keys;
-  // The props come off one at a time: keys and starters for the first telling, keys for the second,
-  // nothing but the one point for the third.
-  const showKeys = warming || round < 2;
+  // Keywords every time (renewed as they are learned); the ready-made openings only the first time.
+  const keys = warming ? shownKeys : (keyed?.keys ?? shownKeys);
   const showStarters = warming || round === 0;
 
   return (
@@ -684,16 +676,17 @@ export default function Retell() {
           )}
           {talking && <span className={`today-big ${left < 10 ? "hurry" : ""}`}>{clock(left)}</span>}
         </span>
-        {showKeys && shownKeys.length > 0 && (
+        {keys.length > 0 && (
           <div className="retell-keys">
-            {shownKeys.map((k) => (
-              <span key={k.ja}>
+            {keys.map((k) => (
+              <span key={k.ja} className={!warming && keyed?.fresh.includes(k.ja) ? "new" : ""}>
                 {k.ja}
                 {k.kana && /[一-龯々]/.test(k.ja) && <small>{k.kana}</small>}
               </span>
             ))}
           </div>
         )}
+        {!warming && !talking && keyed && keyed.done.length > 0 && <span className="retell-done">✓ 会用了：{keyed.done.join("・")}，换成新词</span>}
         {showStarters && (
           <div className="retell-starters">
             {shownT.starters.map((s) => (
@@ -704,12 +697,6 @@ export default function Retell() {
         {!warming && round === 0 && carry && <span className="retell-focus">这次留意：{carry.focus_zh}</span>}
         {/* Under the card while the fix is being read; inside it only while telling, so it shows once. */}
         {round > 0 && focus && (talking || round === 2) && <span className="retell-focus">只注意：{focus}</span>}
-        {talking && hint && (
-          <div className="retell-hint" key={hint}>
-            <span>ヒント</span>
-            {hint}
-          </div>
-        )}
         {talking ? (
           <button className="today-go retell-stop" onClick={finish}>
             <span className="rec-dot" /> 说完了
@@ -753,9 +740,6 @@ export default function Retell() {
             </div>
           )}
           {takes[1]?.good && <Good ja={takes[1].good} onHear={hear} />}
-          {takes[1].hints !== undefined && (
-            <p className={`small-text fb-note ${takes[1].hints ? "" : "hint-none"}`}>{takes[1].hints ? `ヒント ${takes[1].hints}回` : "✓ ヒントなしで言えた"}</p>
-          )}
           {secondNote(takes[0], takes[1], texts.current[1], stall && fix?.stall.better ? fix.stall.better : fix?.fix.better, !!focus).map((l) => (
             <p key={l} className="small-text fb-note">
               {l}
