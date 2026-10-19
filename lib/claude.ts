@@ -742,8 +742,9 @@ export async function retellKana(texts: string[]): Promise<string[]> {
 // in Chinese. Backs up Gemini's own answer in /api/tts. Null when no clean reading comes back.
 const ReadingSchema = z.object({ kana: z.string().describe("読み方（ひらがなだけ）") });
 
-export async function kanaReading(text: string): Promise<string | null> {
-  const { kana } = await haikuFirst(ReadingSchema, "日本語の読み方をひらがなだけで答える。記号や数字も読みに直す。", text, 300);
+// careful: Opus instead of Haiku, the third opinion when the other two don't agree on a word.
+export async function kanaReading(text: string, careful = false): Promise<string | null> {
+  const { kana } = await haikuFirst(ReadingSchema, "日本語の読み方をひらがなだけで答える。記号や数字も読みに直す。", text, careful ? 2000 : 300, careful ? "low" : undefined);
   return /^[぀-ヿ\s、。！？・ー]+$/.test(kana.trim()) ? kana.trim() : null;
 }
 

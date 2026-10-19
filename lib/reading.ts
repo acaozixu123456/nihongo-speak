@@ -27,16 +27,21 @@ const KANJI = /[一-龯々〆ヶ]/;
 
 // The readings the episode's notes show over its words (story.keys, words), checked: the script
 // model wrote them in one go with everything else and sometimes gets one wrong (生乾き as
-// なまどらき). A reading Gemini and Haiku agree on wins; otherwise the written one stays only if one
-// of them says the same; otherwise it's dropped ("") rather than shown wrong.
+// なまどらき). Gemini often gives nothing in time, so when Gemini and Haiku don't agree Opus is asked
+// too. A reading two of the three say wins; otherwise the written one stays only if one of them
+// says the same; otherwise it's dropped ("") rather than shown wrong.
 export async function checkReadings(words: { ja: string; kana: string }[]): Promise<string[]> {
   return Promise.all(
     words.map(async ({ ja, kana }) => {
       if (!KANJI.test(ja)) return kana;
-      const { a, b } = await bothReadings(ja, 25000);
+      const { a, b } = await bothReadings(ja, 15000);
       if (a && b && hira(a) === hira(b)) return hira(a);
-      if ([a, b].some((r) => r && hira(r) === hira(kana))) return kana;
-      console.warn(`reading dropped for ${ja}: wrote ${kana}, heard ${a ?? "-"} / ${b ?? "-"}`);
+      const c = await kanaReading(ja, true).catch(() => null);
+      const said = [a, b, c].filter((r): r is string => !!r).map(hira);
+      const two = said.find((r, i) => said.indexOf(r) !== i);
+      if (two) return two;
+      if (said.includes(hira(kana))) return kana;
+      console.warn(`reading dropped for ${ja}: wrote ${kana}, heard ${a ?? "-"} / ${b ?? "-"} / ${c ?? "-"}`);
       return "";
     }),
   );
