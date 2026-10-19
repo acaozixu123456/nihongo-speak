@@ -132,11 +132,12 @@ export function SenseiSays({ ja, zh, mute = false }: { ja: string; zh?: string; 
 
 // Her short word on a result: the face on the left, the bubble beside it. Used wherever something the
 // learner said is judged, so every correction comes from her.
-export function SenseiLine({ ja, zh, nod = false, wait = false }: { ja: string; zh?: string; nod?: boolean; wait?: boolean }) {
+// mute: no ▶ (while she waits, or a greeting whose ▶ would be mistaken for something to listen to).
+export function SenseiLine({ ja, zh, nod = false, wait = false, mute = false }: { ja: string; zh?: string; nod?: boolean; wait?: boolean; mute?: boolean }) {
   return (
     <div className={`sensei-line${wait ? " wait" : ""}`}>
       <SenseiFace size={44} nod={nod} />
-      <SenseiSays ja={ja} zh={zh} mute={wait} />
+      <SenseiSays ja={ja} zh={zh} mute={wait || mute} />
     </div>
   );
 }

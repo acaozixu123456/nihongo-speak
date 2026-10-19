@@ -104,7 +104,7 @@ export default function Home() {
     return (
       <main className="page">
         {top}
-        <SenseiLine ja="今日はここまで。よくがんばりましたね。" zh="今天就到这里，辛苦了。" nod />
+        <SenseiLine ja="今日はここまで。よくがんばりましたね。" zh="今天就到这里，辛苦了。" nod mute />
         <div className="now-card">
           <div className="kicker">済</div>
           {tomorrow && (
@@ -144,7 +144,7 @@ export default function Home() {
   return (
     <main className="page">
       {top}
-      <SenseiLine ja={say[0]} zh={say[1]} />
+      <SenseiLine ja={say[0]} zh={say[1]} mute />
       <section className="now-card next">
         <div className="kicker">いま・{PILLAR_JA[now!]}</div>
         {fix ? (
