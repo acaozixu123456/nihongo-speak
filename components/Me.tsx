@@ -5,7 +5,7 @@ import { dayKey, dueSkillCount, streak, teacherFix, teacherPlan, todaysCards, us
 import { allTime, lastDays } from "@/lib/client/metrics";
 import { useHydrated } from "@/lib/client/hydrated";
 import { FixBlock, GoodBlock } from "./TeacherMemo";
-import { SenseiFace, SenseiSays } from "./Sensei";
+import { SenseiFace, SenseiSays, speak } from "./Sensei";
 
 // 先生: 森先生's page. Her letter about the week, the record, and everything she looks after
 // (sentences due, practice, the learner's weak points, saved phrases).
@@ -25,14 +25,19 @@ export default function Me() {
     <main className="page">
       <Link href="/" className="back">← 今日</Link>
       <div className="sensei-hero">
-        <SenseiFace size={112} />
+        <SenseiFace size={112} nod={!!good} />
         <b>森先生</b>
         <small>いつも聞いていますよ</small>
       </div>
 
       {t?.letter_ja ? (
         <div className="sensei-letter">
-          <p className="ja">{t.letter_ja}</p>
+          <div className="sensei-ja">
+            <span>{t.letter_ja}</span>
+            <button className="bag-play" aria-label="聞く" onClick={() => speak(t.letter_ja!)}>
+              ▶
+            </button>
+          </div>
           {t.note_zh && <p className="zh">{t.note_zh}</p>}
           <div className="sig">森より</div>
         </div>

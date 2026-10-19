@@ -199,7 +199,7 @@ export default function Home() {
     return (
       <section key="teacher" className={`pil${next ? " next" : ""}`}>
         <div className="sensei-head">
-          <SenseiFace />
+          <SenseiFace nod={over || (next && !!good)} />
           <b>森先生</b>
           <small>老师</small>
           <Link href="/me" className="pil-more">メモ ›</Link>
