@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { stepDone } from "@/lib/client/route";
+import { heardToday, stepDone } from "@/lib/client/route";
 import { useEffect, useRef, useState } from "react";
-import { calls, callTalk, type Call as CallDef, type Prime } from "@/content/calls";
+import { calls, callTalk, type Call as CallDef, type Prime, type TodayTopic } from "@/content/calls";
 import type { Feedback, Turn } from "@/lib/claude";
 import { play, stop, ttsUrl, unlock } from "@/lib/client/player";
 import { LiveStopped, liveReply, stopLive, unlockLive } from "@/lib/client/live";
@@ -80,7 +80,8 @@ export default function Call({ call, round }: { call: CallDef; round?: RoundProp
   // The character's personality, what they remember from earlier calls, and the learner's shakiest point
   // (which they slip into their own lines) go along with every request. Picked when the call starts.
   const [prime, setPrime] = useState<Prime | null>(null);
-  const talk = callTalk(call, call.person ? memories(p, call.person) : [], prime);
+  const [today, setToday] = useState<TodayTopic | null>(null);
+  const talk = callTalk(call, call.person ? memories(p, call.person) : [], prime, today);
   const scenarioId = `call:${call.id}`;
   const [phase, setPhase] = useState<Phase>("ready");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -134,6 +135,9 @@ export default function Call({ call, round }: { call: CallDef; round?: RoundProp
     liveOn.current = true;
     open.current = true;
     setPrime(primePoint(p));
+    // The episode heard today, with a few of its key sentences to give a reason to use.
+    const ep = heardToday(p);
+    setToday(ep ? { title: ep.title_ja ?? ep.title_zh, phrases: ep.phrases.slice(0, 3).map((x) => x.ja) } : null);
     const first: Message = { role: "assistant", text: talk.opening.ja, zh: talk.opening.zh };
     setMessages([first]);
     setPhase("live");

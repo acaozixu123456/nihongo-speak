@@ -56,10 +56,27 @@ export function primeRule(prime?: Prime | null) {
 - 説明したり、言わせようとしたり、直したりはしない。`;
 }
 
-// The call's role-play settings with the character's personality, what they remember, and the point to prime.
-export function callTalk(call: Pick<Call, "person" | "talk">, memories: { date: string; ja: string }[], prime?: Prime | null): Scenario["talk"] {
+// What the learner heard on today's radio, so the call gives them a reason to use it (transfer).
+export type TodayTopic = { title: string; phrases: string[] };
+
+export function topicRule(today?: TodayTopic | null) {
+  if (!today) return "";
+  const phrases = today.phrases.length ? `\n- 学習者が次の表現を使えそうな質問をする：${today.phrases.map((x) => `「${x}」`).join("")}。` : "";
+  return `\n\n【今日の話題（学習者には言わない）】学習者は今日ラジオで「${today.title}」の話を聞いた。
+- 用件の途中か最後に一度、あなたから自然にその話題を振る（「そういえば〜って知ってる？」など）。学習者に話してもらう。${phrases}
+- 言わせようとしたり、直したりはしない。`;
+}
+
+// The call's role-play settings with the character's personality, what they remember, the point to prime
+// and, for the people the learner knows, today's radio topic.
+export function callTalk(
+  call: Pick<Call, "person" | "talk">,
+  memories: { date: string; ja: string }[],
+  prime?: Prime | null,
+  today?: TodayTopic | null,
+): Scenario["talk"] {
   const person = findPerson(call.person);
-  const primed = primeRule(prime);
+  const primed = primeRule(prime) + (person ? topicRule(today) : "");
   if (!person) return { ...call.talk, setup: `${call.talk.setup}${primed}` };
   const recall = memories.length
     ? `\n\nこれまでの電話で分かっていること（古い順）：\n${memories.map((m) => `- ${m.date}：${m.ja}`).join("\n")}\n会話の最初のほうで、その中の一つに自然に一言触れる（覚えていてくれた、と感じるように）。しつこく繰り返さない。`
