@@ -337,6 +337,8 @@ export function merge(a: Progress, b: Progress): Progress {
         const copies = [...(a.episodes ?? []), ...(b.episodes ?? [])].filter((o) => o.id === e.id);
         const asked = [...new Map(copies.flatMap((o) => o.asked ?? []).map((x) => [x.text, x])).values()];
         const title_ja = e.title_ja ?? copies.find((o) => o.title_ja)?.title_ja;
+        // Readings checked later (lib/client/progress.ts ensureReadings) on any of the copies.
+        const checked = e.readings ? e : copies.find((o) => o.readings);
         // やさしく written later (for an old episode, or one long-pressed line) on any of the copies.
         const same = copies.filter((o) => o.lines.length === e.lines.length);
         const lines = e.lines.map((l, i) => {
@@ -349,6 +351,7 @@ export function merge(a: Progress, b: Progress): Progress {
           heard: e.heard || copies.some((o) => o.heard),
           ...(asked.length ? { asked } : {}),
           ...(title_ja ? { title_ja } : {}),
+          ...(checked ? { story: checked.story, words: checked.words, readings: checked.readings } : {}),
         };
       })
       .sort((x, y) => (x.id < y.id ? 1 : -1))

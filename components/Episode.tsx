@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { makingText, radioClips, useRadioMaking, type Clip, type ClipState, type RadioPart } from "@/lib/client/moyu";
 import { mixRadio, type Mixed } from "@/lib/client/radio-mix";
 import { play, preload, SILENCE, ttsUrl, unlock } from "@/lib/client/player";
-import { easyLine, ensureEasy, ensureTitleJa, findEpisode, hasEasy, markHeard, RADIO_VOICE, useProgress } from "@/lib/client/progress";
+import { easyLine, ensureEasy, ensureReadings, ensureTitleJa, findEpisode, hasEasy, markHeard, RADIO_VOICE, useProgress } from "@/lib/client/progress";
 import { setAudioSession } from "@/lib/client/recorder";
 import { useHydrated } from "@/lib/client/hydrated";
 import Earworm from "./Earworm";
@@ -67,6 +67,7 @@ export default function Episode({ id }: { id: string }) {
   useEffect(() => {
     if (!ep) return;
     ensureTitleJa(ep);
+    ensureReadings(ep);
     if (!hasEasy(ep) && !easyAsked.has(ep.id)) {
       easyAsked.add(ep.id);
       ensureEasy(ep);

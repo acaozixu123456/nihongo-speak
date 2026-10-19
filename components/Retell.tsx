@@ -8,6 +8,7 @@ import type { Heard } from "@/lib/gemini-hear";
 import { play, stop as stopAudio, ttsUrl, unlock } from "@/lib/client/player";
 import {
   dayKey,
+  ensureReadings,
   hasCard,
   knownTags,
   RADIO_VOICE,
@@ -70,17 +71,21 @@ const REACTIONS: Record<string, string[]> = {
 
 type Key = { ja: string; kana?: string };
 // pool: more words from the story, for the keywords that take a learned one's place.
-type Topic = { title: string; about: string; keys: Key[]; pool: Key[]; starters: string[] };
+type Topic = { title: string; about: string; keys: Key[]; pool: Key[]; starters: string[]; ep?: string };
 
 const LIFE_TOPICS = ["今天上班（或今天一天）做了什么", "这个周末做了什么，或打算做什么", "最近吃过的好吃的东西", "最近让你吃惊或开心的一件事"];
+
+const epKeys = (ep: Progress["episodes"][number]) =>
+  (ep.story?.keys.length ? ep.story.keys : (ep.words ?? [])).slice(0, 3).map((w) => ({ ja: w.ja, kana: w.kana }));
 
 function epTopic(ep: Progress["episodes"][number]): Topic {
   const main = ep.lines.filter((l) => l.part === "main").map((l) => l.ja);
   return {
     title: ep.title_zh,
     about: `${ep.title_zh}\n${(main.length ? main : ep.lines.map((l) => l.ja)).join("").slice(0, 600)}`,
-    keys: (ep.story?.keys.length ? ep.story.keys : (ep.words ?? [])).slice(0, 3).map((w) => ({ ja: w.ja, kana: w.kana })),
+    keys: epKeys(ep),
     pool: [...(ep.story?.keys ?? []), ...(ep.words ?? [])].map((w) => ({ ja: w.ja, kana: w.kana })),
+    ep: ep.id,
     starters: ["今日ラジオで、〜って話を聞いたんですけど。", "びっくりしたのは、〜ってことです。", "だから、〜らしいですよ。"],
   };
 }
@@ -304,7 +309,12 @@ export default function Retell() {
 
   useEffect(() => {
     if (!hydrated || topics.length) return;
-    setTopics(topicsFor(p));
+    const ts = topicsFor(p);
+    setTopics(ts);
+    for (const t of ts) {
+      const ep = t.ep && p.episodes.find((e) => e.id === t.ep);
+      if (ep) ensureReadings(ep);
+    }
     known.current = knownTags(p);
     setCarry(retellCarry(p));
     if (!retellToday(p)) setAgain(againFor(p));
@@ -642,8 +652,11 @@ export default function Retell() {
   const focus = stall && fix?.stall.better ? `卡住的地方这样说：「${fix.stall.better}」` : fix?.focus_zh;
   const talking = phase === "talk";
   const shownT = shownTopic!;
+  // Keys from the episode as it is now: its readings may have been checked since the topic was picked.
+  const shownEp = shownT.ep ? p.episodes.find((e) => e.id === shownT.ep) : undefined;
+  const shownKeys = shownEp ? epKeys(shownEp) : shownT.keys;
   // Keywords every time (renewed as they are learned); the ready-made openings only the first time.
-  const keys = warming ? shownT.keys : (keyed?.keys ?? shownT.keys);
+  const keys = warming ? shownKeys : (keyed?.keys ?? shownKeys);
   const showStarters = warming || round === 0;
 
   return (

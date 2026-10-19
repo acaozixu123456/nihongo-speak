@@ -2,6 +2,7 @@ import "server-only";
 import * as z from "zod/v4";
 import { makeRadioWithClaude } from "@/lib/claude";
 import { vertexAccess, vertexConfigured } from "@/lib/vertex-tts";
+import { checkReadings } from "@/lib/reading";
 
 // 趣味电台 (ゆるっと日本ラジオ): two hosts chat in Japanese like a real radio show (small talk, a
 // listener's letter that is really the learner's own mistake, one surprising fact, a line to keep),
@@ -83,6 +84,8 @@ export const OldRadioSchema = RadioSchema.extend({
   hitokoto: RadioSchema.shape.hitokoto.optional(),
   quiz_zh: z.string().optional(),
   letter: z.object({ said: z.string(), better: z.string(), where: z.string().optional() }).optional(),
+  // 1 once the readings over story.keys and words were checked (lib/reading.ts).
+  readings: z.number().optional(),
 });
 
 // What the phone stores and plays: new episodes, and old ones as they were saved.
@@ -232,6 +235,19 @@ async function withGemini(avoid: string[], wish: string | undefined, letter: Let
   }
 }
 
+// The readings in the notes, checked by two other models before the episode goes out.
+export async function withCheckedReadings<T extends Radio>(r: T): Promise<T> {
+  const keys = r.story?.keys ?? [];
+  const words = r.words ?? [];
+  const kana = await checkReadings([...keys, ...words]);
+  return {
+    ...r,
+    ...(r.story ? { story: { ...r.story, keys: keys.map((k, i) => ({ ...k, kana: kana[i] })) } } : {}),
+    words: words.map((w, i) => ({ ...w, kana: kana[keys.length + i] })),
+    readings: 1,
+  };
+}
+
 export type Making = { stage: "write"; lines: number } | { stage: "retry" } | { stage: "claude" };
 
 // Gemini, and once more if it stalls or fails; then Claude, which takes longer and shows no lines.
@@ -246,12 +262,14 @@ export async function makeRadio(
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         if (attempt) onProgress({ stage: "retry" });
-        return { ...(await withGemini(avoid, wish, letter, recent, (lines) => onProgress({ stage: "write", lines }))), letter, by: "gemini" };
+        const r = await withGemini(avoid, wish, letter, recent, (lines) => onProgress({ stage: "write", lines }));
+        return { ...(await withCheckedReadings(r)), letter, by: "gemini" };
       } catch (e) {
         console.warn("radio: Gemini failed", e);
       }
     }
   }
   onProgress({ stage: "claude" });
-  return { ...(await makeRadioWithClaude(RadioSchema, SYSTEM, prompt(avoid, wish, letter, recent))), letter, by: "claude" };
+  const r = await makeRadioWithClaude(RadioSchema, SYSTEM, prompt(avoid, wish, letter, recent));
+  return { ...(await withCheckedReadings(r)), letter, by: "claude" };
 }

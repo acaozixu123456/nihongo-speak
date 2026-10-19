@@ -1,7 +1,7 @@
 import { synthesize } from "@/lib/azure";
 import { FLASH, FLASH_LITE, geminiConfigured, geminiVoice, synthesizeGemini } from "@/lib/gemini-tts";
-import { readingOf, synthesizeVertex, vertexConfigured } from "@/lib/vertex-tts";
-import { kanaReading } from "@/lib/claude";
+import { synthesizeVertex, vertexConfigured } from "@/lib/vertex-tts";
+import { agreed, bothReadings } from "@/lib/reading";
 import { burst } from "@/lib/quota";
 
 // "HD|fallback" voice lists as the scenarios write them; Chinese is for 摸鱼模式's narration.
@@ -114,15 +114,12 @@ async function hedgedVertex(text: string, voice: string) {
   return Promise.any([first, second]);
 }
 
-// Gemini's reading and Haiku's, asked together. Either can fail now and then, and either can be
-// wrong (Gemini gave 木炭 as たんざん), so when both answer they must agree; when they don't,
-// null sends the word to Azure, which reads kanji in Japanese.
+// Gemini's reading and Haiku's, asked together; when both answer they must agree, and when they
+// don't, null sends the word to Azure, which reads kanji in Japanese (lib/reading.ts).
 // Gemini's/Haiku's readings of a word, for the X-TTS-Readings header.
 const heard = new Map<string, string>();
 async function reading(text: string): Promise<string | null> {
-  const plain = (r: string | null) => r?.replace(/[\s、。！？・]/g, "") || null;
-  const [a, b] = await Promise.all([readingOf(text), kanaReading(text)].map((p) => p.catch(() => null)));
-  heard.set(text, `${a ?? "-"}/${b ?? "-"}`);
-  if (a && b) return plain(a) === plain(b) ? a : (console.warn(`readings differ for ${text}: ${a} / ${b}`), null);
-  return a ?? b;
+  const r = await bothReadings(text);
+  heard.set(text, `${r.a ?? "-"}/${r.b ?? "-"}`);
+  return agreed(r, text);
 }

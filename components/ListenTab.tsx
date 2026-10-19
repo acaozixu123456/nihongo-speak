@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { unlock } from "@/lib/client/player";
-import { ensureTitleJa, useProgress } from "@/lib/client/progress";
+import { ensureReadings, ensureTitleJa, useProgress } from "@/lib/client/progress";
 import { useHydrated } from "@/lib/client/hydrated";
 import { current, quietPref, startRoute, todaysEpisode, useRoute } from "@/lib/client/route";
 
@@ -20,7 +20,10 @@ export default function ListenTab() {
   const before = hydrated ? p.episodes.filter((e) => e.id !== ep?.id).slice(0, 5) : [];
   useEffect(() => {
     before.forEach(ensureTitleJa);
-    if (ep) ensureTitleJa(ep);
+    if (ep) {
+      ensureTitleJa(ep);
+      ensureReadings(ep);
+    }
   }, [before, ep]);
   const onRoute = current(r)?.key === "listen" || (!r && !ep);
   const go = () => {
