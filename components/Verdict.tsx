@@ -6,6 +6,7 @@ import { recordSpeech, wavSeconds } from "@/lib/client/progress";
 import { closeness, readStreak, sfx, verdict, type Kind } from "@/lib/client/fx";
 import { JudgeWhy, type Judge, type Verdict } from "./AiJudge";
 import HoldButton from "./HoldButton";
+import { SenseiFace } from "./Sensei";
 
 export type { Kind };
 
@@ -113,6 +114,7 @@ export function VerdictSheet({
       <div className={`vsheet ${kind}`}>
         <div className="vsheet-inner">
           <div className="vword">
+            <SenseiFace size={34} nod={kind === "right"} />
             {quiet ? "答え" : WORD[kind]}
             {note && <span className="vnote">{note}</span>}
           </div>

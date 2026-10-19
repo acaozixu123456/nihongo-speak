@@ -108,12 +108,12 @@ export function SenseiFace({ size = 54, nod = false }: { size?: number; nod?: bo
 }
 
 // What she says, in her words: the Japanese big with ▶ to hear her, the Chinese small and grey.
-export function SenseiSays({ ja, zh }: { ja: string; zh?: string }) {
+export function SenseiSays({ ja, zh, mute = false }: { ja: string; zh?: string; mute?: boolean }) {
   return (
     <div className="sensei-say">
       <div className="sensei-ja">
         <span>{ja}</span>
-        <button
+        {!mute && <button
           className="bag-play"
           aria-label="聞く"
           onClick={(e) => {
@@ -123,9 +123,20 @@ export function SenseiSays({ ja, zh }: { ja: string; zh?: string }) {
           }}
         >
           ▶
-        </button>
+        </button>}
       </div>
       {zh && <div className="sensei-zh">{zh}</div>}
+    </div>
+  );
+}
+
+// Her short word on a result: the face on the left, the bubble beside it. Used wherever something the
+// learner said is judged, so every correction comes from her.
+export function SenseiLine({ ja, zh, nod = false, wait = false }: { ja: string; zh?: string; nod?: boolean; wait?: boolean }) {
+  return (
+    <div className={`sensei-line${wait ? " wait" : ""}`}>
+      <SenseiFace size={44} nod={nod} />
+      <SenseiSays ja={ja} zh={zh} mute={wait} />
     </div>
   );
 }
