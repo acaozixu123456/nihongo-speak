@@ -152,7 +152,7 @@ export default function Review() {
   if (p.cards.length === 0) {
     return (
       <main>
-        <Link href="/" className="back">← 今日</Link>
+        <Link href="/me" className="back">← 先生</Link>
         <header className="page-mast">
           <div>
             <h1>復習</h1>
@@ -173,7 +173,7 @@ export default function Review() {
   if (!queue) {
     return (
       <main>
-        <Link href="/" className="back">← 今日</Link>
+        <Link href="/me" className="back">← 先生</Link>
         <header className="page-mast">
           <div>
             <h1>復習</h1>
@@ -203,7 +203,7 @@ export default function Review() {
   if (!card) {
     return (
       <main>
-        <Link href="/" className="back">← 今日</Link>
+        <Link href="/me" className="back">← 先生</Link>
         <header className="page-mast">
           <div>
             <h1>復習</h1>

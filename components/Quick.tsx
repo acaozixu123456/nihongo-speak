@@ -343,7 +343,7 @@ export default function Quick({ drill }: { drill?: string }) {
     const mastered = quickMastered(p);
     return (
       <main>
-        <Link href="/" className="back">← 今日</Link>
+        <Link href="/speak" className="back">← 話す</Link>
         <header className="page-mast">
           <div>
             <h1>瞬間</h1>

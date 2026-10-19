@@ -520,8 +520,8 @@ export default function Retell() {
   if (!hydrated || !topic) return <main className="page" />;
 
   const back = !onRoute && (
-    <Link href="/" className="back">
-      ← 今日
+    <Link href="/speak" className="back">
+      ← 話す
     </Link>
   );
 

@@ -250,7 +250,7 @@ export default function Game({ id }: { id: string }) {
   if (!daily && !ep) {
     return (
       <main className="page">
-        <Link href="/" className="back">← 今日</Link>
+        <Link href="/me" className="back">← 先生</Link>
         <p className="muted">找不到这一期了（只保留最近 50 期）。</p>
       </main>
     );
@@ -261,8 +261,8 @@ export default function Game({ id }: { id: string }) {
       ← 这一期
     </Link>
   ) : (
-    <Link href="/" className="back">
-      ← 今日
+    <Link href="/me" className="back">
+      ← 先生
     </Link>
   );
   if (error) {

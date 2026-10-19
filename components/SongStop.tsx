@@ -20,7 +20,7 @@ export default function SongStop({ id }: { id: string }) {
 
   return (
     <main className="page">
-      <Link href="/" className="back">← 今日</Link>
+      <Link href="/listen" className="back">← 聴く</Link>
       <h1 className="display">一休み</h1>
       {ep && <Earworm ep={ep} kicker="一休み · 洗脑歌" onEnd={stepDone} />}
       {/* Always a way on, while the song is still being made. */}

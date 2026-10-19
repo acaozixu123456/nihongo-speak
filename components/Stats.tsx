@@ -54,16 +54,18 @@ export default function Stats() {
           <p className="muted">森先生的信，和开口时长、反应速度、发音的变化</p>
         </div>
       </header>
-      {t?.letter_ja && (
+      {(t?.letter_ja || t?.note_zh) && (
         <div className="sensei-line letter-line">
           <SenseiFace size={44} />
           <div className="sensei-letter">
-            <div className="sensei-ja">
-              <span>{t.letter_ja}</span>
-              <button className="bag-play" aria-label="聞く" onClick={() => speak(t.letter_ja!)}>
-                ▶
-              </button>
-            </div>
+            {t.letter_ja && (
+              <div className="sensei-ja">
+                <span>{t.letter_ja}</span>
+                <button className="bag-play" aria-label="聞く" onClick={() => speak(t.letter_ja!)}>
+                  ▶
+                </button>
+              </div>
+            )}
             {t.note_zh && <p className="zh">{t.note_zh}</p>}
             <div className="sig">森より</div>
           </div>
