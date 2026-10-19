@@ -11,8 +11,9 @@ const hira = (r: string) => plain(r).replace(/[ァ-ヶ]/g, (c) => String.fromCha
 
 export type Heard = { a: string | null; b: string | null };
 
-export async function bothReadings(text: string): Promise<Heard> {
-  const [a, b] = await Promise.all([readingOf(text), kanaReading(text)].map((p) => p.catch(() => null)));
+// Gemini on Vertex often takes longer than /api/tts can wait (6s); notes can wait longer.
+export async function bothReadings(text: string, geminiMs?: number): Promise<Heard> {
+  const [a, b] = await Promise.all([readingOf(text, geminiMs), kanaReading(text)].map((p) => p.catch(() => null)));
   return { a, b };
 }
 
@@ -32,7 +33,7 @@ export async function checkReadings(words: { ja: string; kana: string }[]): Prom
   return Promise.all(
     words.map(async ({ ja, kana }) => {
       if (!KANJI.test(ja)) return kana;
-      const { a, b } = await bothReadings(ja);
+      const { a, b } = await bothReadings(ja, 25000);
       if (a && b && hira(a) === hira(b)) return hira(a);
       if ([a, b].some((r) => r && hira(r) === hira(kana))) return kana;
       console.warn(`reading dropped for ${ja}: wrote ${kana}, heard ${a ?? "-"} / ${b ?? "-"}`);
