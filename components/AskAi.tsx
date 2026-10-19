@@ -12,6 +12,25 @@ type Ask = { pick: Pick; answer?: Explain; error?: string };
 // Where selecting text is typing, not asking.
 const SKIP = "input, textarea, [contenteditable], .sheet, .ask-bar";
 
+// Answers already given, kept on the phone: asking about the same words in the same line again
+// (another day, after a reload) shows the saved answer instead of asking the AI again.
+const ASKED_KEY = "nihongo-speak:explain";
+const askedKey = (p: Pick) => `${p.text}\n${p.line}`;
+function readAsked(): Record<string, Explain> {
+  try {
+    return JSON.parse(localStorage.getItem(ASKED_KEY) ?? "{}") as Record<string, Explain>;
+  } catch {
+    return {};
+  }
+}
+function keepAsked(p: Pick, answer: Explain) {
+  try {
+    const all = { ...readAsked(), [askedKey(p)]: answer };
+    const keys = Object.keys(all);
+    localStorage.setItem(ASKED_KEY, JSON.stringify(Object.fromEntries(keys.slice(-200).map((k) => [k, all[k]]))));
+  } catch {}
+}
+
 // Long-press any text on any page to select it, then one tap: the AI explains it in its context.
 // A page can mark a line with data-line (and data-before) and its subject with data-ask-topic;
 // otherwise the block around the selection and the page's heading stand in. On an episode page
@@ -49,6 +68,12 @@ export default function AskAi() {
     setAsk({ pick: p });
     setPick(null);
     document.getSelection()?.removeAllRanges();
+    const saved = readAsked()[askedKey(p)];
+    if (saved) {
+      setAsk({ pick: p, answer: saved });
+      if (p.ep) saveAsked(p.ep, { text: p.text, meaning_zh: saved.meaning_zh });
+      return;
+    }
     try {
       const res = await fetch("/api/explain", {
         method: "POST",
@@ -57,6 +82,7 @@ export default function AskAi() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "AI 出错了");
+      keepAsked(p, data as Explain);
       setAsk((a) => (a?.pick === p ? { pick: p, answer: data as Explain } : a));
       if (p.ep) saveAsked(p.ep, { text: p.text, meaning_zh: (data as Explain).meaning_zh });
     } catch (e) {
