@@ -884,6 +884,7 @@ export async function teacherPlan(record: string): Promise<TeacherPlan> {
 毎晩、その日までの記録を全部読んで、明日の練習の優先順位を決めます。アプリは order の順に弱点を練習・電話・ラジオのお便りに出します。
 - 記録の弱点は、発言ごとに別の AI が付けたもので、同じ文法が違う名前で何度も付いていたり、音声認識の誤りを学習者の誤りとして付けていたりする。そういうものは hide に入れる。
 - 優先するのは、仕事や生活で困る誤り ＞ 何度も出ている誤り ＞ 最近の誤り。直ってきたものは後ろに。
+- 「正しくは」も別の AI の推測で、学習者が言おうとした語を取り違えていることがある（例：「ちかいます」は文脈によって「近いです」ではなく「違います」）。前後の文脈から本当に言いたかったことを考え、推測が外れている tag は hide に入れ、note_zh でも取り上げない。
 - 学習者の発言は音声認識の結果。同音の漢字違いや句読点は誤りではない。`,
     messages: [{ role: "user", content: record }],
     output_config: { effort: "high", format: zodOutputFormat(TeacherSchema) },
