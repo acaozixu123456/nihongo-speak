@@ -804,6 +804,39 @@ export function ensureTitleJa(ep: RadioEpisode) {
     .finally(() => titling.delete(ep.id));
 }
 
+// Episodes saved before their readings were checked (one showed 生乾き as なまどらき) get them
+// checked once, on first view; a reading nobody agrees on is dropped rather than shown.
+const reading = new Set<string>();
+export function ensureReadings(ep: RadioEpisode) {
+  if (ep.readings || reading.has(ep.id)) return;
+  const keys = ep.story?.keys ?? [];
+  const words = [...keys, ...(ep.words ?? [])].slice(0, 12).map((w) => ({ ja: w.ja, kana: w.kana ?? "" }));
+  if (!words.length) return;
+  reading.add(ep.id);
+  fetch("/api/readings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ words }) })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d: { kana?: string[] } | null) => {
+      if (d?.kana?.length !== words.length) return;
+      const kana = d.kana;
+      const p = read();
+      write({
+        ...p,
+        episodes: p.episodes.map((e) =>
+          e.id !== ep.id
+            ? e
+            : {
+                ...e,
+                ...(e.story ? { story: { ...e.story, keys: e.story.keys.map((k, i) => ({ ...k, kana: kana[i] ?? k.kana })) } } : {}),
+                words: (e.words ?? []).map((w, i) => ({ ...w, kana: kana[keys.length + i] ?? w.kana })),
+                readings: 1,
+              },
+        ),
+      });
+    })
+    .catch(() => {})
+    .finally(() => reading.delete(ep.id));
+}
+
 // やさしく for an episode saved before scripts came with easy versions of the hard lines: asked for
 // once, kept on its lines ("" where a line is easy enough). Resolves to whether it worked.
 const easing = new Map<string, Promise<boolean>>();

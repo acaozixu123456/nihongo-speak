@@ -8,6 +8,7 @@ import type { Heard } from "@/lib/gemini-hear";
 import { play, stop as stopAudio, ttsUrl, unlock } from "@/lib/client/player";
 import {
   dayKey,
+  ensureReadings,
   hasCard,
   knownTags,
   RADIO_VOICE,
@@ -68,16 +69,20 @@ const REACTIONS: Record<string, string[]> = {
   sato: ["マジですか、それ初めて聞きました。", "へえー、なんか得した気分です。"],
 };
 
-type Topic = { title: string; about: string; keys: { ja: string; kana?: string }[]; starters: string[] };
+type Topic = { title: string; about: string; keys: { ja: string; kana?: string }[]; starters: string[]; ep?: string };
 
 const LIFE_TOPICS = ["今天上班（或今天一天）做了什么", "这个周末做了什么，或打算做什么", "最近吃过的好吃的东西", "最近让你吃惊或开心的一件事"];
+
+const epKeys = (ep: Progress["episodes"][number]) =>
+  (ep.story?.keys.length ? ep.story.keys : (ep.words ?? [])).slice(0, 3).map((w) => ({ ja: w.ja, kana: w.kana }));
 
 function epTopic(ep: Progress["episodes"][number]): Topic {
   const main = ep.lines.filter((l) => l.part === "main").map((l) => l.ja);
   return {
     title: ep.title_zh,
     about: `${ep.title_zh}\n${(main.length ? main : ep.lines.map((l) => l.ja)).join("").slice(0, 600)}`,
-    keys: (ep.story?.keys.length ? ep.story.keys : (ep.words ?? [])).slice(0, 3).map((w) => ({ ja: w.ja, kana: w.kana })),
+    keys: epKeys(ep),
+    ep: ep.id,
     starters: ["今日ラジオで、〜って話を聞いたんですけど。", "びっくりしたのは、〜ってことです。", "だから、〜らしいですよ。"],
   };
 }
@@ -300,7 +305,12 @@ export default function Retell() {
 
   useEffect(() => {
     if (!hydrated || topics.length) return;
-    setTopics(topicsFor(p));
+    const ts = topicsFor(p);
+    setTopics(ts);
+    for (const t of ts) {
+      const ep = t.ep && p.episodes.find((e) => e.id === t.ep);
+      if (ep) ensureReadings(ep);
+    }
     known.current = knownTags(p);
     setCarry(retellCarry(p));
     if (!retellToday(p)) setAgain(againFor(p));
@@ -649,6 +659,9 @@ export default function Retell() {
   const focus = stall && fix?.stall.better ? `卡住的地方这样说：「${fix.stall.better}」` : fix?.focus_zh;
   const talking = phase === "talk";
   const shownT = shownTopic!;
+  // Keys from the episode as it is now: its readings may have been checked since the topic was picked.
+  const shownEp = shownT.ep ? p.episodes.find((e) => e.id === shownT.ep) : undefined;
+  const shownKeys = shownEp ? epKeys(shownEp) : shownT.keys;
   // The props come off one at a time: keys and starters for the first telling, keys for the second,
   // nothing but the one point for the third.
   const showKeys = warming || round < 2;
@@ -671,9 +684,9 @@ export default function Retell() {
           )}
           {talking && <span className={`today-big ${left < 10 ? "hurry" : ""}`}>{clock(left)}</span>}
         </span>
-        {showKeys && shownT.keys.length > 0 && (
+        {showKeys && shownKeys.length > 0 && (
           <div className="retell-keys">
-            {shownT.keys.map((k) => (
+            {shownKeys.map((k) => (
               <span key={k.ja}>
                 {k.ja}
                 {k.kana && /[一-龯々]/.test(k.ja) && <small>{k.kana}</small>}
