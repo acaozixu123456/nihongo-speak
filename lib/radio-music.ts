@@ -2,14 +2,19 @@ import "server-only";
 import { BlobNotFoundError, get, put } from "@vercel/blob";
 import { vertexAccess } from "@/lib/vertex-tts";
 
-// ゆるっと日本ラジオ's own music: a station jingle and a background loop for the talk, made once
-// by Lyria 3 Pro (about 8 cents each, from the Google Cloud credit) and kept in Blob for good.
+// ゆるっと日本ラジオ's own music (a station jingle and a background loop for the talk) and the
+// 三回話す pause music, made once by Lyria 3 Pro (about 8 cents each, from the Google Cloud credit) and kept in Blob for good.
 
 export const MUSIC = {
   jingle:
     "A short bright instrumental radio station jingle for a cheerful Japanese morning talk show. Japanese city pop, bouncy slap bass, clean electric piano, tight drums, brass stab, a catchy 4-note melodic hook, ends after about 6 seconds on a clear final chord and then silence. No vocals.",
   bed:
     "A calm, warm instrumental lo-fi city pop loop to play quietly under two people talking on a radio show. Soft Rhodes electric piano chords, mellow round bass, light brushed drums, 84 BPM, steady from start to end, no lead melody, no build-ups, no breaks, no vocals.",
+  // Under the ~18s wait between two tellings of 三回話す (lib/client/bgm.ts). Made for a resting
+  // mind: slow (about 60 BPM, near a resting heartbeat), soft, wordless, without a melody to follow
+  // or anything sudden, so it settles the learner without pulling attention from the Japanese.
+  pause:
+    "A calm, gentle ambient instrumental piece to relax the mind during a short rest. Soft felt piano playing slow, sparse, sustained major-key chords over a warm, airy synth pad, about 60 BPM, lots of space between notes, no drums, no beat, no bass line, no lead melody, no vocals, no build-ups, no sudden changes, the same soft level from start to end.",
 } as const;
 export type Music = keyof typeof MUSIC;
 
