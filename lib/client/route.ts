@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { calls } from "@/content/calls";
 import { makeRadio } from "./moyu";
-import { dayKey, dueCards, dueSkillCount, retellToday, weakItems, weakList, type Progress } from "./progress";
+import { dayKey, dueCards, dueSkillCount, retellToday, teacherPlan, weakItems, weakList, type Progress } from "./progress";
 
 // 今日のルート: one fixed line of stops for today (listen → practise → a song to unwind → speak → call), so opening the app
 // never asks what to do. Each page calls stepDone() when its part is over; the bar on top then moves
@@ -183,9 +183,12 @@ export async function nextHref(): Promise<string> {
   return current(read())?.href ?? "/";
 }
 
-// The one thing to fix tomorrow: the shakiest point, with the last thing said wrong.
+// The one thing to fix tomorrow: the teacher's first point (or the shakiest), with the last thing said
+// wrong, and the teacher's reason when it chose it.
 export function oneFix(p: Progress) {
   const w = weakList(p)[0];
   const ex = w?.examples[0];
-  return w && ex ? { said: ex.said, better: ex.better, why: w.zh, miss: w.miss } : null;
+  const t = teacherPlan();
+  const why = t?.order[0] === w?.tag && t?.why_zh ? t.why_zh : w?.zh;
+  return w && ex ? { said: ex.said, better: ex.better, why, miss: w.miss } : null;
 }

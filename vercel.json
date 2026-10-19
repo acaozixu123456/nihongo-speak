@@ -2,6 +2,7 @@
   "regions": ["hnd1"],
   "crons": [
     { "path": "/api/cron/noon", "schedule": "0 3 * * *" },
-    { "path": "/api/cron/evening", "schedule": "0 11 * * *" }
+    { "path": "/api/cron/evening", "schedule": "0 11 * * *" },
+    { "path": "/api/cron/teacher", "schedule": "0 18 * * *" }
   ]
 }

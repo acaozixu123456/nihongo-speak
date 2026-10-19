@@ -859,3 +859,36 @@ export async function pointExamples(points: { pattern: string; zh: string; seed?
   );
   return r.items.slice(0, points.length);
 }
+
+// ---- 先生: each night, one look at everything the learner said, to set tomorrow's priorities ----
+
+const TeacherSchema = z.object({
+  order: z
+    .array(z.string())
+    .describe("明日から練習する弱点の tag を、優先する順に最大5個。下の一覧の tag を一字も変えずに書く"),
+  hide: z
+    .array(z.string())
+    .describe("一覧から外す tag：同じ文法・表現の重複（残す方だけ order に入れる）、例が学習者の誤りではないもの（音声認識の誤り、関係のない文から付いたもの）。なければ空配列"),
+  why_zh: z.string().describe("order の一番目を選んだ理由（中国語、1〜2文）。実際の発言に触れて具体的に"),
+  note_zh: z
+    .string()
+    .describe("最近の様子（中国語、3文以内）：実際に伸びた点を具体的に一つ、次に気をつけることを一つ。数字の読み上げやお世辞は書かない"),
+});
+export type TeacherPlan = z.infer<typeof TeacherSchema>;
+
+export async function teacherPlan(record: string): Promise<TeacherPlan> {
+  const res = await parse({
+    model: SMART,
+    max_tokens: 20000,
+    system: `あなたはこの学習者の担任の日本語の先生です。学習者は日本に住んでIT企業で働いている中国人で、日本語は N4〜N3。仕事と生活で話せるようになりたい。
+毎晩、その日までの記録を全部読んで、明日の練習の優先順位を決めます。アプリは order の順に弱点を練習・電話・ラジオのお便りに出します。
+- 記録の弱点は、発言ごとに別の AI が付けたもので、同じ文法が違う名前で何度も付いていたり、音声認識の誤りを学習者の誤りとして付けていたりする。そういうものは hide に入れる。
+- 優先するのは、仕事や生活で困る誤り ＞ 何度も出ている誤り ＞ 最近の誤り。直ってきたものは後ろに。
+- 学習者の発言は音声認識の結果。同音の漢字違いや句読点は誤りではない。`,
+    messages: [{ role: "user", content: record }],
+    output_config: { effort: "high", format: zodOutputFormat(TeacherSchema) },
+  });
+  checkStop(res.stop_reason);
+  if (!res.parsed_output) throw new Error(`AI 返回格式不对（${res.stop_reason}）`);
+  return res.parsed_output;
+}
