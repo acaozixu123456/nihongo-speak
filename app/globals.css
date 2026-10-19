@@ -1683,3 +1683,11 @@ button.today-go { width: 100%; border: none; cursor: pointer; }
 .letter-line .sensei-letter::before { left: -9px; top: 18px; margin: 0; transform: rotate(-45deg); }
 .letter-line + .me-card { margin: 14px 0 18px; }
 .pl .ep-ok { flex: none; color: #fff; font-size: 11px; }
+/* 今日: the one sentence from yesterday's mistake to use today; tap to hear 森先生 say it. */
+.use-today { display: block; width: 100%; margin-top: 22px; padding: 14px 16px; border: 0; border-left: 3px solid var(--accent); border-radius: 0 16px 16px 0; background: var(--card); color: var(--text); text-align: left; cursor: pointer; font: inherit; }
+.use-today .kicker { font-family: var(--ja); font-size: 12px; color: var(--muted); letter-spacing: 0.12em; }
+.use-ja { display: flex; align-items: flex-start; gap: 10px; margin-top: 4px; font-family: var(--ja); font-size: 18px; font-weight: 500; line-height: 1.6; }
+.use-ja > span { flex: 1; }
+.use-ja em { font-style: normal; color: var(--accent); font-weight: 700; }
+.use-ja i { flex: none; display: grid; place-items: center; width: 30px; height: 30px; margin-top: 1px; border-radius: 50%; background: var(--soft); font-size: 11px; font-style: normal; }
+.use-today small { display: block; margin-top: 2px; font-size: 13px; color: var(--muted); }
