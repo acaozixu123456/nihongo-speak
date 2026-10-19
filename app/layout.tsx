@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Boot from "@/components/Boot";
 import RouteBar from "@/components/RouteBar";
+import TabBar from "@/components/TabBar";
 import AskAi from "@/components/AskAi";
 import AudioWait from "@/components/AudioWait";
 
@@ -36,6 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         {children}
         <RouteBar />
+        <TabBar />
         <AskAi />
         <AudioWait />
         <Boot />

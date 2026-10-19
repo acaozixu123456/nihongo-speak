@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
+import SpeakTab from "@/components/SpeakTab";
 
-// 話す is now a stop on 今日's route; old links land there.
 export default function SpeakPage() {
-  redirect("/");
+  return <SpeakTab />;
 }
