@@ -109,7 +109,7 @@ export function useProgress(): Progress {
 // in, and tags it found to be duplicates or recognition slips.
 export type TeacherGood = { before: string; after: string; mark: string; zh: string };
 export type TeacherFix = { tag: string; said: string; better: string; mark: string; zh: string };
-export type Teacher = { day: string; made: number; order: string[]; hide: string[]; why_zh: string; note_zh: string; good?: TeacherGood | null; fix?: TeacherFix | null };
+export type Teacher = { day: string; made: number; order: string[]; hide: string[]; why_zh: string; note_zh: string; letter_ja?: string; good?: TeacherGood | null; fix?: TeacherFix | null };
 const TEACHER_KEY = "nihongo-speak:teacher";
 let teacher: Teacher | null | undefined;
 

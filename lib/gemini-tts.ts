@@ -15,6 +15,8 @@ const VOICES: Record<string, string> = {
   Mayu: "Leda",
   Aoi: "Aoede",
   Shiori: "Despina",
+  // 森先生 (components/Sensei.tsx): not an Azure voice, so Azure falls back to the next one in her list.
+  Mori: "Gacrux",
 };
 
 // "ja-JP-Masaru:DragonHDLatestNeural|ja-JP-KeitaNeural" → "Charon". Null for voices with no match.
