@@ -6,7 +6,8 @@ import { play, preload, ttsUrl, unlock } from "@/lib/client/player";
 import { RADIO_VOICE, saveAsked } from "@/lib/client/progress";
 
 // What the learner selected, with the line it sits in, for 问 AI.
-type Pick = { text: string; line: string; before?: string; topic: string; ep?: string };
+// easy: the radio line it sits in, which can also be shown in easy Japanese (やさしく).
+type Pick = { text: string; line: string; before?: string; topic: string; ep?: string; easy?: string };
 type Ask = { pick: Pick; answer?: Explain; error?: string };
 
 // Where selecting text is typing, not asking.
@@ -32,6 +33,7 @@ function keepAsked(p: Pick, answer: Explain) {
 }
 
 // Long-press any text on any page to select it, then one tap: the AI explains it in its context.
+// On a radio line there is a second choice: the whole line in easy Japanese.
 // A page can mark a line with data-line (and data-before) and its subject with data-ask-topic;
 // otherwise the block around the selection and the page's heading stand in. On an episode page
 // (data-ask-ep) what was asked is kept with the episode, so 练一练 can practise it.
@@ -90,6 +92,13 @@ export default function AskAi() {
     }
   }
 
+  // The page shows the whole line in easy Japanese (Episode.tsx listens).
+  function easier(line: string) {
+    setPick(null);
+    document.getSelection()?.removeAllRanges();
+    window.dispatchEvent(new CustomEvent("ask-easy", { detail: line }));
+  }
+
   function say(ja: string) {
     document.querySelectorAll("audio").forEach((a) => a.pause());
     unlock();
@@ -98,11 +107,22 @@ export default function AskAi() {
 
   return (
     <>
-      {pick && !ask && (
+      {pick && !ask && !pick.easy && (
         <button className="ask-bar" onClick={() => askAi(pick)}>
           <b>问 AI</b>
           <span>{pick.text}</span>
         </button>
+      )}
+      {pick?.easy && !ask && (
+        <div className="ask-acts">
+          <button className="ask-easy" onClick={() => easier(pick.easy!)}>
+            やさしく
+          </button>
+          <button className="ask-bar" onClick={() => askAi(pick)}>
+            <b>问 AI</b>
+            <span>{pick.text}</span>
+          </button>
+        </div>
       )}
       {ask && <AskSheet ask={ask} onClose={() => setAsk(null)} onSay={say} />}
     </>
@@ -123,6 +143,7 @@ function pickAt(at: Element, selected: string): Pick {
     before: marked?.dataset.before || undefined,
     topic: (page?.dataset.askTopic || heading || document.title || "日语练习").slice(0, 80),
     ep: page?.dataset.askEp,
+    easy: at.closest<HTMLElement>("[data-easy-line]")?.dataset.easyLine,
   };
 }
 

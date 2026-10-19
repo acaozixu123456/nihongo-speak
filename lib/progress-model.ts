@@ -339,11 +339,15 @@ export function merge(a: Progress, b: Progress): Progress {
         const copies = [...(a.episodes ?? []), ...(b.episodes ?? [])].filter((o) => o.id === e.id);
         const asked = [...new Map(copies.flatMap((o) => o.asked ?? []).map((x) => [x.text, x])).values()];
         const title_ja = e.title_ja ?? copies.find((o) => o.title_ja)?.title_ja;
-        // やさしく written later for an old episode, on one of the copies.
-        const eased = e.lines.some((l) => l.easy !== undefined) ? e : copies.find((o) => o.lines.some((l) => l.easy !== undefined));
+        // やさしく written later (for an old episode, or one long-pressed line) on any of the copies.
+        const same = copies.filter((o) => o.lines.length === e.lines.length);
+        const lines = e.lines.map((l, i) => {
+          const easy = same.map((o) => o.lines[i].easy).find((x) => x) ?? same.map((o) => o.lines[i].easy).find((x) => x !== undefined);
+          return easy === undefined ? l : { ...l, easy };
+        });
         return {
           ...e,
-          ...(eased && eased.lines.length === e.lines.length ? { lines: eased.lines } : {}),
+          lines,
           heard: e.heard || copies.some((o) => o.heard),
           ...(asked.length ? { asked } : {}),
           ...(title_ja ? { title_ja } : {}),

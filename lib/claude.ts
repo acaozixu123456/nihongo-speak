@@ -793,6 +793,24 @@ export async function radioEasy(lines: string[]): Promise<string[]> {
   return easy;
 }
 
+// One line the learner long-pressed and asked to hear more easily: always said again, as easy as it goes.
+const EasyOneSchema = z.object({ easy: z.string().describe("やさしい言い直し。すでに十分やさしければ元のまま") });
+
+export async function radioEasyOne(line: string, before: string): Promise<string> {
+  const { easy } = await haikuFirst(
+    EasyOneSchema,
+    `日本語学習者（JLPT N4〜N3）がラジオで聞いたセリフを、同じ意味のやさしい日本語に言い直す。
+- N4〜N3の語と文法だけを使う。難しい漢語は和語や説明的な言い方に（均一に→全部同じように）。
+- 意味は同じ（少なくともほぼ同じ）にする。話し言葉のまま、話し手の口調も同じにする。
+- 長さは元と同じくらい。説明を足しすぎない。
+- すでに十分やさしいセリフなら、元のまま返す。`,
+    `${before ? `前のセリフ：${before}\n` : ""}セリフ：${line}`,
+    1500,
+    "low",
+  );
+  return easy.trim();
+}
+
 // ---- 洗脑歌: lyrics as they are sung ----
 
 const SungSchema = z.object({
