@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { checkReadings } from "@/lib/reading";
 
+// Gemini may take up to 25s on a reading (lib/reading.ts).
+export const maxDuration = 60;
+
 const str = (s: unknown, n: number): s is string => typeof s === "string" && s.length <= n;
 
 // The readings over an episode saved before they were checked (story.keys and words), checked now.
