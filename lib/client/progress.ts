@@ -656,6 +656,14 @@ export function recordRetell(r: Retell) {
   write({ ...p, retells: [...(p.retells ?? []).filter((x) => !(x.date === r.date && x.topic === r.topic)), r].slice(-RETELLS_KEPT) });
 }
 
+// 三回話す keywords counted after a telling (only the newest 200 words are kept).
+export function recordKeyRuns(runs: Record<string, number>) {
+  const p = read();
+  const at = Date.now();
+  const all = { ...(p.keyRuns ?? {}), ...Object.fromEntries(Object.entries(runs).map(([k, n]) => [k, { n, at }])) };
+  write({ ...p, keyRuns: Object.fromEntries(Object.entries(all).sort((x, y) => y[1].at - x[1].at).slice(0, 200)) });
+}
+
 // The point an earlier day's telling left unfixed, to carry into today's first telling.
 export function retellCarry(p: Progress): RetellPoint | null {
   const past = (p.retells ?? []).filter((r) => r.date !== dayKey());

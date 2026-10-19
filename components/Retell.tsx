@@ -13,6 +13,7 @@ import {
   knownTags,
   RADIO_VOICE,
   recordPoints,
+  recordKeyRuns,
   recordRetell,
   recordSpeech,
   retellCarry,
@@ -299,6 +300,12 @@ export default function Retell() {
   // The keywords as renewed before each telling after the first (words already used well swapped for
   // new ones), the ones just taken off and the ones just put on; null: the topic's own.
   const [keyed, setKeyed] = useState<(RetellKeys & { fresh: string[] }) | null>(null);
+  // Tellings in a row each keyword was used well (from earlier days too), and each telling as the
+  // keyword check reads it (with where it stalled).
+  const keyRuns = useRef<Record<string, number>>({});
+  const saidMarked = useRef<string[]>([]);
+  // The same counts, for the half-way ✓ on a keyword used well once.
+  const [runsShown, setRunsShown] = useState<Record<string, number>>({});
   // A renewal's outcome; when nothing changed, the last one's marks come off.
   const renew = (k: RetellKeys | null) =>
     setKeyed((was) => {
@@ -310,6 +317,8 @@ export default function Retell() {
   useEffect(() => {
     if (!hydrated || topics.length) return;
     const ts = topicsFor(p);
+    keyRuns.current = Object.fromEntries(Object.entries(p.keyRuns ?? {}).map(([k, v]) => [k, v.n]));
+    setRunsShown(keyRuns.current);
     setTopics(ts);
     for (const t of ts) {
       const ep = t.ep && p.episodes.find((e) => e.id === t.ep);
@@ -449,15 +458,26 @@ export default function Retell() {
     texts.current[n] = text;
     const next = takes.map((t, i) => (i === n ? take : t));
     setTakes(next);
-    // Before the next telling, keywords already used well give their place to new ones. After the
-    // first it is decided while the fix is (and waited for with it); after the second it comes in
-    // while the learner reads, and a telling already under way keeps the words it started with.
-    const swap =
-      n < 2
-        ? post<RetellKeys>({ kind: "keys", topic: topic!.about, keys: keyed?.keys ?? topic!.keys, pool: topic!.pool, said: texts.current.slice(0, n + 1) })
-            .then((k) => (k.done.length || k.keys.length !== (keyed?.keys ?? topic!.keys).length ? k : null))
-            .catch(() => null)
-        : null;
+    saidMarked.current[n] = heard ? marked(heard, flow) : text;
+    // After every telling, how each keyword was used is counted; one used well two tellings in a row
+    // gives its place to a new one. After the first this is decided while the fix is (and waited for
+    // with it); after the second it comes in while the learner reads, and a telling already under way
+    // keeps the words it started with; after the third it is only counted.
+    const now = keyed?.keys ?? topic!.keys;
+    const swap = post<RetellKeys>({
+      kind: "keys",
+      topic: topic!.about,
+      keys: now.map((k) => ({ ...k, runs: keyRuns.current[k.ja] ?? 0 })),
+      pool: topic!.pool,
+      said: saidMarked.current.slice(0, n + 1),
+    })
+      .then((k) => {
+        Object.assign(keyRuns.current, k.runs);
+        setRunsShown({ ...keyRuns.current });
+        if (Object.keys(k.runs).length) recordKeyRuns(k.runs);
+        return k.done.length || k.keys.length !== now.length ? k : null;
+      })
+      .catch(() => null);
     if (n === 0) {
       setBusy("fix");
       const st = heard ? stallOf(heard, flow) : null;
@@ -496,7 +516,7 @@ export default function Retell() {
     if (n === 1) {
       setBusy("");
       setRound(2);
-      swap?.then((k) => {
+      swap.then((k) => {
         if (!rec.current) renew(k);
       });
       return;
@@ -682,11 +702,12 @@ export default function Retell() {
               <span key={k.ja} className={!warming && keyed?.fresh.includes(k.ja) ? "new" : ""}>
                 {k.ja}
                 {k.kana && /[一-龯々]/.test(k.ja) && <small>{k.kana}</small>}
+                {!warming && runsShown[k.ja] === 1 && <i className="key-ok">✓</i>}
               </span>
             ))}
           </div>
         )}
-        {!warming && !talking && keyed && keyed.done.length > 0 && <span className="retell-done">✓ 会用了：{keyed.done.join("・")}，换成新词</span>}
+        {!warming && !talking && keyed && keyed.done.length > 0 && <span className="retell-done">✓ 连续两遍说得又对又顺：{keyed.done.join("・")}，换成新词</span>}
         {showStarters && (
           <div className="retell-starters">
             {shownT.starters.map((s) => (

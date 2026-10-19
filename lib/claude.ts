@@ -638,44 +638,66 @@ ${a.carry ? `前の日から持ち越した注意点：${a.carry.focus_zh}（正
   );
 }
 
-// Before each telling after the first: the keywords on screen, renewed. A word the learner already uses
-// right without effort has done its job, so it gives its place to one they haven't reached for yet.
+// After each telling: how each keyword on screen was used. A word goes only once it has been used
+// right and without a stall in two tellings in a row (counted across days, runs), and then a word the
+// learner hasn't reached for yet takes its place.
+const KEY_RUNS_DONE = 2;
 const RetellKeysSchema = z.object({
-  done: z.array(z.string()).describe("今のキーワードのうち、もう使えているので外す語（キーワードの表記のまま）。なければ空配列"),
-  add: z
+  rated: z
+    .array(
+      z.object({
+        ja: z.string().describe("キーワード（表記のまま）"),
+        use: z
+          .enum(["fluent", "shaky", "unused"])
+          .describe(
+            "fluent：その語（活用形でよい）を正しい意味・形で、直前直後に詰まり（…）や言い直し・えっとがなく、文の中で自然に言えた。shaky：使ったが、間違えた・詰まった・言い直した・言いよどんだ・不自然。unused：使っていない。迷ったら shaky",
+          ),
+      }),
+    )
+    .describe("今のキーワード全部について、今回の話での使い方"),
+  spare: z
     .array(z.object({ ja: z.string().describe("語（表記どおり、短く）"), kana: z.string().describe("読み（ひらがな）") }))
-    .describe("外した語の代わりに出す新しいキーワード。done と同じ数まで。この話を話すのに役立つのに、学習者がまだ使っていない語"),
+    .describe(
+      "キーワードと入れ替えるための新しい語を、役に立つ順に3個。候補の語を優先し、学習者がまだ使っていない、この話を言うのに役立つ語。学習者が言おうとして言えなかった語があればそれを最優先。今のキーワードと同じ語は入れない",
+    ),
 });
-export type RetellKeys = { keys: { ja: string; kana: string }[]; done: string[] };
+export type RetellKeys = { keys: { ja: string; kana: string }[]; done: string[]; runs: Record<string, number> };
 
-export async function retellKeys(a: { topic: string; keys: { ja: string; kana?: string }[]; pool: { ja: string; kana?: string }[]; said: string[] }): Promise<RetellKeys> {
+type KeysArgs = { topic: string; keys: { ja: string; kana?: string; runs?: number }[]; pool: { ja: string; kana?: string }[]; said: string[] };
+
+export async function retellKeys(a: KeysArgs): Promise<RetellKeys> {
   const r = await haikuFirst(
     RetellKeysSchema,
     `${COACH}
-学習者は同じ話を3回、別の人に話します。画面には話の助けになるキーワード（最大3個）が出ています。次に話す前に、キーワードを入れ替えるかを決めてください。
-- 外すのは、もう使えている語だけ：これまでの全部の回で、その語（または同じ意味の自然な言い方）を正しく、迷わずに使えている語。1回しか話していなければ、はっきり自然に言えている場合だけ。
-- 使っていない・間違えた・詰まった語は残す。
-- 外した数だけ、新しいキーワードを add に入れる。候補の語を優先し、学習者がまだ使っていない、この話を言うのに役立つ語。学習者が言おうとして言えなかった語があれば、それを優先。すでにキーワードにある語や、学習者が使えている語は入れない。
-- 今のキーワードがなければ、学習者が言おうとして言えなかった語・言えたらもっと話せる語を最大3個 add に入れる（done は空）。
-- 入れ替える必要がなければ done も add も空配列。`,
+学習者は同じ話を3回、別の人に話します。画面には話の助けになるキーワードが出ています。最新の回で、それぞれのキーワードがどう使えたかを厳しめに判定してください（本当に使いこなせた時だけ fluent）。文字起こしの（…2.1秒…）は黙ったところ、（…詰まった…）は文の途中で詰まったところ。
+キーワードがない場合は、学習者が言おうとして言えなかった語・言えたらもっと話せる語を spare に入れる。`,
     `話のテーマ：${a.topic}
 今のキーワード：${a.keys.length ? a.keys.map((k) => k.ja).join("、") : "（なし）"}
 候補の語：${a.pool.map((k) => k.ja).join("、") || "（なし）"}
-${a.said.map((t, i) => `${i + 1}回目：${t}`).join("\n")}`,
-    1000,
+${a.said.map((t, i) => `${i === a.said.length - 1 ? "最新の回" : `${i + 1}回目`}：${t}`).join("\n")}`,
+    1500,
     "low",
   );
-  const done = r.done.filter((d) => a.keys.some((k) => k.ja === d));
-  const kept = a.keys.filter((k) => !done.includes(k.ja)).map((k) => ({ ja: k.ja, kana: k.kana ?? "" }));
-  const add = r.add
-    .filter((k) => k.ja.trim() && k.ja.length <= 16 && !kept.some((x) => x.ja === k.ja) && !done.includes(k.ja))
-    .slice(0, 3 - kept.length)
-    .map((k) => ({ ja: k.ja.trim(), kana: k.kana.trim() }));
+  const use = new Map(r.rated.map((x) => [x.ja, x.use]));
+  const runs = Object.fromEntries(
+    a.keys.map((k) => {
+      const u = use.get(k.ja) ?? "unused";
+      return [k.ja, u === "fluent" ? (k.runs ?? 0) + 1 : u === "shaky" ? 0 : (k.runs ?? 0)];
+    }),
+  );
+  const spare = r.spare
+    .map((k) => ({ ja: k.ja.trim(), kana: k.kana.trim() }))
+    .filter((k) => k.ja && k.ja.length <= 16 && !a.keys.some((x) => x.ja === k.ja));
   // A word only goes once there is one to take its place, and the new one takes its place in the row.
-  const gone = done.slice(0, add.length);
-  let j = 0;
-  const keys = a.keys.map((k) => (gone.includes(k.ja) ? add[j++] : { ja: k.ja, kana: k.kana ?? "" }));
-  return { keys: [...keys, ...add.slice(j)].slice(0, 3), done: gone };
+  const done: string[] = [];
+  const keys = a.keys.map((k) => {
+    if (runs[k.ja] < KEY_RUNS_DONE || !spare.length) return { ja: k.ja, kana: k.kana ?? "" };
+    done.push(k.ja);
+    return spare.shift()!;
+  });
+  // No keywords at all (a story from the learner's own day): the words they reached for.
+  if (!a.keys.length) keys.push(...spare.slice(0, 3));
+  return { keys, done, runs };
 }
 
 // After the third telling: whether the point stuck, and the learner's own story said naturally, to hear
