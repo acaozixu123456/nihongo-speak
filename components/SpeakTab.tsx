@@ -8,7 +8,8 @@ import { useHydrated } from "@/lib/client/hydrated";
 import { current, pillarOf, plan, quietPref, startRoute, useRoute } from "@/lib/client/route";
 import { GO } from "./Home";
 
-// 話す: today's speaking on top (三回話す, or 瞬間 when there is no episode to tell), then the other ways to talk.
+// 話す: today's speaking on top (三回話す, or 瞬間 when there is no episode to tell), then every way to talk,
+// 三回話す included so it stays reachable after today's telling.
 export default function SpeakTab() {
   const p = useProgress();
   const hydrated = useHydrated();
@@ -57,6 +58,10 @@ export default function SpeakTab() {
         </section>
       )}
       <div className="pl-grid">
+        <Link href="/retell" className="pl">
+          <b>三回話す</b>
+          <span>听过的话，用自己的话讲三遍</span>
+        </Link>
         <Link href="/call" className="pl">
           <b>電話</b>
           <span>和熟人打电话</span>
