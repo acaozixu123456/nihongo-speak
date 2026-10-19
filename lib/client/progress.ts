@@ -804,6 +804,34 @@ export function ensureTitleJa(ep: RadioEpisode) {
     .finally(() => titling.delete(ep.id));
 }
 
+// やさしく for an episode saved before scripts came with easy versions of the hard lines: asked for
+// once, kept on its lines ("" where a line is easy enough). Resolves to whether it worked.
+const easing = new Map<string, Promise<boolean>>();
+export const hasEasy = (ep: RadioEpisode) => ep.lines.some((l) => l.easy !== undefined);
+export function ensureEasy(ep: RadioEpisode): Promise<boolean> {
+  if (hasEasy(ep)) return Promise.resolve(true);
+  const lines = ep.lines.map((l) => l.ja);
+  const going =
+    easing.get(ep.id) ??
+    fetch("/api/radio-easy", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lines }) })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { easy?: string[] } | null) => {
+        if (d?.easy?.length !== lines.length) return false;
+        const p = read();
+        write({
+          ...p,
+          episodes: p.episodes.map((e) =>
+            e.id === ep.id && e.lines.length === lines.length ? { ...e, lines: e.lines.map((l, i) => ({ ...l, easy: d.easy![i] })) } : e,
+          ),
+        });
+        return true;
+      })
+      .catch(() => false)
+      .finally(() => easing.delete(ep.id));
+  easing.set(ep.id, going);
+  return going;
+}
+
 // ---- Custom scenarios ----
 
 export function addCustom(s: CustomScenario) {

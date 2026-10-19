@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { makingText, radioClips, useRadioMaking, type Clip, type ClipState, type RadioPart } from "@/lib/client/moyu";
 import { mixRadio, type Mixed } from "@/lib/client/radio-mix";
 import { play, preload, SILENCE, ttsUrl, unlock } from "@/lib/client/player";
-import { ensureTitleJa, findEpisode, markHeard, RADIO_VOICE, useProgress } from "@/lib/client/progress";
+import { ensureEasy, ensureTitleJa, findEpisode, hasEasy, markHeard, RADIO_VOICE, useProgress } from "@/lib/client/progress";
 import { setAudioSession } from "@/lib/client/recorder";
 import { useHydrated } from "@/lib/client/hydrated";
 import Earworm from "./Earworm";
@@ -28,11 +28,14 @@ const PART_NAME: Record<RadioPart, string> = { open: "開幕", letter: "お便�
 type Phase = "idle" | "loading" | "playing" | "paused";
 const ZH_KEY = "nihongo-speak:ep-zh";
 const RATE_KEY = "nihongo-speak:ep-rate";
+const EASY_KEY = "nihongo-speak:ep-easy";
 // Slower speeds for when the hosts run too fast to follow.
 const RATES = [1, 0.85, 0.7];
 
 // Cover pictures being drawn, so opening the page twice doesn't ask twice.
 const drawing: Record<string, Promise<boolean>> = {};
+// Old episodes whose easy versions were asked for on this visit (asked once, even if it failed).
+const easyAsked = new Set<string>();
 
 // /ep/new: today's route started before its episode was written. Waits for it, then opens it
 // (or, if it can't be written, the route's next stop).
@@ -63,7 +66,12 @@ export default function Episode({ id }: { id: string }) {
   const hydrated = useHydrated();
   const ep = hydrated ? findEpisode(p, id) : undefined;
   useEffect(() => {
-    if (ep) ensureTitleJa(ep);
+    if (!ep) return;
+    ensureTitleJa(ep);
+    if (!hasEasy(ep) && !easyAsked.has(ep.id)) {
+      easyAsked.add(ep.id);
+      ensureEasy(ep);
+    }
   }, [ep]);
   const audio = useRef<HTMLAudioElement>(null);
   const prep = useRef<Mixed | null>(null);
@@ -71,10 +79,18 @@ export default function Episode({ id }: { id: string }) {
   const [done, setDone] = useState(false);
   const [open, setOpen] = useState(false);
   const [at, setAt] = useState(-1);
+  // The furthest line reached, so going back to hear a line again keeps the ones after it.
+  const [far, setFar] = useState(-1);
   const [pos, setPos] = useState(0);
   const [tab, setTab] = useState<Tab>("script");
   const [showZh, setShowZhState] = useState(false);
   const [rate, setRateState] = useState(1);
+  // やさしく: every hard line shown in easy Japanese; flipped: lines switched one at a time.
+  const [easyOn, setEasyOnState] = useState(false);
+  const [flipped, setFlipped] = useState<Set<number>>(new Set());
+  // The line being spoken has been scrolled out of view.
+  const [away, setAway] = useState(false);
+  const chat = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
   // How each clip is getting on while the episode's audio is being made.
   const [made, setMade] = useState<{ clips: Clip[]; at: ClipState[] } | null>(null);
@@ -89,6 +105,7 @@ export default function Episode({ id }: { id: string }) {
       setShowZhState(localStorage.getItem(ZH_KEY) === "1");
       const r = Number(localStorage.getItem(RATE_KEY));
       if (RATES.includes(r)) setRateState(r);
+      setEasyOnState(localStorage.getItem(EASY_KEY) === "1");
     } catch {}
     // Scrolling by hand pauses the follow-along for a few seconds.
     const hand = () => (touched.current = Date.now());
@@ -111,6 +128,17 @@ export default function Episode({ id }: { id: string }) {
     if (!speaking || !open || Date.now() - touched.current < 4000) return;
     notes.current?.querySelector<HTMLElement>(".sline.now")?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [speaking, open]);
+
+  // The chat follows the newest line, unless the learner scrolled back to read; then a button
+  // brings them back to it.
+  useEffect(() => {
+    const el = chat.current?.querySelector<HTMLElement>(".msg.cur");
+    if (!el) return;
+    if (!open && Date.now() - touched.current > 4000) el.scrollIntoView({ behavior: "smooth", block: "end" });
+    const seen = new IntersectionObserver(([e]) => setAway(!e.isIntersecting), { rootMargin: "-120px 0px -150px 0px" });
+    seen.observe(el);
+    return () => seen.disconnect();
+  }, [at, open]);
 
   // Opening a notes tab fetches its sentences and words, so a tap plays at once.
   useEffect(() => {
@@ -169,6 +197,29 @@ export default function Episode({ id }: { id: string }) {
     try {
       localStorage.setItem(ZH_KEY, on ? "1" : "0");
     } catch {}
+  }
+
+  function setEasyOn(on: boolean) {
+    setEasyOnState(on);
+    setFlipped(new Set());
+    if (on) ensureEasy(episode);
+    try {
+      localStorage.setItem(EASY_KEY, on ? "1" : "0");
+    } catch {}
+  }
+
+  function flip(i: number) {
+    setFlipped((f) => {
+      const n = new Set(f);
+      if (n.has(i)) n.delete(i);
+      else n.add(i);
+      return n;
+    });
+  }
+
+  function backToNow() {
+    touched.current = 0;
+    chat.current?.querySelector<HTMLElement>(".msg.cur")?.scrollIntoView({ behavior: "smooth", block: "end" });
   }
 
   function setRate(r: number) {
@@ -240,17 +291,21 @@ export default function Episode({ id }: { id: string }) {
     let i = 0;
     while (i + 1 < cur.starts.length && cur.starts[i + 1] <= a.currentTime) i++;
     setAt(i);
+    setFar((f) => Math.max(f, i));
     setPos(a.currentTime / cur.total);
   }
 
   // Tap a line to jump there (once the audio is ready).
   function seekLine(ja: string) {
+    const i = prep.current?.clips.findIndex((c) => c.show === ja) ?? -1;
+    if (i >= 0) seekClip(i);
+  }
+
+  function seekClip(i: number) {
     const cur = prep.current;
     const a = audio.current;
     // A long press that selected text isn't a tap.
     if (!cur || !a || document.getSelection()?.toString()) return;
-    const i = cur.clips.findIndex((c) => c.show === ja);
-    if (i < 0) return;
     a.currentTime = cur.starts[i] + 0.01;
     if (a.paused) a.play().catch(() => {});
   }
@@ -281,9 +336,8 @@ export default function Episode({ id }: { id: string }) {
   const fallbackN = made?.at.filter((x) => x.at === "done" && x.fallback).length ?? 0;
   const failN = made?.at.filter((x) => x.at === "fail").length ?? 0;
 
-  // Who is talking, which corner of the show this is, and how far into each corner.
+  // Which corner of the show this is, and how far into each corner.
   const k = ep.hitokoto;
-  const who = now?.line ? (now.line.voice === RADIO_VOICE.A ? "A" : "B") : now?.sub === "ハル" ? "A" : now?.sub === "ケン" ? "B" : null;
   const total = prep.current?.total ?? 0;
   const chapters: { part: RadioPart; at: number; to: number }[] = prep.current?.chapters.length
     ? prep.current.chapters.map((c, i, all) => ({ ...c, to: all[i + 1]?.at ?? total }))
@@ -292,42 +346,50 @@ export default function Episode({ id }: { id: string }) {
       : [];
   const nowSec = pos * total;
   const playingNow = phase === "playing";
+  const title = ep.title_ja ?? ep.title_zh;
+
+  // Once playing, the show is a chat: every line said so far, the one being said lit up.
+  const started = phase !== "idle" || !!prep.current;
+  const mixed = prep.current;
+  const shown = mixed && far >= 0 ? mixed.clips.slice(0, far + 1) : [];
+  const lineAt = new Map(ep.lines.map((l, i) => [l.ja, i]));
+  const easing = easyOn && !hasEasy(ep);
+  const next = mixed && at >= 0 ? mixed.clips[at + 1] : undefined;
 
   return (
-    <main className="page" data-ask-topic={episode.title_zh} data-ask-ep={episode.id}>
+    <main className={`page ${started ? "on-air" : ""}`} data-ask-topic={episode.title_zh} data-ask-ep={episode.id}>
       <Link href="/listen" className="back">← 聴く</Link>
-      <div className="kicker">
-        {k ? "ゆるっと日本ラジオ" : "趣味电台"} · {shortDate(ep.date)}
-      </div>
-      <div className={`radio-cover ${cover ? "drawn" : ""}`} style={cover ? { backgroundImage: `url(${cover})` } : undefined}>
-        {!cover && <h1 className="radio-title">{ep.title_ja ?? ep.title_zh}</h1>}
-        <div className={`radio-waves ${playingNow ? "on" : ""}`} aria-hidden>
-          <i />
-          <i />
-          <i />
-        </div>
-        <div className="radio-hosts">
-          <span className={`han ${playingNow && who === "A" ? "on" : ""}`}>春</span>
-          <span className={`han ${playingNow && who === "B" ? "on" : ""}`}>健</span>
-        </div>
-      </div>
-      {cover && <h1 className="radio-title under">{ep.title_ja ?? ep.title_zh}</h1>}
-      {ep.title_ja && <p className="radio-title-zh">{ep.title_zh}</p>}
-
-      {done && k ? (
-        <div className="hitokoto">
-          <div className="hk-k">今日のひとこと</div>
-          <div className="hk-when">{k.when_ja}</div>
-          <button className="hk-ja" onClick={() => say(k.ja)}>
-            {k.ja}
+      {!started ? (
+        <>
+          <div className="kicker">
+            {k ? "ゆるっと日本ラジオ" : "趣味电台"} · {shortDate(ep.date)}
+          </div>
+          <div className={`radio-cover ${cover ? "drawn" : ""}`} style={cover ? { backgroundImage: `url(${cover})` } : undefined}>
+            {!cover && <h1 className="radio-title">{title}</h1>}
+          </div>
+          {cover && <h1 className="radio-title under">{title}</h1>}
+          {ep.title_ja && <p className="radio-title-zh">{ep.title_zh}</p>}
+          <div className="radio-hook">{ep.hook_zh}</div>
+          <button className="radio-start" onClick={toggle}>
+            ▶ 聞く
           </button>
-          <div className="hk-zh">{k.zh}</div>
-          <Link href={`/ep/${ep.id}/game`} className="hk-go">
-            練習
-          </Link>
-        </div>
+        </>
       ) : (
-        <div className="radio-now">
+        <>
+          <div className={`radio-float ${cover ? "drawn" : ""}`} style={cover ? { backgroundImage: `url(${cover})` } : undefined}>
+            <button className={`easy-t ${easyOn ? "on" : ""}`} onClick={() => setEasyOn(!easyOn)}>
+              {easing && <span className="spin" />}
+              やさしく{easyOn ? " ✓" : ""}
+            </button>
+            <div className="float-bar">
+              <span>{title}</span>
+              <div className={`radio-waves ${playingNow ? "on" : ""}`} aria-hidden>
+                <i />
+                <i />
+                <i />
+              </div>
+            </div>
+          </div>
           {loading && (
             <div className="radio-prev">
               正在制作声音
@@ -336,64 +398,115 @@ export default function Episode({ id }: { id: string }) {
               </span>
             </div>
           )}
-          {speaking && !loading ? (
-            <>
-              <div className="radio-who">
-                {now?.part === "song" ? "洗脑歌" : who ? HOST_NAME[who] : ""}
-                {now?.part === "letter" && ep.letter ? " · 读你的来信" : ""}
-              </div>
-              <div className="radio-line">{speaking}</div>
-              {now?.part === "letter" && ep.letter && <span className="radio-tip">来信是你最近说错的一句：{ep.letter.said}</span>}
-            </>
-          ) : (
-            <div className="radio-hook">{ep.hook_zh}</div>
-          )}
-        </div>
-      )}
-
-      {chapters.length > 0 ? (
-        <div className="chap">
-          {chapters.map((c) => {
-            const len = c.to - c.at;
-            const fill = loading ? 0 : len > 0 ? Math.max(0, Math.min(1, (nowSec - c.at) / len)) : 0;
-            const cur = len > 0 && nowSec >= c.at && nowSec < c.to;
-            return (
-              <button
-                key={c.part}
-                className={cur ? "cur" : ""}
-                style={{ flex: len > 0 ? Math.max(0.6, len / 30) : 1 }}
-                onClick={() => len > 0 && audio.current && ((audio.current.currentTime = c.at + 0.01), audio.current.paused && audio.current.play().catch(() => {}))}
-              >
-                <s>
-                  <u style={{ width: `${fill * 100}%` }} />
-                </s>
-                <span>{PART_NAME[c.part]}</span>
+          <div className="chat" ref={chat}>
+            {shown.map((c, i) => {
+              const w = c.line ? (c.line.voice === RADIO_VOICE.A ? "A" : "B") : c.sub === "ハル" ? "A" : c.sub === "ケン" ? "B" : null;
+              if (!w) return <div key={i} className="chat-chip">{c.part === "song" ? "♪ 洗脳歌" : c.show}</div>;
+              const li = lineAt.get(c.show);
+              const easy = li === undefined ? "" : (ep.lines[li].easy ?? "");
+              const asEasy = !!easy && easyOn !== flipped.has(li!);
+              const isNow = i === at;
+              const nw = next && i === at && (next.line ? (next.line.voice === RADIO_VOICE.A ? "A" : "B") : next.sub === "ハル" ? "A" : next.sub === "ケン" ? "B" : null);
+              const flipIt = (e: React.MouseEvent) => {
+                e.stopPropagation();
+                flip(li!);
+              };
+              return (
+                <div key={i} className="msg-wrap">
+                  <div className={`msg ${w === "A" ? "l" : "r"} ${isNow ? "cur" : "old"}`} data-line={c.show} data-before={shown[i - 1]?.show ?? ""} onClick={() => seekClip(i)}>
+                    <span className={`av av-${w}`}>{w === "A" ? "春" : "健"}</span>
+                    <div className={`bub ${asEasy ? "easyb" : ""}`}>
+                      {asEasy ? (
+                        <>
+                          <button className="easy-lab" onClick={flipIt}>
+                            やさしく
+                          </button>
+                          <span className="easy-ja">{easy}</span>
+                          <span className="orig">{c.show}</span>
+                        </>
+                      ) : isNow && mixed ? (
+                        <Said audio={audio} text={c.show} from={mixed.starts[i]} to={mixed.ends[i]} />
+                      ) : (
+                        c.show
+                      )}
+                      {!asEasy && easy && (
+                        <button className="hard" onClick={flipIt}>
+                          やさしく
+                        </button>
+                      )}
+                      {isNow && mixed && <Bar audio={audio} from={mixed.starts[i]} to={mixed.ends[i]} />}
+                      {c.back && <span className="react">{c.back.text}</span>}
+                    </div>
+                  </div>
+                  {nw && mixed && <Typing audio={audio} who={nw} from={mixed.ends[i]} to={mixed.starts[i + 1]} />}
+                </div>
+              );
+            })}
+          </div>
+          {done && k && (
+            <div className="hitokoto">
+              <div className="hk-k">今日のひとこと</div>
+              <div className="hk-when">{k.when_ja}</div>
+              <button className="hk-ja" onClick={() => say(k.ja)}>
+                {k.ja}
               </button>
-            );
-          })}
-        </div>
-      ) : (
-        <div className={`track ${loading ? "making" : ""}`}>
-          <div style={{ width: `${(loading ? finished / made.clips.length : pos) * 100}%` }} />
-        </div>
+              <div className="hk-zh">{k.zh}</div>
+              <Link href={`/ep/${ep.id}/game`} className="hk-go">
+                練習
+              </Link>
+            </div>
+          )}
+          <div className="radio-dock">
+            {chapters.length > 0 ? (
+              <div className="chap">
+                {chapters.map((c) => {
+                  const len = c.to - c.at;
+                  const fill = loading ? 0 : len > 0 ? Math.max(0, Math.min(1, (nowSec - c.at) / len)) : 0;
+                  const cur = len > 0 && nowSec >= c.at && nowSec < c.to;
+                  return (
+                    <button
+                      key={c.part}
+                      className={cur ? "cur" : ""}
+                      style={{ flex: len > 0 ? Math.max(0.6, len / 30) : 1 }}
+                      onClick={() => len > 0 && audio.current && ((audio.current.currentTime = c.at + 0.01), audio.current.paused && audio.current.play().catch(() => {}))}
+                    >
+                      <s>
+                        <u style={{ width: `${fill * 100}%` }} />
+                      </s>
+                      <span>{PART_NAME[c.part]}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className={`track ${loading ? "making" : ""}`}>
+                <div style={{ width: `${(loading ? finished / made.clips.length : pos) * 100}%` }} />
+              </div>
+            )}
+            {loading && chapters.length > 0 && (
+              <div className="track making">
+                <div style={{ width: `${(finished / made.clips.length) * 100}%` }} />
+              </div>
+            )}
+            <div className="radio-ctrl">
+              <button className="player-tool" onClick={() => jump(-1)} disabled={!prep.current} aria-label="再听这一句">
+                戻る
+              </button>
+              <button className="radio-play" onClick={toggle} aria-label={playingNow ? "暂停" : "播放"}>
+                {phase === "loading" ? <span className="spin" /> : playingNow ? "❚❚" : "▶"}
+              </button>
+              <button className="player-tool" onClick={() => setRate(RATES[(RATES.indexOf(rate) + 1) % RATES.length])} aria-label="播放速度">
+                {rate}×
+              </button>
+            </div>
+          </div>
+          {away && at >= 0 && (
+            <button className="now-pill" onClick={backToNow}>
+              ↓ 今のセリフ
+            </button>
+          )}
+        </>
       )}
-      {loading && chapters.length > 0 && (
-        <div className="track making">
-          <div style={{ width: `${(finished / made.clips.length) * 100}%` }} />
-        </div>
-      )}
-
-      <div className="radio-ctrl">
-        <button className="player-tool" onClick={() => jump(-1)} disabled={!prep.current} aria-label="再听这一句">
-          戻る
-        </button>
-        <button className="radio-play" onClick={toggle} aria-label={playingNow ? "暂停" : "播放"}>
-          {phase === "loading" ? <span className="spin" /> : playingNow ? "❚❚" : "▶"}
-        </button>
-        <button className="player-tool" onClick={() => setRate(RATES[(RATES.indexOf(rate) + 1) % RATES.length])} aria-label="播放速度">
-          {rate}×
-        </button>
-      </div>
       {loading && trouble >= 0 && (
         <p className="making-note warn-note" key={trouble}>
           <i />
@@ -414,126 +527,130 @@ export default function Episode({ id }: { id: string }) {
         </p>
       )}
       {error && <p className="error">{error}</p>}
-      <Earworm ep={ep} />
-
-      <div className="radio-rows">
-        <button className="radio-row" onClick={() => setOpen(!open)}>
-          <span>スクリプト</span>
-          <em>{open ? "收起" : "›"}</em>
-        </button>
-        <Link href={`/ep/${ep.id}/game`} className="radio-row">
-          <span>
-            練習{ep.asked?.length ? <small> · 含你问过 AI 的 {ep.asked.length} 处</small> : null}
-          </span>
-          <em>›</em>
-        </Link>
-        {hasSavedSet(ep.id) && (
-          <Link href={`/ep/${ep.id}/game?again`} className="radio-row">
-            <span>再练上次那套</span>
-            <em>›</em>
-          </Link>
-        )}
-      </div>
-
-      {open && (
-      <div ref={notes}>
-      <div className="seg">
-        {TABS.map((t) => (
-          <button key={t.key} className={tab === t.key ? "on" : ""} onClick={() => setTab(t.key)}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {tab === "script" && (
+      {/* While the show is on, nothing under the chat but the chat itself. */}
+      {(!started || done) && (
         <>
-          <div className="row spread note-head">
-            <span>{ep.lines.length} 句 · 点一句跳过去，长按选中问 AI</span>
-            <button className="small ghost" onClick={() => setShowZh(!showZh)}>
-              {showZh ? "隐藏中文" : "显示中文"}
+          <Earworm ep={ep} />
+
+          <div className="radio-rows">
+            <button className="radio-row" onClick={() => setOpen(!open)}>
+              <span>スクリプト</span>
+              <em>{open ? "收起" : "›"}</em>
             </button>
+            <Link href={`/ep/${ep.id}/game`} className="radio-row">
+              <span>
+                練習{ep.asked?.length ? <small> · 含你问过 AI 的 {ep.asked.length} 处</small> : null}
+              </span>
+              <em>›</em>
+            </Link>
+            {hasSavedSet(ep.id) && (
+              <Link href={`/ep/${ep.id}/game?again`} className="radio-row">
+                <span>再练上次那套</span>
+                <em>›</em>
+              </Link>
+            )}
           </div>
-          <div className="script">
-            {ep.lines.map((l, i) => (
-              <div
-                key={i}
-                className={`sline ${speaking === l.ja ? "now" : ""} ${loading && ["wait", "work"].includes(stateOf(l.ja)?.at ?? "") ? "pending" : ""}`}
-                onClick={() => seekLine(l.ja)}
-                data-line={l.ja}
-                data-before={ep.lines[i - 1]?.ja ?? ""}
-              >
-                <span className={`who who-${l.who}`}>{HOST_NAME[l.who]}</span>
-                <div>
-                  <div className="ja">{l.ja}</div>
-                  {showZh && <div className="zh">{l.zh}</div>}
-                  <Mark st={stateOf(l.ja)} live={!!loading} />
-                </div>
-              </div>
+
+          {open && (
+          <div ref={notes}>
+          <div className="seg">
+            {TABS.map((t) => (
+              <button key={t.key} className={tab === t.key ? "on" : ""} onClick={() => setTab(t.key)}>
+                {t.label}
+              </button>
             ))}
           </div>
-          {ep.quiz_zh && (
-            <p className="quiz">
-              <span>想一想</span>
-              {ep.quiz_zh}
-            </p>
+
+          {tab === "script" && (
+            <>
+              <div className="row spread note-head">
+                <span>{ep.lines.length} 句 · 点一句跳过去，长按选中问 AI</span>
+                <button className="small ghost" onClick={() => setShowZh(!showZh)}>
+                  {showZh ? "隐藏中文" : "显示中文"}
+                </button>
+              </div>
+              <div className="script">
+                {ep.lines.map((l, i) => (
+                  <div
+                    key={i}
+                    className={`sline ${speaking === l.ja ? "now" : ""} ${loading && ["wait", "work"].includes(stateOf(l.ja)?.at ?? "") ? "pending" : ""}`}
+                    onClick={() => seekLine(l.ja)}
+                    data-line={l.ja}
+                    data-before={ep.lines[i - 1]?.ja ?? ""}
+                  >
+                    <span className={`who who-${l.who}`}>{HOST_NAME[l.who]}</span>
+                    <div>
+                      <div className="ja">{l.ja}</div>
+                      {showZh && <div className="zh">{l.zh}</div>}
+                      <Mark st={stateOf(l.ja)} live={!!loading} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {ep.quiz_zh && (
+                <p className="quiz">
+                  <span>想一想</span>
+                  {ep.quiz_zh}
+                </p>
+              )}
+            </>
+          )}
+
+          {tab === "phrases" && (
+            <>
+              <p className="note-head">这几句已经放进复习，明天开始会让你说出来。</p>
+              {ep.phrases.map((ph) => (
+                <div key={ph.ja} className="note" data-line={ph.ja}>
+                  <div className="note-main" onClick={() => say(ph.ja)}>
+                    <div className="ja">{ph.ja}</div>
+                    <div className="zh">{ph.zh}</div>
+                  </div>
+                  <Star p={p} ja={ph.ja} zh={ph.zh} voice={RADIO_VOICE.A} scenarioId={scenarioId} />
+                </div>
+              ))}
+            </>
+          )}
+
+          {tab === "words" && (
+            <>
+              <p className="note-head">点单词听发音，想记的点收藏进复习。</p>
+              {(ep.words ?? []).map((w) => (
+                <div key={w.ja} className="note" data-line={w.ja}>
+                  <div className="note-main" onClick={() => say(w.ja)}>
+                    <div className="ja">
+                      {w.ja}
+                      <span className="kana"> {w.kana}</span>
+                    </div>
+                    <div className="zh">{w.zh}</div>
+                  </div>
+                  <Star p={p} ja={w.ja} reading={w.kana} zh={w.zh} voice={RADIO_VOICE.A} scenarioId={scenarioId} />
+                </div>
+              ))}
+              {!ep.words?.length && <p className="muted">这一期是旧版生成的，没有单词表。</p>}
+            </>
+          )}
+
+          {tab === "grammar" && (
+            <>
+              {(ep.grammar ?? []).map((g) => (
+                <div key={g.pattern} className="note gram" data-line={g.ja}>
+                  <div className="note-main">
+                    <div className="gram-pattern">{g.pattern}</div>
+                    <div className="zh">{g.zh}</div>
+                    <div className="gram-ex" onClick={() => say(g.ja)}>
+                      {g.ja}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {!ep.grammar?.length && <p className="muted">这一期是旧版生成的，没有语法整理。</p>}
+            </>
+          )}
+
+          </div>
           )}
         </>
       )}
-
-      {tab === "phrases" && (
-        <>
-          <p className="note-head">这几句已经放进复习，明天开始会让你说出来。</p>
-          {ep.phrases.map((ph) => (
-            <div key={ph.ja} className="note" data-line={ph.ja}>
-              <div className="note-main" onClick={() => say(ph.ja)}>
-                <div className="ja">{ph.ja}</div>
-                <div className="zh">{ph.zh}</div>
-              </div>
-              <Star p={p} ja={ph.ja} zh={ph.zh} voice={RADIO_VOICE.A} scenarioId={scenarioId} />
-            </div>
-          ))}
-        </>
-      )}
-
-      {tab === "words" && (
-        <>
-          <p className="note-head">点单词听发音，想记的点收藏进复习。</p>
-          {(ep.words ?? []).map((w) => (
-            <div key={w.ja} className="note" data-line={w.ja}>
-              <div className="note-main" onClick={() => say(w.ja)}>
-                <div className="ja">
-                  {w.ja}
-                  <span className="kana"> {w.kana}</span>
-                </div>
-                <div className="zh">{w.zh}</div>
-              </div>
-              <Star p={p} ja={w.ja} reading={w.kana} zh={w.zh} voice={RADIO_VOICE.A} scenarioId={scenarioId} />
-            </div>
-          ))}
-          {!ep.words?.length && <p className="muted">这一期是旧版生成的，没有单词表。</p>}
-        </>
-      )}
-
-      {tab === "grammar" && (
-        <>
-          {(ep.grammar ?? []).map((g) => (
-            <div key={g.pattern} className="note gram" data-line={g.ja}>
-              <div className="note-main">
-                <div className="gram-pattern">{g.pattern}</div>
-                <div className="zh">{g.zh}</div>
-                <div className="gram-ex" onClick={() => say(g.ja)}>
-                  {g.ja}
-                </div>
-              </div>
-            </div>
-          ))}
-          {!ep.grammar?.length && <p className="muted">这一期是旧版生成的，没有语法整理。</p>}
-        </>
-      )}
-
-      </div>
-      )}
-
 
       <audio
         ref={audio}
@@ -575,4 +692,57 @@ function Mark({ st, live }: { st?: ClipState; live: boolean }) {
               : null;
   if (!label) return null;
   return <span className={`mk mk-${st.at === "done" ? "fallback" : st.at}`}>{label}</span>;
+}
+
+// Where the audio is now, read every frame (to a twentieth of a second) while this is on screen.
+function useTime(audio: React.RefObject<HTMLAudioElement | null>) {
+  const [t, setT] = useState(0);
+  useEffect(() => {
+    let id = 0;
+    const tick = () => {
+      const a = audio.current;
+      if (a) setT(Math.round(a.currentTime * 20) / 20);
+      id = requestAnimationFrame(tick);
+    };
+    id = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(id);
+  }, [audio]);
+  return t;
+}
+
+// The line being said: the part already said dark, the rest still grey, at the line's own pace.
+function Said({ audio, text, from, to }: { audio: React.RefObject<HTMLAudioElement | null>; text: string; from: number; to: number }) {
+  const t = useTime(audio);
+  const n = Math.round(text.length * Math.max(0, Math.min(1, (t - from) / Math.max(0.3, to - from))));
+  return (
+    <>
+      <span className="said">{text.slice(0, n)}</span>
+      <span className="unsaid">{text.slice(n)}</span>
+    </>
+  );
+}
+
+function Bar({ audio, from, to }: { audio: React.RefObject<HTMLAudioElement | null>; from: number; to: number }) {
+  const t = useTime(audio);
+  return (
+    <span className="bub-bar">
+      <u style={{ width: `${Math.max(0, Math.min(1, (t - from) / Math.max(0.3, to - from))) * 100}%` }} />
+    </span>
+  );
+}
+
+// The other host about to answer: three dots in the pause between two lines.
+function Typing({ audio, who, from, to }: { audio: React.RefObject<HTMLAudioElement | null>; who: "A" | "B"; from: number; to: number }) {
+  const t = useTime(audio);
+  if (!(t > from + 0.1 && t < to)) return null;
+  return (
+    <div className={`msg ${who === "A" ? "l" : "r"} typing`}>
+      <span className={`av av-${who}`}>{who === "A" ? "春" : "健"}</span>
+      <div className="bub">
+        <i />
+        <i />
+        <i />
+      </div>
+    </div>
+  );
 }
