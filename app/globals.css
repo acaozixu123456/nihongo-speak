@@ -1600,3 +1600,31 @@ button.today-go { width: 100%; border: none; cursor: pointer; }
 .sensei-letter .zh { font-size: 13px; color: var(--muted); margin: 6px 0 0; line-height: 1.6; }
 .sensei-letter .sig { text-align: right; font-family: var(--serif); font-size: 15px; color: var(--muted); margin-top: 6px; }
 .teacher-note + .me-card, .sensei-letter + .me-card, .sensei-say + .me-card { margin-top: 16px; }
+
+/* 森先生 moves: breathes, sways a little, blinks; talks while her voice plays; nods with smiling eyes. */
+.sensei-face { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.sensei-face .s-all { animation: s-breathe 4.6s ease-in-out infinite; }
+.sensei-face .s-head { transform-box: view-box; transform-origin: 60px 84px; animation: s-sway 7.5s ease-in-out infinite; }
+.sensei-face .s-eyes { transform-box: fill-box; transform-origin: center; animation: s-blink 5.2s infinite; }
+.sensei-face .s-smile-eyes { opacity: 0; }
+.sensei-face .s-cheek { opacity: 0.55; transition: opacity 0.4s; }
+.sensei-face .s-mouth { opacity: 0; transform-box: fill-box; transform-origin: 50% 0; }
+.sensei-face .s-brow { transform-box: fill-box; transition: transform 0.3s; }
+.sensei-face.talk .s-smile { opacity: 0; }
+.sensei-face.talk .s-mouth { opacity: 1; animation: s-talk 0.62s steps(1) infinite; }
+.sensei-face.talk .s-brow { transform: translateY(-1.2px); }
+.sensei-face.nod .s-head { animation: s-nod 1.3s ease-in-out; }
+.sensei-face.nod .s-eyes { opacity: 0; animation: none; }
+.sensei-face.nod .s-smile-eyes { opacity: 1; }
+.sensei-face.nod .s-cheek { opacity: 0.85; }
+@keyframes s-breathe { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(1.4px); } }
+@keyframes s-sway { 0%, 100% { transform: rotate(-1.2deg); } 50% { transform: rotate(1.4deg); } }
+@keyframes s-blink { 0%, 92%, 100% { transform: scaleY(1); } 94% { transform: scaleY(0.1); } 96% { transform: scaleY(1); } }
+@keyframes s-talk { 0% { transform: scaleY(0.35); } 20% { transform: scaleY(1); } 40% { transform: scaleY(0.55); } 60% { transform: scaleY(0.9); } 80% { transform: scaleY(0.3); } }
+@keyframes s-nod { 0%, 100% { transform: rotate(0) translateY(0); } 20%, 60% { transform: rotate(3deg) translateY(3px); } 40%, 80% { transform: rotate(-0.5deg) translateY(0); } }
+.sensei-say { animation: s-say 0.45s cubic-bezier(.2, .8, .3, 1.2) both; }
+@keyframes s-say { from { opacity: 0; transform: translateY(6px) scale(0.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .sensei-face .s-all, .sensei-face .s-head, .sensei-face .s-eyes, .sensei-say { animation: none; }
+}
+.sensei-letter .sensei-ja { font-size: 16px; line-height: 1.75; }
