@@ -6,7 +6,7 @@ import type { TeacherFix, TeacherGood } from "@/lib/client/progress";
 const VOICE = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-MayuNeural";
 
 // The teacher's marked part of a sentence, coloured where it sits.
-function Marked({ text, mark, as: Tag }: { text: string; mark: string; as: "mark" | "em" }) {
+export function Marked({ text, mark, as: Tag }: { text: string; mark: string; as: "mark" | "em" }) {
   const i = mark ? text.indexOf(mark) : -1;
   if (i < 0) return <>{text}</>;
   return (

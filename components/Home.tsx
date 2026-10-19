@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { unlock } from "@/lib/client/player";
 import { teacherFix, useProgress } from "@/lib/client/progress";
-import { FixBlock } from "./TeacherMemo";
-import { SenseiLine } from "./Sensei";
+import { FixBlock, Marked } from "./TeacherMemo";
+import { SenseiLine, speak } from "./Sensei";
 import { useHydrated } from "@/lib/client/hydrated";
 import { PILLARS, finished, oneFix, pillarOf, plan, quietPref, setQuiet, startRoute, todaysEpisode, useRoute, type Pillar, type Stop } from "@/lib/client/route";
 
@@ -128,7 +128,8 @@ export default function Home() {
   const [hi, hiZh] = greeting();
   const [lead, leadZh] = LEAD[now!];
   const say = at === 0 ? [hi + lead, hiZh + leadZh] : [lead, leadZh];
-  const fix = s.key === "fix" ? teacherFix(p) : null;
+  const tf = teacherFix(p);
+  const fix = s.key === "fix" ? tf : null;
   const ep = todaysEpisode(p);
   let title = s.ja;
   let sub = s.meta;
@@ -159,6 +160,18 @@ export default function Home() {
         </button>
       </section>
       {dots}
+      {tf && !fix && (
+        <button className="use-today" onClick={() => speak(tf.better)}>
+          <span className="kicker">今日使ってみよう</span>
+          <span className="use-ja">
+            <span>
+              <Marked text={tf.better} mark={tf.mark} as="em" />
+            </span>
+            <i aria-hidden>▶</i>
+          </span>
+          {tf.zh && <small>{tf.zh}</small>}
+        </button>
+      )}
     </main>
   );
 }
