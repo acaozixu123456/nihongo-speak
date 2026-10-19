@@ -100,18 +100,20 @@ export function plan(p: Progress, quiet: boolean): Stop[] {
   const phone: Stop = { key: "call", ja: "電話", meta: call.who, href: `/call/${call.id}`, min: 4 };
   // The episode's 練習 also brings back older items that are due and the weak points, so there is no
   // second practice round on a day with an episode.
-  const episode: Stop[] = [listen, { key: "game", ja: "練習", meta: "今の話", href: `${epHref}/game`, min: 5 }, song];
-  // 話す is 三回話す (today's story, three times) once a day, told while the story is fresh; on a
-  // second route the same day it is 瞬間 instead.
+  const game: Stop = { key: "game", ja: "練習", meta: "今の話", href: `${epHref}/game`, min: 5 };
+  // 話す is 三回話す (today's story, three times) once a day; on a second route the same day it is 瞬間.
   const speak: Stop = retellToday(p)
     ? { key: "quick", ja: "話す", meta: `瞬間 ${QUICK_N}問`, href: "/quick", min: 3 }
     : { key: "retell", ja: "話す", meta: "三回", href: "/retell", min: 10 };
-  // 電話 last: the call brings up today's story, so it comes after it has been told.
-  if (ep) return [...episode, speak, ...review, phone];
+  // 三回話す is the stop that matters most, so it comes straight after 聴く: the story is fresh, and a
+  // short morning still gets to it. The song is the break after it; 電話 is last because it brings
+  // up today's story.
+  const episode: Stop[] = [listen, speak, song, game];
+  if (ep) return [...episode, ...review, phone];
   // No episode yet: open with something that doesn't need it while it is written.
   const skills = dueSkillCount(p) + weakItems(p, 3).length;
   const lead: Stop[] = skills > 0 ? [{ key: "skills", ja: "練習", meta: `前の ${Math.min(skills, 12)}問`, href: "/practice", min: 5 }] : review;
-  return [...lead, ...episode, speak, ...(lead === review ? [] : review), phone];
+  return [...lead, ...episode, ...(lead === review ? [] : review), phone];
 }
 
 export const minutes = (stops: Stop[]) => stops.reduce((a, s) => a + s.min, 0);
