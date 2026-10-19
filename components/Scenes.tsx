@@ -14,7 +14,7 @@ export default function Scenes({ tab: initial }: { tab?: BuildingId }) {
 
   return (
     <main>
-      <Link href="/" className="back">← 今日</Link>
+      <Link href="/speak" className="back">← 話す</Link>
       <header className="page-mast">
         <div>
           <h1>場面</h1>

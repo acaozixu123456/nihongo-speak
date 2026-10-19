@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import {
+  dayKey,
+  streak,
+  teacherPlan,
   mastered,
   resetProgress,
   stepsDone,
@@ -12,6 +15,8 @@ import {
 import { allTime, formatDuration, lastDays, weeks } from "@/lib/client/metrics";
 import { Bars, Line } from "./Charts";
 import Reminders from "./Reminders";
+import { SenseiFace, speak } from "./Sensei";
+import { useHydrated } from "@/lib/client/hydrated";
 
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`;
 
@@ -25,6 +30,11 @@ export default function Stats() {
   const days30 = lastDays(30);
   const finished = allScenarios(p).filter((s) => Object.values(stepsDone(p, s)).every(Boolean)).length;
   const retells = (p.retells ?? []).slice(-14);
+  const hydrated = useHydrated();
+  const t = hydrated ? teacherPlan() : null;
+  const today = dayKey();
+  const days21 = lastDays(21);
+  const top = Math.max(1, ...days21.map((d) => p.days[d] ?? 0));
 
   const compare = (a: number | null, b: number | null, unit = "") =>
     a === null || b === null || a === b ? null : (
@@ -40,10 +50,49 @@ export default function Stats() {
       <Link href="/me" className="back">← 先生</Link>
       <header className="page-mast">
         <div>
-          <h1>記録</h1>
-          <p className="muted">开口时长、反应速度、发音的变化</p>
+          <h1>メモと記録</h1>
+          <p className="muted">森先生的信，和开口时长、反应速度、发音的变化</p>
         </div>
       </header>
+      {t?.letter_ja && (
+        <div className="sensei-line letter-line">
+          <SenseiFace size={44} />
+          <div className="sensei-letter">
+            <div className="sensei-ja">
+              <span>{t.letter_ja}</span>
+              <button className="bag-play" aria-label="聞く" onClick={() => speak(t.letter_ja!)}>
+                ▶
+              </button>
+            </div>
+            {t.note_zh && <p className="zh">{t.note_zh}</p>}
+            <div className="sig">森より</div>
+          </div>
+        </div>
+      )}
+      <div className="me-card">
+        <div className="me-nums">
+          <span>
+            <b className="accent">{hydrated ? streak(p) : "–"}</b>
+            <small>日連続</small>
+          </span>
+          <span>
+            <b>{hydrated ? all.said : "–"}</b>
+            <small>話した文</small>
+          </span>
+        </div>
+        <div className="me-days" aria-hidden>
+          {days21.map((d) => {
+            const xp = hydrated ? (p.days[d] ?? 0) : 0;
+            return (
+              <i
+                key={d}
+                className={d === today ? "now" : undefined}
+                style={xp ? { opacity: 0.35 + 0.65 * Math.min(1, xp / top), background: "var(--accent)" } : undefined}
+              />
+            );
+          })}
+        </div>
+      </div>
       {/* Three numbers up front; the other totals are a short list, and a zero is left out. */}
       <div className="card big3">
         <div>
