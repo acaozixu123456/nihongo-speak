@@ -764,24 +764,33 @@ export async function radioTitleJa(zh: string, opening: string): Promise<string>
 // やさしく: the hard lines of an episode saved before the script came with easy versions, said again
 // in N4-N3 Japanese. One answer per line, "" for the lines that are fine as they are.
 const EasySchema = z.object({
-  easy: z.array(z.string().describe("そのセリフのやさしい言い換え。難しくなければ空文字")),
+  lines: z
+    .array(z.object({ n: z.number().describe("セリフの番号"), easy: z.string().describe("そのセリフのやさしい言い直し") }))
+    .describe("言い直したセリフだけ（難しくないセリフは入れない）"),
 });
 
 export async function radioEasy(lines: string[]): Promise<string[]> {
-  const { easy } = await haikuFirst(
-    EasySchema,
-    `日本語学習者（JLPT N4〜N3）が聞くラジオのセリフのうち、難しいものだけを、やさしい日本語に言い直す。
-- 難しい＝N2以上の語や文法、硬い漢語（均一、開発、復活など）、長くて複雑な文。N3の学習者がすぐ分かるセリフは空文字。
+  const ask = () =>
+    haikuFirst(
+      EasySchema,
+      `日本語学習者（JLPT N4〜N3）が聞くラジオのセリフのうち、難しいものだけを、やさしい日本語に言い直す。
+- 難しい＝N2以上の語や文法、硬い漢語（均一、開発、復活など）、長くて複雑な文。N3の学習者がすぐ分かるセリフは入れない。
 - 言い直すのは全体の2割ほど、多くても8行。
 - 意味は同じ（少なくともほぼ同じ）にして、N4〜N3の語と文法だけを使う。話し言葉のまま、話し手の口調（タメ口／です・ます）も同じにする。
 - 長さは元と同じくらい。説明を足しすぎない。
-- 入力と同じ数・同じ順で返す。`,
-    lines.map((l, i) => `${i + 1}. ${l}`).join("\n"),
-    4000,
-    "low",
-  );
-  if (easy.length !== lines.length) throw new Error("AI 返回的句数不对");
-  return easy.map((e, i) => (e.trim() && e.trim() !== lines[i] ? e.trim() : ""));
+- n はセリフの番号（入力の行頭の数字）。`,
+      lines.map((l, i) => `${i + 1}. ${l}`).join("\n"),
+      4000,
+      "low",
+    );
+  const { lines: got } = await ask().catch(ask);
+  const easy = lines.map(() => "");
+  for (const g of got) {
+    const i = Math.round(g.n) - 1;
+    const e = g.easy.trim();
+    if (i >= 0 && i < lines.length && e && e !== lines[i]) easy[i] = e;
+  }
+  return easy;
 }
 
 // ---- 洗脑歌: lyrics as they are sung ----

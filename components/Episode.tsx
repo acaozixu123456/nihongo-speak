@@ -90,6 +90,8 @@ export default function Episode({ id }: { id: string }) {
   const [flipped, setFlipped] = useState<Set<number>>(new Set());
   // The line being spoken has been scrolled out of view.
   const [away, setAway] = useState(false);
+  // The easy versions couldn't be made just now.
+  const [easyErr, setEasyErr] = useState(false);
   const chat = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
   // How each clip is getting on while the episode's audio is being made.
@@ -134,11 +136,25 @@ export default function Episode({ id }: { id: string }) {
   useEffect(() => {
     const el = chat.current?.querySelector<HTMLElement>(".msg.cur");
     if (!el) return;
-    if (!open && Date.now() - touched.current > 4000) el.scrollIntoView({ behavior: "smooth", block: "end" });
+
     const seen = new IntersectionObserver(([e]) => setAway(!e.isIntersecting), { rootMargin: "-120px 0px -150px 0px" });
     seen.observe(el);
     return () => seen.disconnect();
   }, [at, open]);
+
+  // Whenever the chat changes size (a new line, a bubble growing to full size, やさしく switched),
+  // the line being said is brought back above the player.
+  const started0 = phase !== "idle";
+  useEffect(() => {
+    const box = chat.current;
+    if (!box || open) return;
+    const follow = new ResizeObserver(() => {
+      const el = box.querySelector<HTMLElement>(".msg.cur");
+      if (el && Date.now() - touched.current > 4000) aboveDock(el);
+    });
+    follow.observe(box);
+    return () => follow.disconnect();
+  }, [started0, open]);
 
   // Opening a notes tab fetches its sentences and words, so a tap plays at once.
   useEffect(() => {
@@ -202,7 +218,13 @@ export default function Episode({ id }: { id: string }) {
   function setEasyOn(on: boolean) {
     setEasyOnState(on);
     setFlipped(new Set());
-    if (on) ensureEasy(episode);
+    setEasyErr(false);
+    if (on && !hasEasy(episode))
+      ensureEasy(episode).then((ok) => {
+        if (ok) return;
+        setEasyOnState(false);
+        setEasyErr(true);
+      });
     try {
       localStorage.setItem(EASY_KEY, on ? "1" : "0");
     } catch {}
@@ -219,7 +241,8 @@ export default function Episode({ id }: { id: string }) {
 
   function backToNow() {
     touched.current = 0;
-    chat.current?.querySelector<HTMLElement>(".msg.cur")?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const el = chat.current?.querySelector<HTMLElement>(".msg.cur");
+    if (el) aboveDock(el);
   }
 
   function setRate(r: number) {
@@ -354,6 +377,7 @@ export default function Episode({ id }: { id: string }) {
   const shown = mixed && far >= 0 ? mixed.clips.slice(0, far + 1) : [];
   const lineAt = new Map(ep.lines.map((l, i) => [l.ja, i]));
   const easing = easyOn && !hasEasy(ep);
+  const hardN = ep.lines.filter((l) => l.easy).length;
   const next = mixed && at >= 0 ? mixed.clips[at + 1] : undefined;
 
   return (
@@ -379,8 +403,9 @@ export default function Episode({ id }: { id: string }) {
           <div className={`radio-float ${cover ? "drawn" : ""}`} style={cover ? { backgroundImage: `url(${cover})` } : undefined}>
             <button className={`easy-t ${easyOn ? "on" : ""}`} onClick={() => setEasyOn(!easyOn)}>
               {easing && <span className="spin" />}
-              やさしく{easyOn ? " ✓" : ""}
+              やさしく{easyOn && !easing ? ` ✓ ${hardN}文` : ""}
             </button>
+            {easyErr && <span className="easy-err">没做出来，再点一次</span>}
             <div className="float-bar">
               <span>{title}</span>
               <div className={`radio-waves ${playingNow ? "on" : ""}`} aria-hidden>
@@ -745,4 +770,13 @@ function Typing({ audio, who, from, to }: { audio: React.RefObject<HTMLAudioElem
       </div>
     </div>
   );
+}
+
+// Scrolls just enough that the bubble (and the dots that may follow it) sit above the player at the bottom.
+function aboveDock(el: HTMLElement) {
+  const dock = document.querySelector(".radio-dock")?.getBoundingClientRect().top ?? window.innerHeight;
+  const below = el.getBoundingClientRect().bottom - (dock - 70);
+  const top = Math.max(0, el.getBoundingClientRect().top - (document.querySelector(".radio-float")?.getBoundingClientRect().bottom ?? 0) - 12);
+  // A bubble taller than the room left: its top stays in view.
+  window.scrollBy({ top: Math.min(below, top), behavior: "smooth" });
 }
