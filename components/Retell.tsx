@@ -26,6 +26,7 @@ import {
 } from "@/lib/client/progress";
 import { flowOf, moraRate, runClips, wavSlice, type Flow } from "@/lib/client/fluency";
 import { Recorder, transcribeLong } from "@/lib/client/recorder";
+import { watchQuiet } from "@/lib/client/silence";
 import SayAlong from "@/components/SayAlong";
 import { heardToday, stepDone, useOnRoute } from "@/lib/client/route";
 import { useHydrated } from "@/lib/client/hydrated";
@@ -113,7 +114,10 @@ const chars = (s: string) => s.replace(/[\s、。，,.!！?？「」…]/g, "").
 
 // perMin: long silences per minute; stalls: those in the middle of a sentence, per minute (only when
 // Gemini wrote the telling down).
-type Take = { text: string; sec: number; cpm: number; span: number; pauses: number; perMin: number; stalls?: number; mps?: number; good?: string };
+// hints: how many times a hint came up during the telling (second telling only).
+type Take = { text: string; sec: number; cpm: number; span: number; pauses: number; perMin: number; stalls?: number; mps?: number; good?: string; hints?: number };
+// Quiet this long in the second telling brings up the next hint.
+const HINT_AFTER_S = 3;
 // The longest silence in the middle of a sentence in the first telling, where it is in the recording.
 type Stall = { before: string; after: string; secs: number; from: number; to: number };
 const STALL_MIN_S = 1.5;
@@ -287,6 +291,12 @@ export default function Retell() {
   const [shown, setShown] = useState(false);
   // Readings of each telling, asked for as soon as it is transcribed (index 3: the telling of the old story).
   const kana = useRef<Promise<string | undefined>[]>([]);
+  // The second telling's hints, written from where the first one got stuck: the one up now, the next
+  // to show, how many came up, and the microphone watch that brings them.
+  const [hint, setHint] = useState<string | null>(null);
+  const hintNext = useRef(0);
+  const hintsUsed = useRef<number | null>(null);
+  const quietStop = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!hydrated || topics.length) return;
@@ -301,6 +311,7 @@ export default function Retell() {
   useEffect(
     () => () => {
       if (timer.current) clearInterval(timer.current);
+      quietStop.current?.();
       stopAudio();
       rec.current?.stop().catch(() => {});
     },
@@ -336,6 +347,24 @@ export default function Retell() {
     startedAt.current = Date.now();
     setLeft(limit);
     setPhase("talk");
+    hintsUsed.current = null;
+    const hints = round === 1 && !warming ? (fix?.hints ?? []).filter(Boolean) : [];
+    if (hints.length && r.input) {
+      hintsUsed.current = 0;
+      hintNext.current = 0;
+      let up = false;
+      quietStop.current = watchQuiet(r.input, (quiet) => {
+        if (quiet === 0 && up) {
+          // Speaking again: the hint goes.
+          up = false;
+          setHint(null);
+        } else if (quiet >= HINT_AFTER_S && !up && hintNext.current < hints.length) {
+          up = true;
+          setHint(hints[hintNext.current++]);
+          hintsUsed.current = (hintsUsed.current ?? 0) + 1;
+        }
+      });
+    }
     timer.current = window.setInterval(() => {
       const l = limit - (Date.now() - startedAt.current) / 1000;
       setLeft(l);
@@ -346,6 +375,9 @@ export default function Retell() {
   async function finish() {
     if (timer.current) clearInterval(timer.current);
     timer.current = null;
+    quietStop.current?.();
+    quietStop.current = null;
+    setHint(null);
     const r = rec.current;
     rec.current = null;
     if (!r) return;
@@ -404,6 +436,7 @@ export default function Retell() {
       perMin: perMinute(flow.pauses, span),
       ...(heard && { stalls: perMinute(heard.runs.filter((r) => r.cut).length, span) }),
       ...(heard?.good && { good: heard.good }),
+      ...(!old && n === 1 && hintsUsed.current !== null && { hints: hintsUsed.current }),
     };
     const slot = old ? 3 : n;
     kana.current[slot] = heard
@@ -484,6 +517,7 @@ export default function Retell() {
       pauses: all.map((t) => t.pauses),
       perMin: all.map((t) => t.perMin),
       ...(stalls && { stalls }),
+      ...(all[1]?.hints !== undefined && { hints: all[1].hints }),
       texts: texts.current.slice(0, 3),
       ...(all.some((t) => t.good) && { good: all.flatMap((t) => (t.good ? [t.good] : [])) }),
       ...(again &&
@@ -657,6 +691,12 @@ export default function Retell() {
         {!warming && round === 0 && carry && <span className="retell-focus">这次留意：{carry.focus_zh}</span>}
         {/* Under the card while the fix is being read; inside it only while telling, so it shows once. */}
         {round > 0 && focus && (talking || round === 2) && <span className="retell-focus">只注意：{focus}</span>}
+        {talking && hint && (
+          <div className="retell-hint" key={hint}>
+            <span>ヒント</span>
+            {hint}
+          </div>
+        )}
         {talking ? (
           <button className="today-go retell-stop" onClick={finish}>
             <span className="rec-dot" /> 说完了
@@ -700,6 +740,9 @@ export default function Retell() {
             </div>
           )}
           {takes[1]?.good && <Good ja={takes[1].good} onHear={hear} />}
+          {takes[1].hints !== undefined && (
+            <p className={`small-text fb-note ${takes[1].hints ? "" : "hint-none"}`}>{takes[1].hints ? `ヒント ${takes[1].hints}回` : "✓ ヒントなしで言えた"}</p>
+          )}
           {secondNote(takes[0], takes[1], texts.current[1], stall && fix?.stall.better ? fix.stall.better : fix?.fix.better, !!focus).map((l) => (
             <p key={l} className="small-text fb-note">
               {l}
