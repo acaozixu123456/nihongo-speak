@@ -103,6 +103,36 @@ export function useProgress(): Progress {
   );
 }
 
+// ---- 先生 ----
+
+// The nightly plan (lib/teacher.ts), which comes with every sync: the order weak points are drilled
+// in, and tags it found to be duplicates or recognition slips.
+export type Teacher = { day: string; made: number; order: string[]; hide: string[]; why_zh: string; note_zh: string };
+const TEACHER_KEY = "nihongo-speak:teacher";
+let teacher: Teacher | null | undefined;
+
+export function teacherPlan(): Teacher | null {
+  if (teacher === undefined) {
+    try {
+      teacher = JSON.parse(localStorage.getItem(TEACHER_KEY) ?? "null") as Teacher | null;
+    } catch {
+      teacher = null;
+    }
+  }
+  return teacher;
+}
+
+function setTeacher(t: Teacher | null) {
+  if (!t || t.made === teacherPlan()?.made) return;
+  teacher = t;
+  try {
+    localStorage.setItem(TEACHER_KEY, JSON.stringify(t));
+  } catch {}
+  // A new copy of the progress, so pages ranked by weakList() draw again.
+  if (state) state = { ...state };
+  listeners.forEach((l) => l());
+}
+
 // ---- Server sync ----
 
 export type SyncState = "off" | "syncing" | "ok" | "error";
@@ -134,8 +164,9 @@ async function exchange(method: "GET" | "PUT") {
   });
   if (res.status === 503) return "off" as const;
   if (!res.ok) throw new Error(String(res.status));
-  const server = normalize((await res.json()).progress);
-  save(merge(read(), server), false);
+  const body = await res.json();
+  setTeacher(body.teacher ?? null);
+  save(merge(read(), normalize(body.progress)), false);
   return "ok" as const;
 }
 
@@ -475,11 +506,16 @@ export function recordPoints(points: JudgedPoint[], fixes: { you_said: string; b
 // How shaky a point still is: each correct use earns back half a mistake.
 export const weakness = (w: WeakPoint) => w.miss - w.hit * 0.5;
 
-// Points still worth drilling, shakiest first.
+// Points still worth drilling: in the teacher's order first, then shakiest first.
 export function weakList(p: Progress) {
+  const t = teacherPlan();
+  const rank = (tag: string) => {
+    const i = t?.order.indexOf(tag) ?? -1;
+    return i < 0 ? 99 : i;
+  };
   return Object.values(p.weak)
-    .filter((w) => w.miss > 0 && weakness(w) > 0)
-    .sort((x, y) => weakness(y) - weakness(x) || (x.last < y.last ? 1 : -1));
+    .filter((w) => w.miss > 0 && weakness(w) > 0 && !t?.hide.includes(w.tag))
+    .sort((x, y) => rank(x.tag) - rank(y.tag) || weakness(y) - weakness(x) || (x.last < y.last ? 1 : -1));
 }
 
 // The listener's letter for the next 趣味电台 episode: the newest mistake, unless the last

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { dayKey, streak, useProgress } from "@/lib/client/progress";
+import { dayKey, streak, teacherPlan, useProgress } from "@/lib/client/progress";
 import { allTime, lastDays } from "@/lib/client/metrics";
 import { useHydrated } from "@/lib/client/hydrated";
 
@@ -13,6 +13,7 @@ export default function Me() {
   const today = dayKey();
   const days = lastDays(21);
   const top = Math.max(1, ...days.map((d) => p.days[d] ?? 0));
+  const note = hydrated ? teacherPlan()?.note_zh : "";
 
   return (
     <main className="page">
@@ -44,6 +45,13 @@ export default function Me() {
           })}
         </div>
       </Link>
+
+      {note && (
+        <div className="teacher-note">
+          <div className="label">先生のメモ</div>
+          <p className="muted">{note}</p>
+        </div>
+      )}
 
       <Link href="/today" className="row-link">
         今天学过的 <span aria-hidden>›</span>

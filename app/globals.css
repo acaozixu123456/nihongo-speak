@@ -1525,3 +1525,5 @@ button.today-go { width: 100%; border: none; cursor: pointer; }
 .rowlist-row + .rowlist-row::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: 1px; background: var(--line); }
 .pl.two .pl-text { flex: 1; min-width: 0; }
 .pl.two .pl-text b, .pl.two .pl-text span { display: block; }
+.teacher-note { margin: 18px 0 6px; }
+.teacher-note p { margin: 0; line-height: 1.7; }
