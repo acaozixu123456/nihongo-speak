@@ -21,6 +21,11 @@ const Line = z.object({
   back: z
     .string()
     .describe("このセリフの途中で、もう一人が小さく入れる相づち（「うんうん」「へえ」「そうそう」「あー」など、6字以内）。長めのセリフに4〜6回だけ。なければ空文字"),
+  easy: z
+    .string()
+    .describe(
+      "このセリフがN3の学習者に難しいとき（N2以上の語や文法、硬い漢語、複雑な文）だけ、同じ意味をN4〜N3の語と文法で言い直したやさしい日本語。話し手の口調はそのまま。全体で4〜8行だけ。難しくなければ空文字",
+    ),
 });
 
 export const RadioSchema = z.object({
@@ -74,7 +79,7 @@ export const RadioSchema = z.object({
 export const OldRadioSchema = RadioSchema.extend({
   title_ja: z.string().optional(),
   story: RadioSchema.shape.story.optional(),
-  lines: z.array(Line.partial({ part: true, gap: true, back: true })),
+  lines: z.array(Line.partial({ part: true, gap: true, back: true, easy: true })),
   hitokoto: RadioSchema.shape.hitokoto.optional(),
   quiz_zh: z.string().optional(),
   letter: z.object({ said: z.string(), better: z.string(), where: z.string().optional() }).optional(),

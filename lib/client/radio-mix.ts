@@ -13,7 +13,8 @@ import { fetchAudio, radioClips, type Clip, type ClipState, type Part, type Radi
 const SR = 24000;
 
 export type Chapter = { part: RadioPart; at: number };
-export type Mixed = { clips: Clip[]; url: string; starts: number[]; total: number; chapters: Chapter[] };
+// starts / ends: when each clip's voice begins and stops, in seconds.
+export type Mixed = { clips: Clip[]; url: string; starts: number[]; ends: number[]; total: number; chapters: Chapter[] };
 
 let ctx: OfflineAudioContext | null = null;
 async function decode(buf: ArrayBuffer): Promise<Float32Array> {
@@ -148,6 +149,7 @@ export async function mixRadio(ep: RadioEpisode, onProgress?: (i: number, s: Cli
   const t = new Track();
   const kept: Clip[] = [];
   const starts: number[] = [];
+  const ends: number[] = [];
   const chapters: Chapter[] = [];
   let cursor = 0;
   if (jingle) {
@@ -184,6 +186,7 @@ export async function mixRadio(ep: RadioEpisode, onProgress?: (i: number, s: Cli
       last = (p.pauseMs ?? 0) / 1000;
       at += last;
     }
+    ends.push(at - last);
     // A show line's own gap stands in for the pause after it.
     cursor = c.gap !== undefined ? at - last : at;
     const w = c.with && voice.get(keyOf(c.with));
@@ -210,6 +213,7 @@ export async function mixRadio(ep: RadioEpisode, onProgress?: (i: number, s: Cli
     kept.push({ block: "radio", show: "♪ 这期的洗脑歌", parts: [], part: "song" });
     starts.push(cursor);
     cursor = t.put(s, cursor, 0.8, 0, 3);
+    ends.push(cursor);
   }
 
   const total = Math.max(t.end, cursor) + 0.4;
@@ -217,5 +221,5 @@ export async function mixRadio(ep: RadioEpisode, onProgress?: (i: number, s: Cli
   let peak = 0;
   for (let i = 0; i < out.length; i++) peak = Math.max(peak, Math.abs(out[i]));
   if (peak > 0.95) for (let i = 0; i < out.length; i++) out[i] *= 0.95 / peak;
-  return { clips: kept, url: URL.createObjectURL(await mp3(out)), starts, total, chapters };
+  return { clips: kept, url: URL.createObjectURL(await mp3(out)), starts, ends, total, chapters };
 }

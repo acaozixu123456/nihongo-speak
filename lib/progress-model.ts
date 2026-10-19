@@ -337,7 +337,15 @@ export function merge(a: Progress, b: Progress): Progress {
         const copies = [...(a.episodes ?? []), ...(b.episodes ?? [])].filter((o) => o.id === e.id);
         const asked = [...new Map(copies.flatMap((o) => o.asked ?? []).map((x) => [x.text, x])).values()];
         const title_ja = e.title_ja ?? copies.find((o) => o.title_ja)?.title_ja;
-        return { ...e, heard: e.heard || copies.some((o) => o.heard), ...(asked.length ? { asked } : {}), ...(title_ja ? { title_ja } : {}) };
+        // やさしく written later for an old episode, on one of the copies.
+        const eased = e.lines.some((l) => l.easy !== undefined) ? e : copies.find((o) => o.lines.some((l) => l.easy !== undefined));
+        return {
+          ...e,
+          ...(eased && eased.lines.length === e.lines.length ? { lines: eased.lines } : {}),
+          heard: e.heard || copies.some((o) => o.heard),
+          ...(asked.length ? { asked } : {}),
+          ...(title_ja ? { title_ja } : {}),
+        };
       })
       .sort((x, y) => (x.id < y.id ? 1 : -1))
       .slice(0, EPISODES_KEPT),
