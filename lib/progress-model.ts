@@ -128,6 +128,8 @@ export type Retell = {
   pauses?: number[];
   perMin?: number[];
   stalls?: number[];
+  // How many times a hint came up in the second telling (after 3 seconds of quiet).
+  hints?: number;
   texts?: string[];
   natural?: string[];
   // Expressions praised that day (said well, word for word), never praised again.
