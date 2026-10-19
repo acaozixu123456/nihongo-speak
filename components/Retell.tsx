@@ -27,7 +27,7 @@ import {
 import { flowOf, moraRate, runClips, wavSlice, type Flow } from "@/lib/client/fluency";
 import { Recorder, transcribeLong } from "@/lib/client/recorder";
 import SayAlong from "@/components/SayAlong";
-import { stepDone, todaysEpisode, useOnRoute } from "@/lib/client/route";
+import { heardToday, stepDone, useOnRoute } from "@/lib/client/route";
 import { useHydrated } from "@/lib/client/hydrated";
 import { Star } from "./FeedbackCard";
 
@@ -86,8 +86,8 @@ const lifeTopic = (t: string): Topic => ({ title: t, about: t, keys: [], starter
 // the learner's own day; then the other heard episodes and life topics, for practising off the route.
 // A story not heard yet can't be retold.
 function topicsFor(p: Progress): Topic[] {
-  const today = todaysEpisode(p);
-  const ep = today?.heard ? today : null;
+  // The episode heard on today's route, even one written the day before.
+  const ep = heardToday(p);
   const day = Number(dayKey().replace(/-/g, ""));
   const life = LIFE_TOPICS.map((_, i) => lifeTopic(LIFE_TOPICS[(day + i) % LIFE_TOPICS.length]));
   const eps = p.episodes.filter((e) => e !== ep && e.heard).slice(0, 8).map(epTopic);
