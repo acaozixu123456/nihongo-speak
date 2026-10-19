@@ -14,7 +14,8 @@ export async function GET(request: Request) {
   if (!storageReady()) return NextResponse.json({ fresh: false, storage: false });
 
   const [{ progress }, last] = await Promise.all([readState(), readTeacher()]);
-  if (last && last.made > progress.updatedAt) return NextResponse.json({ fresh: false, day: last.day });
+  const force = new URL(request.url).searchParams.has("force");
+  if (last && last.made > progress.updatedAt && !force) return NextResponse.json({ fresh: false, day: last.day });
   try {
     const t = await teach(progress, jstDay());
     return NextResponse.json({ fresh: true, teacher: t });
