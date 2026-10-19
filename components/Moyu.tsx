@@ -228,7 +228,7 @@ export default function Moyu() {
 
   return (
     <main className="moyu">
-      <Link href="/" className="back">← 今日</Link>
+      <Link href="/listen" className="back">← 聴く</Link>
       <header className="page-mast">
         <div>
           <h1>流す</h1>

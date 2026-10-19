@@ -140,7 +140,7 @@ export default function Rehearse() {
 
   return (
     <main className="page">
-      <Link href="/" className="back">← 今日</Link>
+      <Link href="/speak" className="back">← 話す</Link>
       <h1 className="ep-head">予行演習</h1>
 
       {done && current ? (

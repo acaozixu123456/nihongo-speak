@@ -41,17 +41,27 @@ const TABS = [
   { href: "/me", ja: "先生", icon: null },
 ];
 
-// The four tabs, shown only on the four tab pages; everything else keeps its own back link.
+// List pages opened from a tab keep the tabs, with their tab lit. Pages where something is played,
+// said or answered have their own controls at the bottom, so there the tabs give way to a back link.
+const UNDER: Record<string, string> = {
+  "/episodes": "/listen",
+  "/scenes": "/speak",
+  "/weak": "/me",
+  "/bag": "/me",
+  "/stats": "/me",
+};
+
 export default function TabBar() {
-  const here = usePathname();
+  const path = usePathname();
   const p = useProgress();
   const hydrated = useHydrated();
+  const here = UNDER[path] ?? path;
   if (!TABS.some((t) => t.href === here)) return null;
   const due = hydrated ? todaysCards(p).length : 0;
   return (
     <nav className="tabbar">
       {TABS.map((t) => (
-        <Link key={t.href} href={t.href} className={`tab${t.href === here ? " on" : ""}`} aria-current={t.href === here ? "page" : undefined}>
+        <Link key={t.href} href={t.href} className={`tab${t.href === here ? " on" : ""}`} aria-current={t.href === path ? "page" : undefined}>
           {t.icon ?? (
             <span className="tab-face">
               <SenseiFace size={28} />
