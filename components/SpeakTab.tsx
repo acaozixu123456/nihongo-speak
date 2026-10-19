@@ -5,11 +5,14 @@ import { useRouter } from "next/navigation";
 import { unlock } from "@/lib/client/player";
 import { rehearsalToReport, useProgress } from "@/lib/client/progress";
 import { useHydrated } from "@/lib/client/hydrated";
-import { current, pillarOf, plan, quietPref, startRoute, useRoute } from "@/lib/client/route";
-import { GO } from "./Home";
+import { current, heardToday, plan, quietPref, startRoute, useRoute } from "@/lib/client/route";
+import { retellBlocker, retellList } from "@/lib/client/retell-history";
+import { RetellRow } from "./RetellRows";
+import { SenseiLine } from "./Sensei";
+import { FixBlock } from "./TeacherMemo";
 
-// 話す: today's speaking on top (三回話す, or 瞬間 when there is no episode to tell), then every way to talk,
-// 三回話す included so it stays reachable after today's telling.
+// 話す: 三回話す on top, the day's most important speaking: 森先生 names the one thing that stops the learner most and today's story, with up to two
+// told before that she would tell again (all of them in /retell/list); then the other ways to talk.
 export default function SpeakTab() {
   const p = useProgress();
   const hydrated = useHydrated();
@@ -17,8 +20,11 @@ export default function SpeakTab() {
   const r = useRoute();
   const quiet = hydrated ? (r?.quiet ?? quietPref()) : false;
   const stops = hydrated ? (r ? r.stops : plan(p, quiet)) : [];
-  const first = stops.find((s) => pillarOf(s.key) === "speak");
+  const first = stops.find((s) => s.key === "retell");
   const onRoute = !!first && current(r) === first;
+  const todayEp = hydrated ? heardToday(p) : null;
+  const list = hydrated ? retellList(p, todayEp) : null;
+  const fix = hydrated ? retellBlocker(p) : null;
   const report = hydrated && !!rehearsalToReport(p);
   const go = () => {
     unlock();
@@ -30,38 +36,43 @@ export default function SpeakTab() {
       <h1 className="tab-h1">
         話す<small>说</small>
       </h1>
-      {hydrated && (
-        <section className="now-card">
-          <div className="kicker">今日</div>
-          {quiet || !first ? (
-            <div className="pil-what">
-              <div className="pil-t muted">今は聴くだけ</div>
-              <div className="pil-m">能出声的时候再说</div>
-            </div>
+      {hydrated && list && (
+        <section className="rt-hero">
+          <div className="rt-head">
+            <span>三回話す</span>
+            <Link href="/retell/list">一覧{list.times ? ` ${list.times}回` : ""} ›</Link>
+          </div>
+          <SenseiLine
+            mute
+            ja={fix ? "ここで一番止まっています。" : list.today.toldToday ? "今日はもう話しましたね。" : "今日はこれを話しましょう。"}
+            zh={fix ? "今天讲的时候，用上下面这句" : undefined}
+          />
+          {fix && <FixBlock f={fix} />}
+          <div className="rt-title">{list.today.ja}</div>
+          {(list.today.times > 0 || list.today.score !== null) && (
+            <div className="rt-sub">{[`${list.today.times}回`, list.today.score !== null ? `${list.today.score}点` : ""].filter(Boolean).join(" · ")}</div>
+          )}
+          {onRoute ? (
+            <button className="pil-go on" onClick={go}>
+              話す
+            </button>
           ) : (
-            <>
-              <div className="pil-what">
-                <div className="pil-t">{first.key === "quick" ? `瞬間 ${first.meta.replace(/\D/g, "")}問` : "さっきの話を三回話す"}</div>
-                <div className="pil-m">{first.key === "quick" ? "看中文马上说日语" : "听完的那期，用自己的话讲三遍"}</div>
-              </div>
-              {onRoute ? (
-                <button className="pil-go on" onClick={go}>
-                  {GO[first.key]}
-                </button>
-              ) : (
-                <Link href={first.href} className="pil-go">
-                  {GO[first.key]}
-                </Link>
-              )}
-            </>
+            <Link href={list.today.href} className={`pil-go${list.today.toldToday || quiet ? "" : " on"}`}>
+              {list.today.toldToday ? "もう一回" : "話す"}
+            </Link>
+          )}
+          {list.picks.length > 0 && (
+            <div className="rt-picks">
+              <span className="kicker">もう一回</span>
+              {list.picks.map((r) => (
+                <RetellRow key={r.key} r={r} bare />
+              ))}
+            </div>
           )}
         </section>
       )}
+      <div className="kicker tab-kicker">ほかの話し方</div>
       <div className="pl-grid">
-        <Link href="/retell" className="pl">
-          <b>三回話す</b>
-          <span>听过的话，用自己的话讲三遍</span>
-        </Link>
         <Link href="/call" className="pl">
           <b>電話</b>
           <span>和熟人打电话</span>

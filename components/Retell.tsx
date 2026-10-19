@@ -32,8 +32,9 @@ import { Recorder, transcribeLong } from "@/lib/client/recorder";
 import SayAlong from "@/components/SayAlong";
 import { heardToday, stepDone, useOnRoute } from "@/lib/client/route";
 import { useHydrated } from "@/lib/client/hydrated";
+import { LIFE_TOPICS, latest, retellList, retellScore, topicLogs } from "@/lib/client/retell-history";
 import { Star } from "./FeedbackCard";
-import { SenseiLine } from "./Sensei";
+import { SenseiFace, SenseiLine } from "./Sensei";
 
 // 三回話す: tell today's radio story three times, each time to a different person (so there is nothing
 // new to add, only saying it better), with the one thing to fix shown between the first and second time.
@@ -73,9 +74,8 @@ const REACTIONS: Record<string, string[]> = {
 
 type Key = { ja: string; kana?: string };
 // pool: more words from the story, for the keywords that take a learned one's place.
-type Topic = { title: string; about: string; keys: Key[]; pool: Key[]; starters: string[]; ep?: string };
-
-const LIFE_TOPICS = ["今天上班（或今天一天）做了什么", "这个周末做了什么，或打算做什么", "最近吃过的好吃的东西", "最近让你吃惊或开心的一件事"];
+// title: how the story is stored in the history; ja / zh: how it is shown.
+type Topic = { title: string; ja: string; zh: string; about: string; keys: Key[]; pool: Key[]; starters: string[]; ep?: string };
 
 const epKeys = (ep: Progress["episodes"][number]) =>
   (ep.story?.keys.length ? ep.story.keys : (ep.words ?? [])).slice(0, 3).map((w) => ({ ja: w.ja, kana: w.kana }));
@@ -84,6 +84,8 @@ function epTopic(ep: Progress["episodes"][number]): Topic {
   const main = ep.lines.filter((l) => l.part === "main").map((l) => l.ja);
   return {
     title: ep.title_zh,
+    ja: ep.title_ja ?? ep.title_zh,
+    zh: ep.title_ja ? ep.title_zh : "",
     about: `${ep.title_zh}\n${(main.length ? main : ep.lines.map((l) => l.ja)).join("").slice(0, 600)}`,
     keys: epKeys(ep),
     pool: [...(ep.story?.keys ?? []), ...(ep.words ?? [])].map((w) => ({ ja: w.ja, kana: w.kana })),
@@ -92,16 +94,32 @@ function epTopic(ep: Progress["episodes"][number]): Topic {
   };
 }
 
-const lifeTopic = (t: string): Topic => ({ title: t, about: t, keys: [], pool: [], starters: ["実は、〜んですよ。", "それで、〜。", "結局、〜って感じでした。"] });
+const lifeTopic = (t: string): Topic => ({
+  title: t,
+  ja: LIFE_TOPICS.find((l) => l.zh === t)?.ja ?? t,
+  zh: t,
+  about: t,
+  keys: [],
+  pool: [],
+  starters: ["実は、〜んですよ。", "それで、〜。", "結局、〜って感じでした。"],
+});
 
 // What there is to tell, first one first: today's episode once it has been heard, else something from
 // the learner's own day; then the other heard episodes and life topics, for practising off the route.
 // A story not heard yet can't be retold.
-function topicsFor(p: Progress): Topic[] {
+// The story asked for in the address (?ep=<id> or ?life=<n>), from the history list.
+export function pickedTopic(p: Progress, q: URLSearchParams): Topic | null {
+  const ep = q.get("ep") && p.episodes.find((e) => e.id === q.get("ep"));
+  if (ep) return epTopic(ep);
+  const life = LIFE_TOPICS[Number(q.get("life"))];
+  return q.has("life") && life ? lifeTopic(life.zh) : null;
+}
+
+export function topicsFor(p: Progress): Topic[] {
   // The episode heard on today's route, even one written the day before.
   const ep = heardToday(p);
   const day = Number(dayKey().replace(/-/g, ""));
-  const life = LIFE_TOPICS.map((_, i) => lifeTopic(LIFE_TOPICS[(day + i) % LIFE_TOPICS.length]));
+  const life = LIFE_TOPICS.map((_, i) => lifeTopic(LIFE_TOPICS[(day + i) % LIFE_TOPICS.length].zh));
   const eps = p.episodes.filter((e) => e !== ep && e.heard).slice(0, 8).map(epTopic);
   return ep ? [epTopic(ep), ...life.slice(0, 1), ...eps, ...life.slice(1)] : [life[0], ...eps, ...life.slice(1)];
 }
@@ -113,7 +131,7 @@ function againFor(p: Progress): Again | null {
   const r = past[past.length - 1];
   if (!r || (Date.parse(dayKey()) - Date.parse(r.date)) / 86400000 > AGAIN_DAYS) return null;
   const ep = p.episodes.find((e) => e.title_zh === r.topic);
-  const topic = ep ? epTopic(ep) : LIFE_TOPICS.includes(r.topic) ? lifeTopic(r.topic) : null;
+  const topic = ep ? epTopic(ep) : LIFE_TOPICS.some((l) => l.zh === r.topic) ? lifeTopic(r.topic) : null;
   return topic && { topic, last: r.mps?.[2], natural: r.natural };
 }
 
@@ -258,8 +276,9 @@ export default function Retell() {
   const hydrated = useHydrated();
   const onRoute = useOnRoute();
   const [topics, setTopics] = useState<Topic[]>([]);
-  const [pick, setPick] = useState(0);
-  const topic: Topic | null = topics[pick] ?? null;
+  const topic: Topic | null = topics[0] ?? null;
+  // This story's latest score before today's telling, and how many times it was told before.
+  const prior = useRef<{ score: number | null; times: number; runsToday: number }>({ score: null, times: 0, runsToday: 0 });
   const [round, setRound] = useState(0);
   const [phase, setPhase] = useState<Phase>("ready");
   const [left, setLeft] = useState(SECONDS[0]);
@@ -321,7 +340,12 @@ export default function Retell() {
 
   useEffect(() => {
     if (!hydrated || topics.length) return;
-    const ts = topicsFor(p);
+    const auto = topicsFor(p);
+    const picked = pickedTopic(p, new URLSearchParams(location.search));
+    const ts = picked ? [picked] : auto;
+    const log = topicLogs(p).get(ts[0].title);
+    const today = (p.retells ?? []).find((r) => r.date === dayKey() && r.topic === ts[0].title);
+    prior.current = { score: latest(log)?.score ?? null, times: log?.times ?? 0, runsToday: today ? (today.runs ?? 1) : 0 };
     keyRuns.current = Object.fromEntries(Object.entries(p.keyRuns ?? {}).map(([k, v]) => [k, v.n]));
     setRunsShown(keyRuns.current);
     setTopics(ts);
@@ -331,7 +355,8 @@ export default function Retell() {
     }
     known.current = knownTags(p);
     setCarry(retellCarry(p));
-    if (!retellToday(p)) setAgain(againFor(p));
+    // The earlier story first only before today's own story, not before one picked from the list.
+    if (!retellToday(p) && (!picked || picked.title === auto[0]?.title)) setAgain(againFor(p));
     // Only earlier days counted the same way can be compared.
     before.current = { mps: retellUsual(p, (r) => r.mps?.[0]), stalls: retellUsual(p, (r) => r.stalls?.[0]) };
   }, [hydrated, p, topics]);
@@ -552,6 +577,7 @@ export default function Retell() {
       perMin: all.map((t) => t.perMin),
       ...(stalls && { stalls }),
       texts: texts.current.slice(0, 3),
+      ...(prior.current.runsToday && { runs: prior.current.runsToday + 1 }),
       ...(all.some((t) => t.good) && { good: all.flatMap((t) => (t.good ? [t.good] : [])) }),
       ...(again &&
         againTake && { again: { topic: again.topic.title, mps: againTake.mps, pauses: againTake.pauses, stalls: againTake.stalls, ...(uptake.length && { uptake }) } }),
@@ -602,10 +628,29 @@ export default function Retell() {
     const stalls = all.length === 3 && all.every((t) => t.stalls !== undefined) ? all.map((t) => t.stalls!) : null;
     const perMin = all.map((t) => t.perMin);
     const usual = stalls ? before.current.stalls : null;
+    const score = stalls ? retellScore({ date: "", topic: "", cpm: [], stalls }) : null;
+    const prev = prior.current.score;
+    const nextPick = retellList(p, heardToday(p)).picks.find((r) => r.key !== topic.title);
     return (
       <main className="page">
         {back}
         <h1 className="ep-head">三回話す</h1>
+        <div className="retell-score">
+          <span className="kicker">{prior.current.times + 1}回目</span>
+          <b className="retell-score-t">{topic.ja}</b>
+          {score !== null ? (
+            <>
+              <span className={`retell-score-n ${prev === null || score >= prev ? "ok" : ""}`}>{score}</span>
+              {prev !== null && (
+                <span className={`retell-score-up ${score >= prev ? "ok" : ""}`}>
+                  {score > prev ? `↑ ${score - prev}` : score < prev ? `↓ ${prev - score}` : "±0"}　前回 {prev}
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="muted retell-score-zh">这次没算出分数</span>
+          )}
+        </div>
         <div className="today retell-end">
           <span className="kicker">{byMora ? "每秒说出的音拍" : "每分钟说出的字数"}</span>
           <div className="retell-bars">
@@ -672,6 +717,22 @@ export default function Retell() {
             )}
           </>
         )}
+        {!onRoute && nextPick && (
+          <Link href={nextPick.href} className="retell-next">
+            <SenseiFace size={34} />
+            <span>
+              <small>先生のおすすめ · 次は</small>
+              <b>{nextPick.ja}</b>
+            </span>
+            {nextPick.score !== null && <em>{nextPick.score}</em>}
+            <i>›</i>
+          </Link>
+        )}
+        {!onRoute && (
+          <Link href="/retell/list" className="retell-pick">
+            一覧から選ぶ
+          </Link>
+        )}
       </main>
     );
   }
@@ -698,11 +759,14 @@ export default function Retell() {
           {warming ? `先把上次的故事再讲一遍 · 讲给${nameOf(listener)}` : `第 ${round + 1} 遍 · 讲给${nameOf(listener)}`}
         </span>
         <span className="today-title">
-          <span className="retell-topic">{shownT.title}</span>
-          {!warming && round === 0 && phase === "ready" && !onRoute && topics.length > 1 && (
-            <button className="retell-other" onClick={() => setPick((pick + 1) % topics.length)}>
-              別の話 ›
-            </button>
+          <span className="retell-topic">
+            <b>{shownT.ja}</b>
+            {shownT.zh && <small>{shownT.zh}</small>}
+          </span>
+          {!warming && round === 0 && phase === "ready" && !onRoute && (
+            <Link href="/retell/list" className="retell-other">
+              一覧 ›
+            </Link>
           )}
           {talking && <span className={`today-big ${left < 10 ? "hurry" : ""}`}>{clock(left)}</span>}
         </span>
