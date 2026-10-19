@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Places from "./Places";
 import { unlock } from "@/lib/client/player";
-import { useProgress } from "@/lib/client/progress";
+import { teacherFix, useProgress } from "@/lib/client/progress";
+import { FixBlock } from "./TeacherMemo";
 import { useHydrated } from "@/lib/client/hydrated";
-import { finished, minutes, oneFix, plan, quietPref, setQuiet, startRoute, useRoute } from "@/lib/client/route";
+import { finished, oneFix, plan, quietPref, setQuiet, startRoute, useRoute } from "@/lib/client/route";
 
 const WEEKDAY_JA = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -68,19 +69,32 @@ export default function Home() {
 
   const stops = r && r.at > 0 ? r.stops : plan(p, quiet);
   const at = r && r.at > 0 ? r.at : 0;
+  const go = () => {
+    unlock();
+    router.push(startRoute(p, quiet));
+  };
+  // Before the day starts, the teacher's one point is all there is to see; the rest of the route
+  // follows it by itself.
+  const fix = at === 0 && stops[0]?.key === "fix" ? teacherFix(p) : null;
 
   return (
     <main className="page">
       {top}
       {tag}
+      {fix ? (
+        <div className="today teacher-today">
+          <span className="kicker">先生より</span>
+          <FixBlock f={fix} />
+          <button className="today-go" onClick={go}>
+            1分 練習する
+          </button>
+        </div>
+      ) : (
       <button
         className="today today-btn"
-        onClick={() => {
-          unlock();
-          router.push(startRoute(p, quiet));
-        }}
+        onClick={go}
       >
-        <span className="kicker">今日 · 約 {minutes(stops.slice(at))} 分{quiet ? " · 聴くだけ" : ""}</span>
+        <span className="kicker">今日{quiet ? " · 聴くだけ" : ""}</span>
         <span className="route">
           {stops.map((s, i) => (
             <span key={i} className={`stop ${i < at ? "done" : i === at ? "now" : ""}`}>
@@ -92,6 +106,7 @@ export default function Home() {
         </span>
         <span className="today-go">{at > 0 ? "続ける" : quiet ? "流す" : "始める"}</span>
       </button>
+      )}
       <label className="quiet">
         <input
           type="checkbox"

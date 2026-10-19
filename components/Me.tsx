@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { dayKey, streak, teacherPlan, useProgress } from "@/lib/client/progress";
+import { dayKey, streak, teacherFix, teacherPlan, useProgress } from "@/lib/client/progress";
 import { allTime, lastDays } from "@/lib/client/metrics";
 import { useHydrated } from "@/lib/client/hydrated";
+import { FixBlock, GoodBlock } from "./TeacherMemo";
 
 // 记录: the streak and days; every feature itself is on 今日.
 export default function Me() {
@@ -13,7 +14,9 @@ export default function Me() {
   const today = dayKey();
   const days = lastDays(21);
   const top = Math.max(1, ...days.map((d) => p.days[d] ?? 0));
-  const note = hydrated ? teacherPlan()?.note_zh : "";
+  const t = hydrated ? teacherPlan() : null;
+  const good = t?.good;
+  const fix = hydrated ? teacherFix(p) : null;
 
   return (
     <main className="page">
@@ -46,11 +49,24 @@ export default function Me() {
         </div>
       </Link>
 
-      {note && (
+      {(good || fix) ? (
         <div className="teacher-note">
           <div className="label">先生のメモ</div>
-          <p className="muted">{note}</p>
+          {good && <GoodBlock g={good} />}
+          {fix && <FixBlock f={fix} />}
+          {fix && (
+            <Link href={`/quick?drill=${encodeURIComponent(fix.tag)}`} className="today-go memo-go">
+              練習する
+            </Link>
+          )}
         </div>
+      ) : (
+        t?.note_zh && (
+          <div className="teacher-note">
+            <div className="label">先生のメモ</div>
+            <p className="muted">{t.note_zh}</p>
+          </div>
+        )
       )}
 
       <Link href="/today" className="row-link">

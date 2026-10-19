@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import { calls } from "@/content/calls";
 import { makeRadio } from "./moyu";
-import { dayKey, dueSkillCount, todaysCards, retellToday, teacherPlan, weakItems, weakList, type Progress } from "./progress";
+import { dayKey, dueSkillCount, todaysCards, retellToday, teacherFix, teacherPlan, weakItems, weakList, type Progress } from "./progress";
 
 // 今日のルート: one fixed line of stops for today (listen → practise → a song to unwind → speak → call), so opening the app
 // never asks what to do. Each page calls stepDone() when its part is over; the bar on top then moves
 // on to the next stop by itself.
 
-export type StopKey = "listen" | "game" | "song" | "retell" | "skills" | "review" | "quick" | "call" | "flow";
+export type StopKey = "fix" | "listen" | "game" | "song" | "retell" | "skills" | "review" | "quick" | "call" | "flow";
 export type Stop = { key: StopKey; ja: string; meta: string; href: string; min: number };
 export type Route = { day: string; quiet: boolean; stops: Stop[]; at: number };
 
@@ -109,11 +109,14 @@ export function plan(p: Progress, quiet: boolean): Stop[] {
   // short morning still gets to it. The song is the break after it; 電話 is last because it brings
   // up today's story.
   const episode: Stop[] = [listen, speak, song, game];
-  if (ep) return [...episode, ...review, phone];
+  // The teacher's one point opens the day: a minute, while it is the first thing on the screen.
+  const f = teacherFix(p);
+  const fix: Stop[] = f ? [{ key: "fix", ja: "直す", meta: f.better, href: `/quick?drill=${encodeURIComponent(f.tag)}`, min: 1 }] : [];
+  if (ep) return [...fix, ...episode, ...review, phone];
   // No episode yet: open with something that doesn't need it while it is written.
   const skills = dueSkillCount(p) + weakItems(p, 3).length;
   const lead: Stop[] = skills > 0 ? [{ key: "skills", ja: "練習", meta: `前の ${Math.min(skills, 12)}問`, href: "/practice", min: 5 }] : review;
-  return [...lead, ...episode, ...(lead === review ? [] : review), phone];
+  return [...fix, ...lead, ...episode, ...(lead === review ? [] : review), phone];
 }
 
 export const minutes = (stops: Stop[]) => stops.reduce((a, s) => a + s.min, 0);
@@ -189,6 +192,8 @@ export async function nextHref(): Promise<string> {
 // The one thing to fix tomorrow: the teacher's first point (or the shakiest), with the last thing said
 // wrong, and the teacher's reason when it chose it.
 export function oneFix(p: Progress) {
+  const f = teacherFix(p);
+  if (f) return { said: f.said, better: f.better, why: f.zh, miss: p.weak[f.tag].miss };
   const w = weakList(p)[0];
   const ex = w?.examples[0];
   const t = teacherPlan();

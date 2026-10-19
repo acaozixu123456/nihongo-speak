@@ -873,6 +873,25 @@ const TeacherSchema = z.object({
   note_zh: z
     .string()
     .describe("最近の様子（中国語、3文以内）：実際に伸びた点を具体的に一つ、次に気をつけることを一つ。数字の読み上げやお世辞は書かない"),
+  good: z
+    .object({
+      before: z.string().describe("前の言い方（学習者の実際の発言をそのまま。三回話すの1回目や、前に間違えた文）"),
+      after: z.string().describe("良くなった言い方（学習者の実際の発言をそのまま、短く切り出してよい）"),
+      mark: z.string().describe("after の中で特に良くなった部分。after の一部を一字も変えずに"),
+      zh: z.string().describe("何が良くなったか（中国語、1文、20字以内）"),
+    })
+    .nullable()
+    .describe("実際に伸びた点を一つ、画面に大きく出す。前の発言と比べられるものがなければ null"),
+  fix: z
+    .object({
+      tag: z.string().describe("order の一番目の tag をそのまま"),
+      said: z.string().describe("学習者が実際に言った短い間違い（記録の「言った」から、その部分だけ）"),
+      better: z.string().describe("正しい言い方（said と同じ長さの短い日本語）"),
+      mark: z.string().describe("better の中で直した部分。better の一部を一字も変えずに（例：に）"),
+      zh: z.string().describe("なぜそう言うか（中国語、1文、20字以内）"),
+    })
+    .nullable()
+    .describe("明日まず直すことを一つ、画面に大きく出す。order が空なら null"),
 });
 export type TeacherPlan = z.infer<typeof TeacherSchema>;
 
@@ -885,7 +904,9 @@ export async function teacherPlan(record: string): Promise<TeacherPlan> {
 - 記録の弱点は、発言ごとに別の AI が付けたもので、同じ文法が違う名前で何度も付いていたり、音声認識の誤りを学習者の誤りとして付けていたりする。そういうものは hide に入れる。
 - 優先するのは、仕事や生活で困る誤り ＞ 何度も出ている誤り ＞ 最近の誤り。直ってきたものは後ろに。
 - 「正しくは」も別の AI の推測で、学習者が言おうとした語を取り違えていることがある（例：「ちかいます」は文脈によって「近いです」ではなく「違います」）。前後の文脈から本当に言いたかったことを考え、推測が外れている tag は hide に入れ、note_zh でも取り上げない。
-- 学習者の発言は音声認識の結果。同音の漢字違いや句読点は誤りではない。`,
+- 学習者の発言は音声認識の結果。同音の漢字違いや句読点は誤りではない。
+- good と fix は画面に大きく出る。どちらも学習者が実際に言った文から短く切り出し、一目で分かるようにする。
+- 「これまでのメモ」がある時は続きとして書く：前に直そうと言った点が最近正しく言えていれば good で取り上げ、同じ fix を何日も続けない（まだ直っていなければ、別の例文で出してよい）。`,
     messages: [{ role: "user", content: record }],
     output_config: { effort: "high", format: zodOutputFormat(TeacherSchema) },
   });
