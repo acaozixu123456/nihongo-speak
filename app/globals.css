@@ -1335,6 +1335,7 @@ a.me-card:active, a.tile:active { transform: scale(0.985); }
 /* A keyword that just took a learned one's place, and the line saying which ones were learned. */
 .retell-keys span.new { border-color: var(--ok-ink); }
 .retell-keys span.new::before { content: "新"; margin-right: 6px; font-size: 11px; font-weight: 500; color: var(--ok-ink); }
+.retell-keys .key-ok { margin-left: 6px; font-style: normal; font-size: 13px; color: var(--ok-ink); }
 .retell-done { display: block; margin-top: 6px; color: var(--ok-ink); font-size: 13px; font-weight: 500; }
 .retell-starters { margin: 14px 0 0; font-family: var(--ja); font-size: 17px; line-height: 1.9; }
 .retell-focus { display: block; margin-top: 14px; padding: 8px 12px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-ink); font-size: 14px; }

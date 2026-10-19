@@ -10,7 +10,7 @@ type Body =
   | { kind: "uptake"; natural: string[]; said: string }
   | { kind: "end"; topic: string; first: string; last: string; focus?: string }
   | { kind: "kana"; texts: string[] }
-  | { kind: "keys"; topic: string; keys: { ja: string; kana?: string }[]; pool?: { ja: string; kana?: string }[]; said: string[] };
+  | { kind: "keys"; topic: string; keys: { ja: string; kana?: string; runs?: number }[]; pool?: { ja: string; kana?: string }[]; said: string[] };
 
 const text = (s: unknown, n: number): s is string => typeof s === "string" && s.trim().length > 0 && s.length <= n;
 
@@ -72,7 +72,7 @@ export async function POST(request: Request) {
         (Array.isArray(x) ? x : [])
           .filter((k): k is { ja: string; kana?: string } => !!k && text(k.ja, 30))
           .slice(0, n)
-          .map((k) => ({ ja: k.ja, kana: typeof k.kana === "string" ? k.kana.slice(0, 40) : undefined }));
+          .map((k) => ({ ja: k.ja, kana: typeof k.kana === "string" ? k.kana.slice(0, 40) : undefined, runs: Math.max(0, Math.min(9, Number((k as { runs?: number }).runs) || 0)) }));
       const said = Array.isArray(b.said) ? b.said.filter((t) => text(t, 3000)).slice(0, 3) : [];
       if (!said.length) return NextResponse.json({ error: "没有听到内容" }, { status: 400 });
       return NextResponse.json(await retellKeys({ topic: b.topic, keys: words(b.keys, 3), pool: words(b.pool, 15), said }));

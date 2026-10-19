@@ -173,6 +173,9 @@ export type Progress = {
   skills: Record<string, Skill>; // keyed by the Japanese without spaces or punctuation
   people: Record<string, PersonMemory[]>;
   retells: Retell[]; // newest last // keyed by the character's id in content/calls.ts
+  // 三回話す keywords: how many tellings in a row (across days) each was used right and without a
+  // stall; at 2 it gives its place to a new one. at: when last counted, so the newer copy wins.
+  keyRuns?: Record<string, { n: number; at: number }>;
   rehearsals: Rehearsal[]; // newest last
   freezes: number; // streak protectors in hand
   frozen: string[]; // days covered by a protector
@@ -307,6 +310,9 @@ export function merge(a: Progress, b: Progress): Progress {
     .sort((x, y) => (x.date < y.date ? -1 : 1))
     .slice(-RETELLS_KEPT);
 
+  const keyRuns = { ...(a.keyRuns ?? {}) };
+  for (const [k, v] of Object.entries(b.keyRuns ?? {})) if (!keyRuns[k] || v.at > keyRuns[k].at) keyRuns[k] = v;
+
   // The copy that got further (more rounds, or a report) wins.
   const rehearsals = [...[...(a.rehearsals ?? []), ...(b.rehearsals ?? [])]
     .reduce((m, r) => {
@@ -361,6 +367,7 @@ export function merge(a: Progress, b: Progress): Progress {
     skills,
     people,
     retells,
+    keyRuns,
     rehearsals,
     freezes: newer.freezes,
     frozen: [...new Set([...a.frozen, ...b.frozen])],
