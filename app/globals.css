@@ -1815,22 +1815,22 @@ body:has(.on-air) .ask-acts, body:has(.on-air) .ask-bar:not(.ask-acts .ask-bar) 
 .nw-page { padding-bottom: 210px; }
 .nw-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; }
 .nw-top .back { margin-bottom: 0; }
-.nw-title { font-family: var(--ja); font-size: 18px; font-weight: 700; line-height: 1.9; letter-spacing: 0.02em; text-wrap: pretty; margin: 12px 0 2px; }
+.nw-title { font-family: var(--ja); font-size: 18px; font-weight: 700; line-height: 1.9; margin: 12px 0 2px; }
 .nw-page ruby rt { font-size: 10px; font-weight: 400; color: var(--muted); }
 .nw-date { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
 .nw-zh { font-size: 13.5px; color: var(--muted); line-height: 1.6; margin: 0 2px 6px; }
-.nw-para { margin-top: 28px; }
+.nw-para { margin-top: 16px; }
 .nw-para:first-child { margin-top: 6px; }
-.nw-s + .nw-s { margin-top: 10px; }
-/* Reading comfort (NHK ONE tokens: ruby half size, UD letter-spacing .05em, paragraph gap 28px on phones): soft ink, slight tracking, room for the readings above, no lone 「す。」 on a line. */
-.nw-s p { margin: 0; padding: 1px 0; font-family: var(--ja); font-size: 16px; font-weight: 400; line-height: 2; letter-spacing: 0.02em; color: #33302b; text-wrap: pretty; line-break: strict; cursor: pointer; }
+.nw-s + .nw-s { margin-top: 2px; }
+/* Reading comfort: soft ink, even lines just tall enough for the readings above, small gaps (no tracking or text-wrap: pretty: on iPhone they wrapped early and pushed readings off their kanji). */
+.nw-s p { margin: 0; padding: 1px 0; font-family: var(--ja); font-size: 16px; font-weight: 400; line-height: 1.85; color: #33302b; line-break: strict; cursor: pointer; }
 .rb { position: relative; }
 .rb::before { content: attr(data-r); position: absolute; left: 50%; top: -0.8em; transform: translateX(-50%); white-space: nowrap; font-size: 9px; font-weight: 400; letter-spacing: 0; line-height: 1; color: #8f877a; pointer-events: none; }
 .nw-now .rb::before { font-size: 11px; top: -1em; }
 .rb-on { color: var(--accent); }
 .nw-body.hidden .nw-s p { color: transparent; text-shadow: none; }
 .nw-body.hidden .nw-s .rb::before, .nw-body.hidden .rb-on { color: transparent; }
-.nw-body.hidden .nw-s p { background: repeating-linear-gradient(transparent 0 0.75em, var(--soft) 0.75em 1.4em, transparent 1.4em 2em); }
+.nw-body.hidden .nw-s p { background: repeating-linear-gradient(transparent 0 0.75em, var(--soft) 0.75em 1.4em, transparent 1.4em 1.85em); }
 .nw-body.hidden .nw-zh { display: none; }
 .nw-hidden { text-align: center; color: var(--faint); font-size: 15px; padding: 18px 0; }
 .nw-src { display: inline-block; margin-top: 14px; font-size: 12px; color: var(--muted); text-decoration: none; }
