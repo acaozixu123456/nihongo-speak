@@ -236,10 +236,10 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
         </div>
       )}
 
-      {busy === "feedback" && <Note wait ja="まとめています…" zh="在看你刚才的对话…" />}
+      {busy === "feedback" && <Note wait text="在看你刚才的对话…" />}
       {feedback && (
-        <FeedbackCard feedback={feedback} voice={talk.aiVoice} scenarioId={scenario.id}>
-          <Link href="/scenes" className="btn primary" style={{ flex: 1 }}>場面へ</Link>
+        <FeedbackCard feedback={feedback} area="scene" title={scenario.titleZh}>
+          <Link href="/scenes" className="btn primary" style={{ flex: 1 }}>返回</Link>
           <button onClick={start}>再来一次</button>
         </FeedbackCard>
       )}

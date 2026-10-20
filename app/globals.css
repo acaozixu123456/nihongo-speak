@@ -1916,3 +1916,32 @@ body:has(.on-air) .ask-acts, body:has(.on-air) .ask-bar:not(.ask-acts .ask-bar) 
 .sp-rec-news { margin-top: 12px; font-size: 13px; color: var(--muted); }
 .sp-rec-news b { color: var(--text); font-weight: 500; margin: 0 2px; }
 .sp-rec-news small { font-size: 12px; }
+/* 先生 page: one card per practice, with its review */
+.area { background: var(--card); border-radius: 18px; padding: 14px 16px 14px; margin-top: 10px; box-shadow: var(--shadow); scroll-margin-top: 16px; }
+.area-hd { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.area-hd b { flex: none; font-size: 16px; font-weight: 700; }
+.area-hd span { min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.a-good { display: flex; gap: 8px; align-items: baseline; margin-top: 10px; font-size: 14px; line-height: 1.55; color: var(--ok-ink); }
+.a-good i, .a-fix .h i { font-style: normal; flex: none; width: 18px; height: 18px; border-radius: 50%; color: #fff; font-size: 11px; display: inline-grid; place-items: center; }
+.a-good i { background: var(--ok); }
+.a-fix { margin-top: 10px; background: var(--no-bg); border-radius: 12px; padding: 10px 12px; }
+.a-fix .h { display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 700; color: var(--no-ink); }
+.a-fix .h i { background: var(--no); }
+.a-fix .w { font-family: var(--ja); font-size: 14px; color: var(--muted); margin-top: 6px; }
+.a-fix .w s { text-decoration-color: var(--no); text-decoration-thickness: 2px; }
+.a-fix .r { display: flex; align-items: center; gap: 8px; font-family: var(--ja); font-size: 16px; font-weight: 700; line-height: 1.5; margin-top: 2px; }
+.a-fix .r span { flex: 1; }
+.a-fix .r .bag-play { width: 30px; height: 30px; background: var(--card); }
+.a-fix .z { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.a-more { display: block; margin-top: 8px; padding: 0; border: 0; background: none; font-size: 13px; color: var(--muted); cursor: pointer; }
+.a-num { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+.a-num b { font-size: 15px; color: var(--text); font-weight: 600; margin: 0 2px; }
+.a-tip { margin-top: 8px; font-size: 13px; color: var(--text); background: var(--soft); border-radius: 12px; padding: 9px 12px; }
+/* End of a practice: the review is on the 先生 page */
+.fb-done { margin: 16px 0; }
+.fb-done-t { font-size: 18px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+.to-sensei { display: flex; align-items: center; gap: 12px; margin: 14px 0; padding: 14px 16px; background: var(--card); border-radius: 16px; box-shadow: var(--shadow); color: var(--text); text-decoration: none; }
+.to-sensei span { flex: 1; min-width: 0; }
+.to-sensei b { display: block; font-size: 16px; }
+.to-sensei small { font-size: 12px; color: var(--muted); }
+.to-sensei i { font-style: normal; color: var(--faint); font-size: 18px; }

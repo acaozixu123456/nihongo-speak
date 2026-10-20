@@ -14,10 +14,10 @@ export default function Scenes({ tab: initial }: { tab?: BuildingId }) {
 
   return (
     <main>
-      <Link href="/speak" className="back">← 話す</Link>
+      <Link href="/speak" className="back">← 说</Link>
       <header className="page-mast">
         <div>
-          <h1>場面</h1>
+          <h1>场景对话</h1>
           <p className="muted">每个场景三步：听 → 跟读 → 对话</p>
         </div>
       </header>

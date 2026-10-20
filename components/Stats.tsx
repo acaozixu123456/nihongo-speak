@@ -44,10 +44,10 @@ export default function Stats() {
 
   return (
     <main>
-      <Link href="/me" className="back">← 先生</Link>
+      <Link href="/me" className="back">← 老师</Link>
       <header className="page-mast">
         <div>
-          <h1>記録</h1>
+          <h1>记录</h1>
           <p className="muted">开口时长、反应速度、发音的变化</p>
         </div>
       </header>
@@ -87,7 +87,7 @@ export default function Stats() {
         </div>
         <div>
           <b>{(p.retells ?? []).length}</b>
-          <span>三回話す</span>
+          <span>讲三遍</span>
         </div>
       </div>
       <div className="rowlist">

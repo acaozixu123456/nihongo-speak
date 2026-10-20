@@ -152,10 +152,10 @@ export default function Review() {
   if (p.cards.length === 0) {
     return (
       <main>
-        <Link href="/me" className="back">← 先生</Link>
+        <Link href="/me" className="back">← 老师</Link>
         <header className="page-mast">
           <div>
-            <h1>復習</h1>
+            <h1>复习</h1>
             <p className="muted">按 1、3、7、14 天的间隔再说一遍</p>
           </div>
         </header>
@@ -173,10 +173,10 @@ export default function Review() {
   if (!queue) {
     return (
       <main>
-        <Link href="/me" className="back">← 先生</Link>
+        <Link href="/me" className="back">← 老师</Link>
         <header className="page-mast">
           <div>
-            <h1>復習</h1>
+            <h1>复习</h1>
             <p className="muted">按 1、3、7、14 天的间隔再说一遍</p>
           </div>
         </header>
@@ -186,7 +186,7 @@ export default function Review() {
               <div className="score-big">{due.length}</div>
               <p>句今天该复习了</p>
               <p className="muted">看中文，用日语说出来，再对照答案。</p>
-              <button className="primary next-cta" onClick={begin}>始める</button>
+              <button className="primary next-cta" onClick={begin}>开始</button>
             </>
           ) : (
             <>
@@ -203,10 +203,10 @@ export default function Review() {
   if (!card) {
     return (
       <main>
-        <Link href="/me" className="back">← 先生</Link>
+        <Link href="/me" className="back">← 老师</Link>
         <header className="page-mast">
           <div>
-            <h1>復習</h1>
+            <h1>复习</h1>
             <p className="muted">按 1、3、7、14 天的间隔再说一遍</p>
           </div>
         </header>
@@ -218,7 +218,7 @@ export default function Review() {
               <Link href="/weak">看 AI 找出的薄弱点 →</Link>
             </p>
           )}
-          <Link href="/me" className="btn primary next-cta" style={{ display: "block" }}>先生へ</Link>
+          <Link href="/me" className="btn primary next-cta" style={{ display: "block" }}>返回</Link>
         </div>
       </main>
     );

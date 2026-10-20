@@ -9,12 +9,12 @@ export function RetellRow({ r, bare, sub }: { r: TopicRow; bare?: boolean; sub?:
       <span className="rt-t">
         <b>
           {r.ja}
-          {!bare && r.mark === "again" && <em className="rt-tag">もう一回</em>}
+          {!bare && r.mark === "again" && <em className="rt-tag">再来一次</em>}
           {r.mark === "grad" && <em className="rt-tag grad">卒業</em>}
         </b>
         {sub && <span>{sub}</span>}
       </span>
-      {r.times > 0 ? <span className="rt-n">{r.times}回</span> : null}
+      {r.times > 0 ? <span className="rt-n">{r.times} 次</span> : null}
       {r.score !== null ? (
         <span className={`rt-s${r.up !== null && r.up > 0 ? " up" : ""}`}>
           {r.score}

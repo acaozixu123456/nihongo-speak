@@ -9,7 +9,7 @@ import { SenseiFace } from "./Sensei";
 const TABS = [
   {
     href: "/",
-    ja: "聴く",
+    ja: "听",
     icon: (
       <svg className="tab-i" viewBox="0 0 24 24" aria-hidden>
         <path d="M4 14v-2a8 8 0 0 1 16 0v2" />
@@ -20,7 +20,7 @@ const TABS = [
   },
   {
     href: "/speak",
-    ja: "話す",
+    ja: "说",
     icon: (
       <svg className="tab-i" viewBox="0 0 24 24" aria-hidden>
         <rect x="9" y="3" width="6" height="11" rx="3" />
@@ -28,7 +28,7 @@ const TABS = [
       </svg>
     ),
   },
-  { href: "/me", ja: "先生", icon: null },
+  { href: "/me", ja: "老师", icon: null },
 ];
 
 // List pages opened from a tab keep the tabs, with their tab lit. Pages where something is played,

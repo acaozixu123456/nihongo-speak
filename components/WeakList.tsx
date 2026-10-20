@@ -27,7 +27,7 @@ export function WeakList() {
         {ex?.said && <span className="weak-ex"><s>{ex.said}</s></span>}
         {ex?.better && <span className="weak-ex weak-better">→ {ex.better}</span>}
         <span className="weak-why">错 {top.miss} 次 · {top.hit ? `答对 ${top.hit} 次` : "还没答对过"}</span>
-        <span className="today-go">一組やる</span>
+        <span className="today-go">练一组</span>
       </Link>
       {rest.length > 0 && (
         <>

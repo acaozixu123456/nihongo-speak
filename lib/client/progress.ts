@@ -7,6 +7,7 @@ import {
   EMPTY,
   EPISODES_KEPT,
   MEMORIES_KEPT,
+  NOTES_KEPT,
   REHEARSALS_KEPT,
   RETELLS_KEPT,
   active,
@@ -27,6 +28,7 @@ import {
   type Learned,
   type NewsMark,
   type PersonMemory,
+  type PracticeNote,
   type Progress,
   type RadioEpisode,
   type Rehearsal,
@@ -39,7 +41,7 @@ import {
 } from "@/lib/progress-model";
 
 export { dayKey, level, streak, totalXp };
-export type { AskedItem, Skill, Card, CustomScenario, DiaryEntry, DrillItem, Learned, PersonMemory, Progress, RadioEpisode, Rehearsal, Retell, RetellPoint, StuckLine, WeakPoint };
+export type { AskedItem, Skill, Card, CustomScenario, DiaryEntry, DrillItem, Learned, PersonMemory, PracticeNote, Progress, RadioEpisode, Rehearsal, Retell, RetellPoint, StuckLine, WeakPoint };
 
 // The phone's localStorage is the working copy; it is synced to the server
 // (when storage is set up) so nothing is lost if Safari data is cleared.
@@ -649,6 +651,16 @@ export function remember(person: string, ja: string) {
 }
 
 export const memories = (p: Progress, person: string) => p.people[person] ?? [];
+
+// ---- Notes for the 先生 page ----
+
+export function recordNote(n: Omit<PracticeNote, "at" | "day">) {
+  const p = read();
+  write({ ...p, notes: [...(p.notes ?? []), { ...n, at: Date.now(), day: dayKey() }].slice(-NOTES_KEPT) });
+}
+
+// The newest note of each area.
+export const lastNote = (p: Progress, area: PracticeNote["area"]) => [...(p.notes ?? [])].reverse().find((n) => n.area === area) ?? null;
 
 // ---- 三回話す ----
 

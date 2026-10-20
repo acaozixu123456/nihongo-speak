@@ -25,7 +25,7 @@ async function post<T>(body: unknown): Promise<T> {
 function roundCall(r: Rehearsal, i: number): CallDef {
   return {
     id: `rehearse-${r.id}`,
-    title: "予行演習",
+    title: "预演",
     titleZh: r.titleZh,
     who: r.who,
     incoming: false,
@@ -140,15 +140,15 @@ export default function Rehearse() {
 
   return (
     <main className="page">
-      <Link href="/speak" className="back">← 話す</Link>
-      <h1 className="ep-head">予行演習</h1>
+      <Link href="/speak" className="back">← 说</Link>
+      <h1 className="ep-head">预演</h1>
 
       {done && current ? (
         <div className="today rehearse">
           <span className="kicker">演完了</span>
           <span className="today-title">{current.titleZh}</span>
           <span className="today-zh">真说完以后回来，告诉我哪句没说出来，我把它变成下次能用的话。</span>
-          <Link href="/speak" className="today-go">話すへ</Link>
+          <Link href="/speak" className="today-go">返回</Link>
         </div>
       ) : debrief ? (
         <div className="today rehearse">
@@ -168,7 +168,7 @@ export default function Rehearse() {
             </button>
           ))}
           {debrief.d.missed.length > 0 && <span className="today-zh">已放进フレーズ帳，瞬間 会再考你。</span>}
-          <button className="today-go" onClick={() => setDebrief(null)}>次を準備する</button>
+          <button className="today-go" onClick={() => setDebrief(null)}>准备下一个</button>
         </div>
       ) : pending ? (
         <div className="today rehearse">
@@ -197,7 +197,7 @@ export default function Rehearse() {
             placeholder="比如：明天跟课长请半天假去医院"
           />
           <button className="today-go" onClick={start} disabled={!ask.trim() || busy}>
-            {busy ? "AI 在准备对方…" : "始める"}
+            {busy ? "AI 在准备对方…" : "开始"}
           </button>
         </div>
       )}

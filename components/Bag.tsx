@@ -16,10 +16,10 @@ export default function Bag() {
 
   return (
     <main>
-      <Link href="/me" className="back">← 先生</Link>
+      <Link href="/me" className="back">← 老师</Link>
       <header className="page-mast">
         <div>
-          <h1>フレーズ帳</h1>
+          <h1>收藏的句子</h1>
           <p className="muted">
             {p.cards.length} 句{due.length ? ` · ${due.length} 句今天该复习` : ""}
           </p>

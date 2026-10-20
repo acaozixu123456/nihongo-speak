@@ -23,14 +23,14 @@ export function GoodBlock({ g }: { g: TeacherGood }) {
   return (
     <div className="memo-blk m-good">
       <div className="memo-hd">
-        <span className="memo-mk">✓</span>上手になった
+        <span className="memo-mk">✓</span>进步了
       </div>
       <div className="memo-ln m-old">
-        <span className="memo-t">前</span>
+        <span className="memo-t">以前</span>
         {g.before}
       </div>
       <div className="memo-ln m-new">
-        <span className="memo-t">今</span>
+        <span className="memo-t">现在</span>
         <span>
           <Marked text={g.after} mark={g.mark} as="mark" />
         </span>
@@ -45,20 +45,20 @@ export function FixBlock({ f }: { f: TeacherFix }) {
   return (
     <div className="memo-blk m-bad">
       <div className="memo-hd">
-        <span className="memo-mk">!</span>ここを直そう
+        <span className="memo-mk">!</span>要改的地方
       </div>
       <div className="memo-ln m-wrong">
-        <span className="memo-t">言った</span>
+        <span className="memo-t">你说的</span>
         <s>{f.said}</s>
       </div>
       <div className="memo-ln m-right">
-        <span className="memo-t">正しく</span>
+        <span className="memo-t">这样说</span>
         <span>
           <Marked text={f.better} mark={f.mark} as="em" />
         </span>
         <button
           className="bag-play memo-play"
-          aria-label="聞く"
+          aria-label="听"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();

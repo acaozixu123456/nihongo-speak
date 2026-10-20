@@ -34,35 +34,32 @@ export default function SpeakTab() {
   return (
     <main className="page">
       <h1 className="tab-h1">
-        話す<small>说</small>
+        说
       </h1>
       {hydrated && list && (
         <section className="rt-hero">
           <div className="rt-head">
-            <span>三回話す</span>
-            <Link href="/retell/list">一覧{list.times ? ` ${list.times}回` : ""} ›</Link>
+            <span>讲三遍</span>
+            <Link href="/retell/list">全部{list.times ? ` ${list.times} 次` : ""} ›</Link>
           </div>
-          <Note
-            ja={fix ? "ここで一番止まっています。" : list.today.toldToday ? "今日はもう話しました。" : "今日はこれを話そう。"}
-            zh={fix ? "今天讲的时候，用上下面这句" : undefined}
-          />
+          <Note text={fix ? "你最常卡在这里，今天讲的时候用上这句" : list.today.toldToday ? "今天已经讲过了" : "今天讲这个"} />
           {fix && <FixBlock f={fix} />}
           <div className="rt-title">{list.today.ja}</div>
           {(list.today.times > 0 || list.today.score !== null) && (
-            <div className="rt-sub">{[`${list.today.times}回`, list.today.score !== null ? `${list.today.score}点` : ""].filter(Boolean).join(" · ")}</div>
+            <div className="rt-sub">{[`${list.today.times} 次`, list.today.score !== null ? `${list.today.score} 分` : ""].filter(Boolean).join(" · ")}</div>
           )}
           {onRoute ? (
             <button className="pil-go on" onClick={go}>
-              話す
+              开始讲
             </button>
           ) : (
             <Link href={list.today.href} className={`pil-go${list.today.toldToday || quiet ? "" : " on"}`}>
-              {list.today.toldToday ? "もう一回" : "話す"}
+              {list.today.toldToday ? "再来一次" : "开始讲"}
             </Link>
           )}
           {list.picks.length > 0 && (
             <div className="rt-picks">
-              <span className="kicker">もう一回</span>
+              <span className="kicker">再来一次</span>
               {list.picks.map((r) => (
                 <RetellRow key={r.key} r={r} bare />
               ))}
@@ -70,22 +67,22 @@ export default function SpeakTab() {
           )}
         </section>
       )}
-      <div className="kicker tab-kicker">ほかの話し方</div>
+      <div className="kicker tab-kicker">其他练法</div>
       <div className="pl-grid">
         <Link href="/call" className="pl">
-          <b>電話</b>
+          <b>打电话</b>
           <span>和熟人打电话</span>
         </Link>
         <Link href="/scenes" className="pl">
-          <b>場面</b>
+          <b>场景对话</b>
           <span>工作生活场景</span>
         </Link>
         <Link href="/quick" className="pl">
-          <b>瞬間</b>
+          <b>马上说</b>
           <span>看中文马上说日语</span>
         </Link>
         <Link href="/rehearse" className="pl">
-          <b>予行演習</b>
+          <b>预演</b>
           <span>明天要说的话先演一遍</span>
           {report ? <em className="new">1</em> : null}
         </Link>

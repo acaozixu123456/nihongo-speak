@@ -123,7 +123,7 @@ function savedSet(id: string): SavedSet | null {
 export const hasSavedSet = (id: string) => savedSet(id) !== null;
 
 // The stamp at the end, by how much was right the first time.
-const STAMP = (rate: number) => (rate === 1 ? "満点" : rate >= 0.8 ? "合格" : rate >= 0.5 ? "まあまあ" : "もう一回");
+const STAMP = (rate: number) => (rate === 1 ? "満点" : rate >= 0.8 ? "合格" : rate >= 0.5 ? "まあまあ" : "再来一次");
 
 type Result = { q: Q; ok: boolean };
 
@@ -250,7 +250,7 @@ export default function Game({ id }: { id: string }) {
   if (!daily && !ep) {
     return (
       <main className="page">
-        <Link href="/me" className="back">← 先生</Link>
+        <Link href="/me" className="back">← 老师</Link>
         <p className="muted">找不到这一期了（只保留最近 50 期）。</p>
       </main>
     );
@@ -262,7 +262,7 @@ export default function Game({ id }: { id: string }) {
     </Link>
   ) : (
     <Link href="/me" className="back">
-      ← 先生
+      ← 老师
     </Link>
   );
   if (error) {
@@ -280,7 +280,7 @@ export default function Game({ id }: { id: string }) {
     return (
       <main className="page">
         {back}
-        <h1 className="ep-head">練習</h1>
+        <h1 className="ep-head">练一练</h1>
         <p className="muted game-wait">
           <span className="spin" /> AI 正在出题…
         </p>
@@ -294,7 +294,7 @@ export default function Game({ id }: { id: string }) {
     return (
       <main className="page">
         {back}
-        <h1 className="ep-head">今日の練習はなし</h1>
+        <h1 className="ep-head">今天没有要练的</h1>
         <p className="muted">听完一期、练一练之后，学过的内容会按记忆曲线回到这里；说话时常错的点也会混进来。</p>
       </main>
     );
