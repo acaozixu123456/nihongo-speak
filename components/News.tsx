@@ -11,7 +11,7 @@ import { play, ttsUrl, unlock } from "@/lib/client/player";
 import { dayKey, markNews, useProgress } from "@/lib/client/progress";
 import { stepDone, useOnRoute } from "@/lib/client/route";
 import { Star } from "./FeedbackCard";
-import { SenseiLine } from "./Sensei";
+import Note from "./Note";
 
 // NHKやさしいことばニュース in our own voice: one article to read along (/news/[id]), or the ones not heard
 // yet back to back for the train (/news), each article first without the text, then with it.
@@ -136,7 +136,7 @@ export function NewsArticlePage({ id }: { id: string }) {
   if (!a)
     return (
       <main className="page">
-        <Link href="/listen" className="back">‹ 聴く</Link>
+        <Link href="/" className="back">‹ 聴く</Link>
         <p className="muted">{items.length ? "这条新闻已经不在了（只保留 14 天）" : "正在读取…"}</p>
       </main>
     );
@@ -178,7 +178,7 @@ function Article({ a }: { a: NewsArticle }) {
   return (
     <main className="page nw-page">
       <div className="nw-top">
-        <Link href="/listen" className="back">‹ 聴く</Link>
+        <Link href="/" className="back">‹ 聴く</Link>
         <button className={`nw-chip${zh ? " on" : ""}`} onClick={() => setZh(!zh)}>訳</button>
       </div>
       <NewsImage a={a} className="nw-img" />
@@ -236,7 +236,7 @@ function Article({ a }: { a: NewsArticle }) {
       )}
 
       <div className="nw-end" ref={end}>
-        <SenseiLine ja="聞いたら、自分の言葉で三回話してみましょう。" zh="听完了，用自己的话讲三遍吧。" mute />
+        <Note ja="聞いたら、自分の言葉で三回話してみよう。" zh="听完了，用自己的话讲三遍。" />
         <Link href={`/retell?news=${a.id}`} className="pil-go on">三回話す</Link>
       </div>
 
@@ -272,7 +272,7 @@ export function NewsPlay() {
   if (!set?.items.length)
     return (
       <main className="page">
-        <Link href="/listen" className="back">‹ 聴く</Link>
+        <Link href="/" className="back">‹ 聴く</Link>
         <p className="muted">还没有新闻（每天晚上 21:00 自动更新）</p>
       </main>
     );
@@ -347,7 +347,7 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
   return (
     <main className="page nw-page">
       <div className="nw-top">
-        <Link href="/listen" className="back">‹ 聴く</Link>
+        <Link href="/" className="back">‹ 聴く</Link>
         <span className="muted">{newsDay(set.day)} {idle ? today.length : `${n + 1} / ${today.length}`}</span>
       </div>
       <div className="kicker">{idle ? "2回ずつ · 1回目は文字なし" : asking ? "1回目 おわり" : second ? "2回目 · 文字あり" : "1回目 · 文字なし"}</div>

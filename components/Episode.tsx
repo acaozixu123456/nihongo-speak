@@ -50,7 +50,7 @@ export function NewEpisode() {
     if (a) {
       newsRadio(a).then(
         (ep) => !gone && router.replace(`/ep/${ep.id}`),
-        () => !gone && router.replace("/listen"),
+        () => !gone && router.replace("/"),
       );
       return () => {
         gone = true;
@@ -63,7 +63,7 @@ export function NewEpisode() {
   }, [router]);
   return (
     <main className="page">
-      <Link href="/listen" className="back">← 聴く</Link>
+      <Link href="/" className="back">← 聴く</Link>
       <p className="muted game-wait">
         <span className="spin" /> {making ? makingText(making) : "新しい回を作っています"}
       </p>
@@ -239,7 +239,7 @@ export default function Episode({ id }: { id: string }) {
   if (!ep) {
     return (
       <main className="page">
-        <Link href="/listen" className="back">← 聴く</Link>
+        <Link href="/" className="back">← 聴く</Link>
         <p className="muted">找不到这一期了（只保留最近 50 期）。</p>
       </main>
     );
@@ -403,7 +403,7 @@ export default function Episode({ id }: { id: string }) {
 
   return (
     <main className={`page ${started ? "on-air" : ""}`} data-ask-topic={episode.title_zh} data-ask-ep={episode.id}>
-      <Link href="/listen" className="back">← 聴く</Link>
+      <Link href="/" className="back">← 聴く</Link>
       {!started ? (
         <>
           <div className="kicker">

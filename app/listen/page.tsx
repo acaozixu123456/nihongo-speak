@@ -1,5 +1,6 @@
-import ListenTab from "@/components/ListenTab";
+import { redirect } from "next/navigation";
 
+// 聴く is the home page now.
 export default function ListenPage() {
-  return <ListenTab />;
+  redirect("/");
 }

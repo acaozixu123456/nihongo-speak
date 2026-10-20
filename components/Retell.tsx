@@ -37,7 +37,7 @@ import type { NewsArticle } from "@/lib/news-model";
 import { useHydrated } from "@/lib/client/hydrated";
 import { LIFE_TOPICS, latest, retellList, retellScore, topicLogs } from "@/lib/client/retell-history";
 import { Star } from "./FeedbackCard";
-import { SenseiFace, SenseiLine } from "./Sensei";
+import Note from "./Note";
 
 // 三回話す: tell today's radio story three times, each time to a different person (so there is nothing
 // new to add, only saying it better), with the one thing to fix shown between the first and second time.
@@ -702,10 +702,10 @@ export default function Retell() {
             </span>
           )}
         </div>
-        {busy === "end" && <SenseiLine wait ja="うん、うん。聞いていますよ…" zh="我在听你的第三遍…" />}
+        {busy === "end" && <Note wait ja="まとめています…" zh="在看你的第三遍…" />}
         {end && (
           <>
-            <SenseiLine nod ja="三回、よくがんばりましたね。" zh={end.praise_zh} />
+            <Note ja="三回、おつかれさま。" zh={end.praise_zh} />
             {all[2]?.good && <Good ja={all[2].good} onHear={hear} />}
             {fix?.focus_zh && !stall && end.used !== "unused" && (
               <p className="small-text">
@@ -759,9 +759,8 @@ export default function Retell() {
         )}
         {!onRoute && nextPick && (
           <Link href={nextPick.href} className="retell-next">
-            <SenseiFace size={34} />
             <span>
-              <small>先生のおすすめ · 次は</small>
+              <small>おすすめ · 次は</small>
               <b>{nextPick.ja}</b>
             </span>
             {nextPick.score !== null && <em>{nextPick.score}</em>}
@@ -900,7 +899,7 @@ export default function Retell() {
       {round === 1 && !talking && (
         <div className="retell-fix">
           {busy === "fix" ? (
-            <SenseiLine wait ja="うん、うん。聞いていますよ…" zh="我在听你的第一遍…" />
+            <Note wait ja="聞いています…" zh="在看你的第一遍…" />
           ) : busy ? null : fix ? (
             <>
               {carry && carried !== null && (
@@ -908,7 +907,7 @@ export default function Retell() {
                   {carried === "right" ? "✓ 上次那一点，这次说对了" : carried === "wrong" ? "△ 上次那一点还没改过来，明天再来" : "上次那一点这次没用到，明天接着留意"}
                 </p>
               )}
-              <SenseiLine ja="一回目、おつかれさま。次はここだけね。" zh="第一遍辛苦了，下一遍只改这一处。" nod={!!take0?.good} />
+              <Note ja="一回目、おつかれさま。次はここだけ。" zh="下一遍只改这一处。" />
               {take0?.good && <Good ja={take0.good} onHear={hear} />}
               <div className="fix-card">
                 <div className="fix-head">
@@ -969,11 +968,11 @@ export default function Retell() {
               </div>
             </>
           ) : take0 ? (
-            <SenseiLine nod ja="内容はばっちり。次の人にも話してみましょうね。" zh="讲得不错，内容不用改，再讲一遍给下一个人。" />
+            <Note ja="内容はばっちり。次の人にも話してみよう。" zh="内容不用改，再讲一遍给下一个人。" />
           ) : null}
         </div>
       )}
-      {round === 2 && !talking && !busy && <SenseiLine ja="あと一回。いちばん言いたいことだけで大丈夫ですよ。" zh="最后一遍，时间短一点，挑最想说的讲。" />}
+      {round === 2 && !talking && !busy && <Note ja="あと一回。いちばん言いたいことだけで大丈夫。" zh="最后一遍，时间短一点，挑最想说的讲。" />}
       {error && <p className="error">{error}</p>}
     </main>
   );

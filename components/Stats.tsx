@@ -4,7 +4,6 @@ import Link from "next/link";
 import {
   dayKey,
   streak,
-  teacherPlan,
   mastered,
   resetProgress,
   stepsDone,
@@ -15,7 +14,6 @@ import {
 import { allTime, formatDuration, lastDays, weeks } from "@/lib/client/metrics";
 import { Bars, Line } from "./Charts";
 import Reminders from "./Reminders";
-import { SenseiFace, speak } from "./Sensei";
 import { useHydrated } from "@/lib/client/hydrated";
 
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`;
@@ -31,7 +29,6 @@ export default function Stats() {
   const finished = allScenarios(p).filter((s) => Object.values(stepsDone(p, s)).every(Boolean)).length;
   const retells = (p.retells ?? []).slice(-14);
   const hydrated = useHydrated();
-  const t = hydrated ? teacherPlan() : null;
   const today = dayKey();
   const days21 = lastDays(21);
   const top = Math.max(1, ...days21.map((d) => p.days[d] ?? 0));
@@ -50,27 +47,10 @@ export default function Stats() {
       <Link href="/me" className="back">← 先生</Link>
       <header className="page-mast">
         <div>
-          <h1>メモと記録</h1>
-          <p className="muted">森先生的信，和开口时长、反应速度、发音的变化</p>
+          <h1>記録</h1>
+          <p className="muted">开口时长、反应速度、发音的变化</p>
         </div>
       </header>
-      {(t?.letter_ja || t?.note_zh) && (
-        <div className="sensei-line letter-line">
-          <SenseiFace size={44} />
-          <div className="sensei-letter">
-            {t.letter_ja && (
-              <div className="sensei-ja">
-                <span>{t.letter_ja}</span>
-                <button className="bag-play" aria-label="聞く" onClick={() => speak(t.letter_ja!)}>
-                  ▶
-                </button>
-              </div>
-            )}
-            {t.note_zh && <p className="zh">{t.note_zh}</p>}
-            <div className="sig">森より</div>
-          </div>
-        </div>
-      )}
       <div className="me-card">
         <div className="me-nums">
           <span>

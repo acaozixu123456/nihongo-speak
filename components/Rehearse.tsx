@@ -148,7 +148,7 @@ export default function Rehearse() {
           <span className="kicker">演完了</span>
           <span className="today-title">{current.titleZh}</span>
           <span className="today-zh">真说完以后回来，告诉我哪句没说出来，我把它变成下次能用的话。</span>
-          <Link href="/" className="today-go">今日へ</Link>
+          <Link href="/speak" className="today-go">話すへ</Link>
         </div>
       ) : debrief ? (
         <div className="today rehearse">

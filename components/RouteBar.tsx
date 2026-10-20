@@ -8,7 +8,7 @@ import { makingText, useRadioMaking } from "@/lib/client/moyu";
 const SEE_MS = 1800; // time to look at the result before the next stop is announced
 const COUNT = 3;
 
-// On top of whichever page is today's current stop: × back to 今日, and one segment per stop.
+// On top of whichever page is today's current stop: × back to 聴く, and one segment per stop.
 // When a page reports its part done, the next stop is announced and opens after 3 seconds, unless the
 // learner touches the page meanwhile (another round, a sentence to hear): then the page stays, and the
 // next stop waits as a small link in the bar.
@@ -90,7 +90,7 @@ export default function RouteBar() {
   return (
     <>
       <div className="route-bar">
-        <button className="route-x" onClick={() => router.push("/")} aria-label="回到今日">
+        <button className="route-x" onClick={() => router.push("/")} aria-label="閉じる">
           ×
         </button>
         <div className="route-segs">

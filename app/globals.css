@@ -1645,7 +1645,7 @@ button.today-go { width: 100%; border: none; cursor: pointer; }
 .vword .sensei-face { align-self: center; flex: none; }
 
 /* Bottom tabs: 今日 聴く 話す 先生, on the four tab pages only. */
-.tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; display: grid; grid-template-columns: repeat(4, 1fr); max-width: 560px; margin: 0 auto; padding: 7px 6px calc(env(safe-area-inset-bottom) + 6px); background: var(--card); border-top: 1px solid var(--line); }
+.tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; display: grid; grid-template-columns: repeat(3, 1fr); max-width: 560px; margin: 0 auto; padding: 7px 6px calc(env(safe-area-inset-bottom) + 6px); background: var(--card); border-top: 1px solid var(--line); }
 .tab { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 2px 0; font-family: var(--ja); font-size: 11px; color: var(--muted); text-decoration: none; -webkit-tap-highlight-color: transparent; }
 .tab.on { color: var(--accent); font-weight: 700; }
 .tab-i { width: 26px; height: 26px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
@@ -1888,3 +1888,31 @@ body:has(.on-air) .ask-acts, body:has(.on-air) .ask-bar:not(.ask-acts .ask-bar) 
 .nw-loop { margin-right: 6px; font-size: 12px; }
 @keyframes nw-up { from { transform: translateY(100%); } to { transform: none; } }
 @keyframes nw-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* Plain result lines in practice pages (森先生 herself only appears on the 先生 page). */
+.fb-line { margin: 12px 0 6px; }
+.fb-line-ja { display: flex; align-items: center; gap: 8px; font-family: var(--ja); font-size: 16px; font-weight: 500; line-height: 1.5; }
+.fb-line-zh { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.fb-line .spin { flex: none; border-color: var(--line); border-top-color: var(--accent); }
+.fb-line.wait .fb-line-ja { color: var(--muted); font-weight: 400; }
+
+/* 先生 page */
+.sp-head { display: flex; align-items: center; gap: 14px; margin: 4px 0 14px; }
+.sp-head h1 { margin: 0; font-size: 21px; line-height: 1.2; }
+.sp-head small { display: block; font-family: var(--ja); font-size: 13px; color: var(--muted); margin-top: 2px; }
+.sp-letter { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 16px 16px 12px 18px; box-shadow: var(--shadow); }
+.sp-letter::before { content: ""; position: absolute; left: 30px; top: -9px; width: 16px; height: 16px; background: var(--card); border-left: 1px solid var(--line); border-top: 1px solid var(--line); transform: rotate(45deg); }
+.sp-letter-ja { display: flex; align-items: flex-start; gap: 10px; font-family: var(--ja); font-size: 16px; line-height: 1.8; }
+.sp-letter-ja span { flex: 1; }
+.sp-letter-ja .bag-play { margin-top: 2px; }
+.sp-letter-zh { font-size: 13px; color: var(--muted); line-height: 1.65; margin: 8px 0 0; }
+.sp-zh { margin-top: 6px; padding: 0; border: 0; background: none; font-size: 13px; color: var(--muted); cursor: pointer; }
+.sp-letter .sig { text-align: right; font-family: var(--serif); font-size: 14px; color: var(--muted); margin-top: 2px; }
+.sp-blk { margin-top: 14px; }
+.sp-blk .memo-blk { margin-top: 0; }
+.sp-blk .pil-go { margin-top: 10px; }
+.sp-rec { margin: 0; }
+.sp-rec .me-nums .chev { color: var(--faint); font-size: 20px; }
+.sp-rec-news { margin-top: 12px; font-size: 13px; color: var(--muted); }
+.sp-rec-news b { color: var(--text); font-weight: 500; margin: 0 2px; }
+.sp-rec-news small { font-size: 12px; }

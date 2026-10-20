@@ -8,11 +8,11 @@ import { useHydrated } from "@/lib/client/hydrated";
 import { current, heardToday, plan, quietPref, startRoute, useRoute } from "@/lib/client/route";
 import { retellBlocker, retellList } from "@/lib/client/retell-history";
 import { RetellRow } from "./RetellRows";
-import { SenseiLine } from "./Sensei";
+import Note from "./Note";
 import { FixBlock } from "./TeacherMemo";
 
-// 話す: 三回話す on top, the day's most important speaking: 森先生 names the one thing that stops the learner most and today's story, with up to two
-// told before that she would tell again (all of them in /retell/list); then the other ways to talk.
+// 話す: 三回話す on top, the day's most important speaking: the one thing that stops the learner most and today's story, with up to two
+// told before worth telling again (all of them in /retell/list); then the other ways to talk.
 export default function SpeakTab() {
   const p = useProgress();
   const hydrated = useHydrated();
@@ -42,9 +42,8 @@ export default function SpeakTab() {
             <span>三回話す</span>
             <Link href="/retell/list">一覧{list.times ? ` ${list.times}回` : ""} ›</Link>
           </div>
-          <SenseiLine
-            mute
-            ja={fix ? "ここで一番止まっています。" : list.today.toldToday ? "今日はもう話しましたね。" : "今日はこれを話しましょう。"}
+          <Note
+            ja={fix ? "ここで一番止まっています。" : list.today.toldToday ? "今日はもう話しました。" : "今日はこれを話そう。"}
             zh={fix ? "今天讲的时候，用上下面这句" : undefined}
           />
           {fix && <FixBlock f={fix} />}
