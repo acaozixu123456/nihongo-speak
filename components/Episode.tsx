@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { makeRadio, makingText, radioClips, useRadioMaking, type Clip, type ClipState, type RadioPart } from "@/lib/client/moyu";
+import { makingText, newsRadio, radioClips, useRadioMaking, type Clip, type ClipState, type RadioPart } from "@/lib/client/moyu";
 import { newsItems } from "@/lib/client/news";
 import { mixRadio, type Mixed } from "@/lib/client/radio-mix";
 import { play, preload, SILENCE, ttsUrl, unlock } from "@/lib/client/player";
@@ -48,7 +48,7 @@ export function NewEpisode() {
     const id = new URLSearchParams(location.search).get("news");
     const a = id && newsItems().find((x) => x.id === id);
     if (a) {
-      makeRadio(undefined, a).then(
+      newsRadio(a).then(
         (ep) => !gone && router.replace(`/ep/${ep.id}`),
         () => !gone && router.replace("/listen"),
       );

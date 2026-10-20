@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { dueSkillCount, teacherFix, teacherPlan, todaysCards, useProgress, weakList } from "@/lib/client/progress";
+import { addDays } from "@/lib/progress-model";
+import { dayKey, dueSkillCount, teacherFix, teacherPlan, todaysCards, useProgress, weakList } from "@/lib/client/progress";
 import { useHydrated } from "@/lib/client/hydrated";
 import { FixBlock, GoodBlock } from "./TeacherMemo";
 import { SenseiFace, SenseiSays } from "./Sensei";
@@ -15,6 +16,10 @@ export default function Me() {
   const good = t?.good;
   const fix = hydrated ? teacherFix(p) : null;
   const n = (x: number) => (hydrated && x > 0 ? <em>{x}</em> : null);
+  // 分かった？ of the last 7 days: how much of the news was understood the first time, without the text.
+  const week = addDays(dayKey(), -6);
+  const got = hydrated ? Object.values(p.news ?? {}).filter((m) => m.heard && m.heard >= week && m.got !== undefined) : [];
+  const most = got.filter((m) => m.got === 2).length;
 
   return (
     <main className="page">
@@ -46,6 +51,12 @@ export default function Me() {
         <Link href="/weak" className="pl"><b>苦手</b><span>我常错的地方</span>{n(hydrated ? weakList(p).length : 0)}</Link>
         <Link href="/bag" className="pl"><b>フレーズ帳</b><span>收藏的句子</span></Link>
         <Link href="/stats" className="pl"><b>メモと記録</b><span>她的信・记录</span></Link>
+        {got.length > 0 && (
+          <Link href="/listen" className="pl">
+            <b>ニュース</b>
+            <span>这周第一遍听懂大部分 {most}/{got.length} 篇</span>
+          </Link>
+        )}
       </div>
     </main>
   );

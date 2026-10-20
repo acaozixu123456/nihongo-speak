@@ -78,7 +78,8 @@ const REACTIONS: Record<string, string[]> = {
 type Key = { ja: string; kana?: string };
 // pool: more words from the story, for the keywords that take a learned one's place.
 // title: how the story is stored in the history; ja / zh: how it is shown.
-type Topic = { title: string; ja: string; zh: string; about: string; keys: Key[]; pool: Key[]; starters: string[]; ep?: string; news?: string };
+// opinion: a starter for the third telling only (the learner's own view). model: the story told well, shown after.
+type Topic = { title: string; ja: string; zh: string; about: string; keys: Key[]; pool: Key[]; starters: string[]; ep?: string; news?: string; opinion?: string; model?: string[] };
 
 const epKeys = (ep: Progress["episodes"][number]) =>
   (ep.story?.keys.length ? ep.story.keys : (ep.words ?? [])).slice(0, 3).map((w) => ({ ja: w.ja, kana: w.kana }));
@@ -107,7 +108,9 @@ function newsTopic(a: NewsArticle): Topic {
     keys: a.keys.slice(0, 3).map((k) => ({ ja: k.ja, kana: k.kana })),
     pool: [...a.keys, ...a.words].map((w) => ({ ja: w.ja, kana: w.kana })),
     news: a.id,
-    starters: ["今日のニュースで、〜と言っていました。", "〜そうです。", "わたしは〜と思います。"],
+    starters: ["ニュースで、〜と言っていました。", "〜そうです。"],
+    opinion: "わたしは〜と思います。",
+    model: a.summary,
   };
 }
 
@@ -722,6 +725,20 @@ export default function Retell() {
                 </div>
               ))}
             </div>
+            {topic.model && topic.model.length > 0 && (
+              <>
+                <span className="kicker" style={{ marginTop: 18 }}>お手本</span>
+                <div className="card">
+                  {topic.model.map((ja) => (
+                    <div key={ja} className="note">
+                      <div className="note-main" onClick={() => hear(ja)}>
+                        <div className="ja">{ja}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
             {along ? (
               <SayAlong lines={end.natural.map((x) => ({ ja: x.ja, zh: x.zh }))} voice={RADIO_VOICE.A} onClose={() => setAlong(false)} />
             ) : (
@@ -819,6 +836,11 @@ export default function Retell() {
             {shownT.starters.map((s) => (
               <div key={s}>{s}</div>
             ))}
+          </div>
+        )}
+        {!warming && round === 2 && shownT.opinion && (
+          <div className="retell-starters">
+            <div>{shownT.opinion}</div>
           </div>
         )}
         {!warming && round === 0 && carry && <span className="retell-focus">这次留意：{carry.focus_zh}</span>}

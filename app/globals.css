@@ -1860,3 +1860,17 @@ body:has(.on-air) .ask-acts, body:has(.on-air) .ask-bar:not(.ask-acts .ask-bar) 
 .nw-got-row { display: flex; justify-content: center; gap: 8px; margin-top: 10px; }
 .nw-row-st { flex: none; margin-left: auto; font-size: 12px; color: var(--muted); }
 .nw-row-st.go { color: var(--accent); font-weight: 700; }
+.nw-page:has(.nw-end) { padding-bottom: 130px; }
+.nw-end { display: grid; gap: 12px; margin-top: 22px; }
+.nw-word-say { display: flex; align-items: center; gap: 6px; border: none; background: none; padding: 0; color: var(--text); cursor: pointer; text-align: left; }
+.nw-word-say i { font-style: normal; font-size: 12px; opacity: 0.55; }
+.nw-word .star { flex: none; }
+.nw-word span { flex: 1; }
+.nw-sdots { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 4px; }
+.nw-sdots span { width: 8px; height: 8px; border-radius: 50%; background: var(--soft); }
+.nw-sdots span.on { background: var(--muted); }
+.nw-sdots span.now { background: var(--accent); }
+.nw-wait { height: 3px; margin: 16px auto 8px; width: 60%; border-radius: 3px; background: var(--accent); transform-origin: left; animation: nw-wait linear forwards; }
+@keyframes nw-wait { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.nw-tap { display: block; text-align: center; }
+.pl .nw-row-st { flex: none; }

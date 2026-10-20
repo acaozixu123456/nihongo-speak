@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { calls } from "@/content/calls";
 import { makeRadio } from "./moyu";
-import { morning, newsItems, newsMinutes } from "./news";
+import { listenSet, newsDay, newsMinutes } from "./news";
 import { dayKey, dueSkillCount, todaysCards, retellToday, teacherFix, teacherPlan, weakItems, weakList, type Progress } from "./progress";
 
 // 今日のルート: one fixed line of stops for today (listen → speak → the teacher), so opening the app
@@ -84,8 +84,9 @@ export function heardToday(p: Progress) {
 // The stops for today, from what is due. A route made before the new episode is written starts
 // with something else, so there is no waiting.
 export function plan(p: Progress, quiet: boolean): Stop[] {
-  const news = morning(newsItems());
-  if (news.length) return newsPlan(p, quiet, news.length, newsMinutes(news));
+  // The news not heard yet; when all of it was heard on earlier days, the day goes on without listening again.
+  const news = listenSet(p);
+  if (news.items.length) return newsPlan(p, quiet, news.fresh ? news.items.length : 0, newsMinutes(news.items), news.day);
   const ep = todaysEpisode(p);
   const epHref = ep ? `/ep/${ep.id}` : NEW_EP;
   // min: what each stop really takes, so the total on the start card is honest.
@@ -121,16 +122,17 @@ export function plan(p: Progress, quiet: boolean): Stop[] {
   return [...lead, ...episode, ...(lead === review ? [] : review)];
 }
 
-// A day around this morning's NHK news: all of it on the train (each article twice), 三回話す on one of
+// A day around the NHK news: what is not heard yet on the train (each article twice), 三回話す on one of
 // them, a call, then the teacher's point, practice and the sentences due.
-function newsPlan(p: Progress, quiet: boolean, n: number, min: number): Stop[] {
-  const listen: Stop = { key: "listen", ja: "聴く", meta: `今朝のニュース ${n}本`, href: "/news", min: min * 2 };
-  if (quiet) return [listen, { key: "flow", ja: "流す", meta: "心の中で", href: "/moyu", min: 10 }];
+// n: articles not heard yet (0: none, so no listening stop); min: both passes of them.
+function newsPlan(p: Progress, quiet: boolean, n: number, min: number, day: string): Stop[] {
+  const listen: Stop[] = n ? [{ key: "listen", ja: "聴く", meta: `${newsDay(day)} ${n}本`, href: "/news", min }] : [];
+  if (quiet) return [...listen, { key: "flow", ja: "流す", meta: "心の中で", href: "/moyu", min: 10 }];
   const cards = todaysCards(p).length;
   const review: Stop[] = cards > 0 ? [{ key: "review", ja: "復習", meta: `${cards}文`, href: "/review", min: Math.ceil(cards / 2) }] : [];
-  const day = Number(dayKey().replace(/-/g, ""));
+  const d = Number(dayKey().replace(/-/g, ""));
   const pool = calls.filter((c) => c.person);
-  const call = (pool.length ? pool : calls)[day % (pool.length || calls.length)];
+  const call = (pool.length ? pool : calls)[d % (pool.length || calls.length)];
   const speak: Stop = retellToday(p)
     ? { key: "quick", ja: "話す", meta: `瞬間 ${QUICK_N}問`, href: "/quick", min: 3 }
     : { key: "retell", ja: "話す", meta: "三回", href: "/retell", min: 10 };
@@ -138,7 +140,7 @@ function newsPlan(p: Progress, quiet: boolean, n: number, min: number): Stop[] {
   const fix: Stop[] = f ? [{ key: "fix", ja: "直す", meta: f.better, href: `/quick?drill=${encodeURIComponent(f.tag)}`, min: 1 }] : [];
   const skills = dueSkillCount(p) + weakItems(p, 3).length;
   const practice: Stop[] = skills > 0 ? [{ key: "skills", ja: "練習", meta: `前の ${Math.min(skills, 12)}問`, href: "/practice", min: 5 }] : [];
-  return [listen, speak, { key: "call", ja: "電話", meta: call.who, href: `/call/${call.id}`, min: 4 }, ...fix, ...practice, ...review];
+  return [...listen, speak, { key: "call", ja: "電話", meta: call.who, href: `/call/${call.id}`, min: 4 }, ...fix, ...practice, ...review];
 }
 
 // Which of the three cards on 今日 a stop belongs to.
