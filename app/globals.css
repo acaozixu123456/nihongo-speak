@@ -1819,7 +1819,9 @@ body:has(.on-air) .ask-acts, body:has(.on-air) .ask-bar:not(.ask-acts .ask-bar) 
 .nw-page ruby rt { font-size: 10px; font-weight: 400; color: var(--muted); }
 .nw-date { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
 .nw-zh { font-size: 13.5px; color: var(--muted); line-height: 1.6; margin: 0 2px 6px; }
-.nw-para { background: var(--card); border-radius: 14px; padding: 10px 16px 12px; margin-top: 10px; }
+.nw-para { margin-top: 30px; }
+.nw-para:first-child { margin-top: 6px; }
+.nw-s + .nw-s { margin-top: 14px; }
 .nw-s p { margin: 0; padding: 1px 0; font-family: var(--ja); font-size: 16px; font-weight: 400; line-height: 1.95; cursor: pointer; }
 .rb { position: relative; }
 .rb::before { content: attr(data-r); position: absolute; left: 50%; top: -0.8em; transform: translateX(-50%); white-space: nowrap; font-size: 8.5px; font-weight: 400; letter-spacing: 0; line-height: 1; color: #aaa294; pointer-events: none; }
