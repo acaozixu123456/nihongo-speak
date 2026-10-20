@@ -9,20 +9,25 @@ import { setAudioSession } from "./recorder";
 // with the screen locked; the next round is made while this one plays. For the NHK news pages.
 
 export type Phase = "idle" | "loading" | "playing" | "paused" | "done";
-export const RATES = [0.9, 1, 1.1];
+export const RATES = [0.8, 1, 1.2, 1.4];
 const RATE_KEY = "nihongo-speak:news-rate";
+// Loop: off, the sentence playing, or the whole round (the article) again and again.
+export type Loop = "off" | "one" | "all";
+export const LOOPS: Loop[] = ["off", "one", "all"];
+const LOOP_KEY = "nihongo-speak:news-loop";
 
 // onRoundEnd may hold the next round back until it settles (a question between rounds).
 // idx, seek: the clip's place in the round as passed in, even when prepare dropped one that failed.
-export function useJoined(rounds: Clip[][], o: { album: string; onRoundEnd?: (round: number) => void | Promise<void>; onDone?: () => void }) {
+export function useJoined(rounds: Clip[][], o: { album: string; loopable?: boolean; onRoundEnd?: (round: number) => void | Promise<void>; onDone?: () => void }) {
   const audio = useRef<HTMLAudioElement>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [round, setRound] = useState(0);
   const [idx, setIdx] = useState(-1);
   const [frac, setFrac] = useState(0);
   const [rate, setRateState] = useState(1);
+  const [loop, setLoopState] = useState<Loop>("off");
   const [error, setError] = useState("");
-  const s = useRef({ cur: null as Prepared | null, round: 0, next: null as Promise<Prepared> | null, rate: 1, rounds, o }).current;
+  const s = useRef({ cur: null as Prepared | null, round: 0, next: null as Promise<Prepared> | null, rate: 1, loop: "off" as Loop, hold: -1, rounds, o }).current;
   s.rounds = rounds;
   s.o = o;
 
@@ -31,6 +36,8 @@ export function useJoined(rounds: Clip[][], o: { album: string; onRoundEnd?: (ro
     try {
       const r = Number(localStorage.getItem(RATE_KEY));
       if (RATES.includes(r)) setRate(r);
+      const l = localStorage.getItem(LOOP_KEY) as Loop | null;
+      if (o.loopable && l && LOOPS.includes(l)) setLoop(l);
     } catch {}
     const el = audio.current;
     return () => {
@@ -51,6 +58,25 @@ export function useJoined(rounds: Clip[][], o: { album: string; onRoundEnd?: (ro
     } catch {}
   }
 
+  function setLoop(l: Loop) {
+    s.loop = l;
+    s.hold = s.cur ? curIdx() : -1;
+    setLoopState(l);
+    try {
+      localStorage.setItem(LOOP_KEY, l);
+    } catch {}
+  }
+
+  // The kept clip the audio is in now.
+  function curIdx() {
+    const cur = s.cur;
+    const a = audio.current;
+    if (!cur || !a) return -1;
+    let i = 0;
+    while (i + 1 < cur.starts.length && cur.starts[i + 1] <= a.currentTime) i++;
+    return i;
+  }
+
   const make = (i: number) => (i < s.rounds.length ? prepare(s.rounds[i]) : null);
 
   function load(prep: Prepared, i: number) {
@@ -61,6 +87,7 @@ export function useJoined(rounds: Clip[][], o: { album: string; onRoundEnd?: (ro
     s.round = i;
     setRound(i);
     setIdx(-1);
+    s.hold = -1;
     a.src = prep.url;
     a.defaultPlaybackRate = s.rate;
     a.playbackRate = s.rate;
@@ -88,6 +115,13 @@ export function useJoined(rounds: Clip[][], o: { album: string; onRoundEnd?: (ro
   }
 
   async function onEnded() {
+    const a = audio.current;
+    if (a && s.cur && s.loop !== "off") {
+      // Again from the start of the sentence held, or of the round.
+      a.currentTime = s.loop === "one" && s.hold >= 0 ? s.cur.starts[s.hold] + 0.01 : 0;
+      a.play().catch(() => {});
+      return;
+    }
     const hold = s.o.onRoundEnd?.(s.round);
     const next = s.next;
     if (hold) {
@@ -120,6 +154,14 @@ export function useJoined(rounds: Clip[][], o: { album: string; onRoundEnd?: (ro
     const t = a.currentTime;
     let i = 0;
     while (i + 1 < cur.starts.length && cur.starts[i + 1] <= t) i++;
+    // 1文 loop: the moment the next sentence starts, back to the start of the one held.
+    if (s.loop === "one") {
+      if (s.hold < 0) s.hold = i;
+      else if (i === s.hold + 1 && t - cur.starts[i] < 0.6) {
+        a.currentTime = cur.starts[s.hold] + 0.01;
+        return;
+      }
+    }
     const end = cur.starts[i + 1] ?? cur.total;
     setFrac(Math.min(1, (t - cur.starts[i]) / Math.max(0.1, end - cur.starts[i] - 0.4)));
     setIdx((was) => {
@@ -138,6 +180,7 @@ export function useJoined(rounds: Clip[][], o: { album: string; onRoundEnd?: (ro
     const a = audio.current!;
     const cur = s.cur;
     if (!cur) return;
+    s.hold = Math.min(Math.max(0, k), cur.clips.length - 1);
     if (k >= cur.clips.length) a.currentTime = Math.max(0, cur.total - 0.05);
     else a.currentTime = cur.starts[Math.max(0, k)] + 0.01;
     if (a.paused) a.play().catch(() => {});
@@ -203,5 +246,5 @@ export function useJoined(rounds: Clip[][], o: { album: string; onRoundEnd?: (ro
   // The clip now playing, as the round passed in (prepare may have dropped one that failed).
   const clip = s.cur && idx >= 0 ? s.cur.clips[idx] : null;
   const total = s.cur?.total ?? 0;
-  return { audioProps, phase, round, idx: origOf(idx), clip, frac, rate, setRate, error, start, toggle, seek, again, skip, total, time: () => audio.current?.currentTime ?? 0 };
+  return { audioProps, phase, round, idx: origOf(idx), clip, frac, rate, setRate, loop, setLoop, error, start, toggle, seek, again, skip, total, time: () => audio.current?.currentTime ?? 0 };
 }
