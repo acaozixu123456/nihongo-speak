@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo } from "react";
 import { unlock } from "@/lib/client/player";
 import { dayKey, ensureTitleJa, useProgress } from "@/lib/client/progress";
-import { morning, newsMinutes, newsToday, preloadNews, useNews } from "@/lib/client/news";
+import { listenSet, newsDay, newsMinutes, newsToTell, preloadNews, useNews } from "@/lib/client/news";
+import { newsRadio } from "@/lib/client/moyu";
 import { useHydrated } from "@/lib/client/hydrated";
 import { current, quietPref, startRoute, todaysEpisode, useRoute } from "@/lib/client/route";
 
 const md = (day: string) => `${Number(day.slice(5, 7))}/${Number(day.slice(8))}`;
 
-// 聴く: this morning's NHK news on top (all of it back to back, or one by one), then the radio and the
+// 聴く: the NHK news not heard yet on top (all of it back to back, or one by one), then the radio and the
 // rest, then the news of the days before.
 export default function ListenTab() {
   const p = useProgress();
@@ -19,12 +20,13 @@ export default function ListenTab() {
   const router = useRouter();
   const r = useRoute();
   const items = useNews();
-  const today = useMemo(() => (hydrated ? morning(items) : []), [hydrated, items]);
+  // The set is fixed once shown, so marking one heard doesn't move it off the list.
+  const set = useMemo(() => (hydrated ? listenSet(p, items) : { day: "", items: [], fresh: false }), [hydrated, items]); // eslint-disable-line react-hooks/exhaustive-deps
+  const today = set.items;
   const older = hydrated ? items.filter((a) => !today.includes(a)).slice(0, 8) : [];
   const ep = hydrated ? todaysEpisode(p) : null;
-  const talk = hydrated ? newsToday(p, items) : null;
-  // The radio after the news: Haru and Ken talk over the article to be told today (else the first).
-  const target = talk ?? today[0] ?? null;
+  // The article to tell tonight, marked from the start: Haru and Ken talk it over on the radio too.
+  const target = hydrated ? newsToTell(p, today, items) : null;
   const newsEp = target ? p.episodes.find((e) => e.news === target.id) : undefined;
   useEffect(() => {
     if (ep) ensureTitleJa(ep);
@@ -32,6 +34,10 @@ export default function ListenTab() {
   useEffect(() => {
     if (today.length) preloadNews(today);
   }, [today]);
+  // Its radio is made in the background, so the row plays on a tap.
+  useEffect(() => {
+    if (target && !newsEp && set.fresh) newsRadio(target).catch(() => {});
+  }, [target, newsEp, set.fresh]);
   const onRoute = current(r)?.key === "listen";
   const go = () => {
     unlock();
@@ -45,10 +51,10 @@ export default function ListenTab() {
         聴く<small>听</small>
       </h1>
       <section className="now-card">
-        <div className="kicker">今朝のニュース{today[0] ? ` · ${md(today[0].day)}` : ""}</div>
+        <div className="kicker">{set.day ? newsDay(set.day) : "ニュース"}</div>
         <div className="pil-what">
-          <div className="pil-t">{today.length ? `${today.length}本 · 約${newsMinutes(today)}分` : "まだありません"}</div>
-          <div className="pil-m">NHKやさしいことばニュース</div>
+          <div className="pil-t">{today.length ? `${set.fresh ? "新しい" : "全部聞いた · "}${today.length}本 · ${newsMinutes(today)}分` : "まだありません"}</div>
+          <div className="pil-m">2回ずつ · 1回目は文字なし</div>
         </div>
         {hydrated &&
           today.length > 0 &&
@@ -70,7 +76,7 @@ export default function ListenTab() {
                 <b>{a.title_ja}</b>
                 <span>{a.title_zh}</span>
               </div>
-              {talk?.id === a.id && mark(a.id)?.told !== dayKey() ? (
+              {target?.id === a.id && mark(a.id)?.told !== dayKey() ? (
                 <span className="nw-row-st go">話す</span>
               ) : mark(a.id)?.heard ? (
                 <span className="ep-ok">✓</span>

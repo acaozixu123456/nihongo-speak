@@ -12,7 +12,9 @@ export type Phase = "idle" | "loading" | "playing" | "paused" | "done";
 export const RATES = [0.9, 1, 1.1];
 const RATE_KEY = "nihongo-speak:news-rate";
 
-export function useJoined(rounds: Clip[][], o: { album: string; onRoundEnd?: (round: number) => void; onDone?: () => void }) {
+// onRoundEnd may hold the next round back until it settles (a question between rounds).
+// idx, seek: the clip's place in the round as passed in, even when prepare dropped one that failed.
+export function useJoined(rounds: Clip[][], o: { album: string; onRoundEnd?: (round: number) => void | Promise<void>; onDone?: () => void }) {
   const audio = useRef<HTMLAudioElement>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [round, setRound] = useState(0);
@@ -86,8 +88,12 @@ export function useJoined(rounds: Clip[][], o: { album: string; onRoundEnd?: (ro
   }
 
   async function onEnded() {
-    s.o.onRoundEnd?.(s.round);
+    const hold = s.o.onRoundEnd?.(s.round);
     const next = s.next;
+    if (hold) {
+      setPhase("loading");
+      await hold;
+    }
     if (!next) {
       setPhase("done");
       s.o.onDone?.();
@@ -124,14 +130,26 @@ export function useJoined(rounds: Clip[][], o: { album: string; onRoundEnd?: (ro
     });
   }
 
-  // To clip i of this round (as prepare kept them).
-  function seek(i: number) {
+  // Where clip k as prepare kept it was in the round passed in.
+  const origOf = (k: number) => (s.cur && k >= 0 ? s.rounds[s.round]?.indexOf(s.cur.clips[k]) ?? k : -1);
+
+  // To kept clip k of this round.
+  function seekKept(k: number) {
     const a = audio.current!;
     const cur = s.cur;
     if (!cur) return;
-    if (i >= cur.clips.length) a.currentTime = Math.max(0, cur.total - 0.05);
-    else a.currentTime = cur.starts[Math.max(0, i)] + 0.01;
+    if (k >= cur.clips.length) a.currentTime = Math.max(0, cur.total - 0.05);
+    else a.currentTime = cur.starts[Math.max(0, k)] + 0.01;
     if (a.paused) a.play().catch(() => {});
+  }
+
+  // To clip i of the round passed in (the next one kept, if that one failed).
+  function seek(i: number) {
+    const cur = s.cur;
+    if (!cur) return;
+    let k = 0;
+    while (k < cur.clips.length && origOf(k) < i) k++;
+    seekKept(k);
   }
 
   // Back to the start of this sentence (or the one before, right after a new one began).
@@ -139,11 +157,11 @@ export function useJoined(rounds: Clip[][], o: { album: string; onRoundEnd?: (ro
     const cur = s.cur;
     const a = audio.current;
     if (!cur || !a || idx < 0) return;
-    seek(a.currentTime - cur.starts[idx] > 1.5 ? idx : idx - 1);
+    seekKept(a.currentTime - cur.starts[idx] > 1.5 ? idx : idx - 1);
   }
 
   function skip() {
-    if (s.cur && idx >= 0) seek(idx + 1);
+    if (s.cur && idx >= 0) seekKept(idx + 1);
   }
 
   function toggle() {
@@ -185,5 +203,5 @@ export function useJoined(rounds: Clip[][], o: { album: string; onRoundEnd?: (ro
   // The clip now playing, as the round passed in (prepare may have dropped one that failed).
   const clip = s.cur && idx >= 0 ? s.cur.clips[idx] : null;
   const total = s.cur?.total ?? 0;
-  return { audioProps, phase, round, idx, clip, frac, rate, setRate, error, start, toggle, seek, again, skip, total, time: () => audio.current?.currentTime ?? 0 };
+  return { audioProps, phase, round, idx: origOf(idx), clip, frac, rate, setRate, error, start, toggle, seek, again, skip, total, time: () => audio.current?.currentTime ?? 0 };
 }

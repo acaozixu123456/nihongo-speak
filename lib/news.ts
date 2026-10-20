@@ -3,7 +3,7 @@ import { BlobNotFoundError, get, put } from "@vercel/blob";
 import { newsNotes } from "@/lib/claude";
 import { addDays } from "@/lib/progress-model";
 import { NEWS_DAYS, NEWS_VOICE, type NewsArticle } from "@/lib/news-model";
-import { nhkArticle, nhkList, nhkSession, plain, spoken, withReadings } from "@/lib/nhk";
+import { nhkArticle, nhkList, nhkSession, plain, spoken, spokenAll, withReadings } from "@/lib/nhk";
 
 // Every morning (cron, 8:30 JST) the newest NHKやさしいことばニュース articles are fetched, given our
 // notes and kept in one private Blob file the phone reads through /api/news. Their sentences are then
@@ -25,12 +25,14 @@ async function writeNews(f: NewsFile) {
 }
 
 // The articles of the last few days NHK put out that aren't kept yet, made one by one (a failed one is
-// tried again next time). Old ones are dropped.
-export async function refreshNews(today: string, opts: { days?: number } = {}): Promise<{ added: string[]; failed: string[]; file: NewsFile }> {
-  const file = await readNews();
+// tried again next time). Old ones are dropped. redo: make the kept ones of those days again too (after
+// the notes or the voice text changed).
+export async function refreshNews(today: string, opts: { days?: number; redo?: boolean } = {}): Promise<{ added: string[]; failed: string[]; file: NewsFile }> {
+  const read = await readNews();
   const s = await nhkSession();
   const list = await nhkList(s);
   const from = addDays(today, -(opts.days ?? 3));
+  const file = opts.redo ? { ...read, items: read.items.filter((a) => !list.some((n) => n.id === a.id && n.day >= from)) } : read;
   const have = new Set(file.items.map((a) => a.id));
   const todo = list.filter((n) => n.day >= from && !have.has(n.id));
   const added: string[] = [];
@@ -49,6 +51,7 @@ export async function refreshNews(today: string, opts: { days?: number } = {}): 
           rank: n.rank,
           title: a.title,
           title_ja: plain(a.title),
+          title_say: spokenAll(a.title),
           title_zh: notes.title_zh,
           sentences: flat.map((x, i) => ({ segs: x.segs, ja: plain(x.segs), say: spoken(x.segs), zh: zh.get(i + 1) ?? "", ...(x.p && i > 0 ? { p: true as const } : {}) })),
           words: notes.words,
@@ -70,14 +73,20 @@ export async function refreshNews(today: string, opts: { days?: number } = {}): 
     .filter((a) => a.day >= keepFrom)
     .sort((x, y) => (x.day === y.day ? x.rank - y.rank : x.day < y.day ? 1 : -1));
   const next = { made: Date.now(), items };
-  if (added.length || items.length !== file.items.length) await writeNews(next);
+  // A redo that failed keeps the article as it was.
+  for (const id of failed) {
+    const old = read.items.find((a) => a.id === id);
+    if (old && !items.some((a) => a.id === id)) items.push(old);
+  }
+  items.sort((x, y) => (x.day === y.day ? x.rank - y.rank : x.day < y.day ? 1 : -1));
+  if (added.length || items.length !== read.items.length) await writeNews(next);
   return { added, failed, file: next };
 }
 
 // The voice of every sentence of these articles, asked for once through the public address (the same one
 // the phone asks for), so the CDN has it. A few at a time.
 export async function warmVoices(base: string, items: NewsArticle[]) {
-  const urls = items.flatMap((a) => [a.title_ja, ...a.sentences.map((s) => s.say)].map((t) => ttsAddress(base, t)));
+  const urls = items.flatMap((a) => [a.title_say ?? a.title_ja, ...a.sentences.map((s) => s.say)].map((t) => ttsAddress(base, t)));
   let i = 0;
   let ok = 0;
   const worker = async () => {

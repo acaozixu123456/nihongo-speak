@@ -1008,6 +1008,9 @@ const TeacherSchema = z.object({
     })
     .nullable()
     .describe("明日まず直すことを一つ、画面に大きく出す。order が空なら null"),
+  news: z
+    .string()
+    .describe("「明日のニュース」から、明日三回話すのに一番いい記事の id を一つ、一字も変えずに（今の弱点を使う練習になるもの・仕事や生活の話に近いもの）。一覧がなければ空文字"),
 });
 export type TeacherPlan = z.infer<typeof TeacherSchema>;
 
@@ -1038,10 +1041,10 @@ const NewsNotesSchema = z.object({
   zh: z.array(z.object({ n: z.number(), zh: z.string().describe("その文の自然な中国語訳（簡体字）。訳だけ") })).describe("全部の文の訳。n は入力の文番号"),
   words: z
     .array(z.object({ ja: z.string().describe("本文に出てくる形の語・表現（読みの（）は付けない）"), kana: z.string().describe("読み（ひらがな）。本文の（）の読みに合わせる"), zh: z.string().describe("中国語の意味（短く）") }))
-    .describe("覚えておくと仕事や生活で使える語・表現を3〜5個。N3〜N2 レベルで、この記事の内容を話すのに必要なもの。人名・地名は入れない"),
+    .describe("覚えておくと仕事や生活で使える語・表現を3〜5個。N3〜N2 レベルで、この記事の内容を話すのに必要なもの。ja は辞書形（広がっています→広がる、捕まえた→捕まえる）。N4 までの基本語（情報、参加する、天気など）と人名・地名・国名は入れない"),
   keys: z
-    .array(z.object({ ja: z.string().describe("本文の語・短い表現（読みの（）は付けない）"), kana: z.string().describe("読み（ひらがな）"), zh: z.string().describe("中国語の意味（短く）") }))
-    .describe("この記事を自分の言葉で話すときの骨組みになる語を3個、話の順番に。見れば話の流れを思い出せるもの"),
+    .array(z.object({ ja: z.string().describe("本文の語（辞書形の名詞か動詞。読みの（）は付けない）"), kana: z.string().describe("読み（ひらがな）"), zh: z.string().describe("中国語の意味（短く）") }))
+    .describe("この記事を自分の言葉で話すときの骨組みになる語を3個、話の順番に。見れば話の流れを思い出せるもの。辞書形（盗んだり→盗む）。人名・地名・国名・カタカナの固有名詞は入れない"),
   summary: z.array(z.string()).describe("記事の内容を、友だちに話すような自然な日本語の3文で（N4〜N3 の語と文法、です・ます）"),
 });
 export type NewsNotes = z.infer<typeof NewsNotesSchema>;

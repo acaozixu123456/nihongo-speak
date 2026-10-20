@@ -13,6 +13,7 @@ export type NewsArticle = {
   rank: number; // NHK's order within the day
   title: Seg[];
   title_ja: string;
+  title_say?: string; // what the voice is given for the title: NHK's readings for its kanji (a headline has few particles to guess from)
   title_zh: string;
   sentences: NewsSentence[];
   words: NewsWord[];

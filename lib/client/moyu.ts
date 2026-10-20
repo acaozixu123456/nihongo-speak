@@ -326,6 +326,18 @@ export function makingText(m: RadioMaking) {
   return "换 Claude 来写，大约还要一分钟";
 }
 
+// The episode about a news article, made once (聴く starts it in the background, so it is ready on a tap).
+const newsMaking = new Map<string, Promise<RadioEpisode>>();
+export function newsRadio(a: NewsArticle): Promise<RadioEpisode> {
+  let m = newsMaking.get(a.id);
+  if (!m) {
+    m = makeRadio(undefined, a);
+    m.catch(() => newsMaking.delete(a.id));
+    newsMaking.set(a.id, m);
+  }
+  return m;
+}
+
 // The new episode is saved with its notes (see saveEpisode), so it can be looked back on in 听.
 // The server streams how far the script has got before the episode itself.
 // news: this morning's NHK article, for an episode where the hosts talk it over.

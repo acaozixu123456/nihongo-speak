@@ -124,5 +124,7 @@ export async function nhkArticle(s: NhkSession, id: string): Promise<NhkArticle>
 export const plain = (segs: Seg[]) => segs.map((s) => s.t).join("");
 // What the voice is given: names by their reading.
 export const spoken = (segs: Seg[]) => segs.map((s) => (s.name && s.r ? s.r : s.t)).join("");
+// Every word NHK gives a reading by its reading: for headlines, which are too terse for the voice to guess (祈る read as 乗る).
+export const spokenAll = (segs: Seg[]) => segs.map((s) => s.r ?? s.t).join("");
 // With readings inline, for the AI: 経済（けいざい）.
 export const withReadings = (segs: Seg[]) => segs.map((s) => (s.r ? `${s.t}（${s.r}）` : s.t)).join("");
