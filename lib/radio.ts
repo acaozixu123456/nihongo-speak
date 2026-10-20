@@ -159,9 +159,14 @@ function weekTopic(now: Date) {
 // wish: a listener's request (点播), in their own words, usually Chinese. letter: what the learner
 // got wrong lately, read out in お便り. recent: words taught in the last few episodes, a few of which
 // come back so they are met again.
-function prompt(avoid: string[], wish?: string, letter?: Letter, recent: string[] = []) {
+// news: this morning's NHK やさしいことばニュース article the learner heard; the hosts talk it over.
+export type RadioNews = { title: string; summary: string[]; words: string[] };
+
+function prompt(avoid: string[], wish?: string, letter?: Letter, recent: string[] = [], news?: RadioNews) {
   const now = new Date(Date.now() + 9 * 3600 * 1000);
-  const topic = wish
+  const topic = news
+    ? `今朝のNHKニュース「${news.title}」（内容：${news.summary.join("")}）。リスナーは今朝このニュースを聞いた。open でハルが「今朝のニュースで〜」と紹介し、main ではニュースの事実は変えず足さずに、ハルとケンが自分たちの生活や仕事に引きつけてゆるく話す。ニュースの語（${news.words.join("、")}）を会話の中で自然に何度か使う`
+    : wish
     ? `リスナーからのリクエスト「${wish}」。このテーマで、日本で暮らす人に身近な話にする（open でハルがリクエストを紹介する）`
     : `今週のテーマ「${weekTopic(now)}」の中から、ひとつの話（今週は毎回このテーマなので、open で「今週は〜ウィーク」と軽く触れてよい）`;
   const mail = letter
@@ -182,7 +187,7 @@ const linesIn = (text: string) => text.match(/"gap"\s*:/g)?.length ?? 0;
 
 // Streams the show from Gemini so the phone can watch it being written (onLines), and so a request
 // that has stopped moving is noticed: one that sends nothing for a while is dropped.
-async function withGemini(avoid: string[], wish: string | undefined, letter: Letter | undefined, recent: string[], onLines: (n: number) => void): Promise<Radio> {
+async function withGemini(avoid: string[], wish: string | undefined, letter: Letter | undefined, recent: string[], onLines: (n: number) => void, news?: RadioNews): Promise<Radio> {
   const { project, token } = await vertexAccess();
   const { $schema, ...schema } = z.toJSONSchema(RadioSchema) as Record<string, unknown>;
   void $schema;
@@ -201,7 +206,7 @@ async function withGemini(avoid: string[], wish: string | undefined, letter: Let
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: SYSTEM }] },
-          contents: [{ role: "user", parts: [{ text: prompt(avoid, wish, letter, recent) }] }],
+          contents: [{ role: "user", parts: [{ text: prompt(avoid, wish, letter, recent, news) }] }],
           // Little thinking: the show is long, and with full thinking it sometimes ran past a minute.
           generationConfig: { responseMimeType: "application/json", responseJsonSchema: schema, temperature: 1, thinkingConfig: { thinkingLevel: "low" } },
         }),
@@ -257,12 +262,13 @@ export async function makeRadio(
   letter?: Letter,
   recent: string[] = [],
   onProgress: (m: Making) => void = () => {},
+  news?: RadioNews,
 ): Promise<Radio & { by: "gemini" | "claude" }> {
   if (vertexConfigured()) {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         if (attempt) onProgress({ stage: "retry" });
-        const r = await withGemini(avoid, wish, letter, recent, (lines) => onProgress({ stage: "write", lines }));
+        const r = await withGemini(avoid, wish, letter, recent, (lines) => onProgress({ stage: "write", lines }), news);
         return { ...(await withCheckedReadings(r)), letter, by: "gemini" };
       } catch (e) {
         console.warn("radio: Gemini failed", e);
@@ -270,6 +276,6 @@ export async function makeRadio(
     }
   }
   onProgress({ stage: "claude" });
-  const r = await makeRadioWithClaude(RadioSchema, SYSTEM, prompt(avoid, wish, letter, recent));
+  const r = await makeRadioWithClaude(RadioSchema, SYSTEM, prompt(avoid, wish, letter, recent, news));
   return { ...(await withCheckedReadings(r)), letter, by: "claude" };
 }

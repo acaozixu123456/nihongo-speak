@@ -23,6 +23,9 @@ export default function ListenTab() {
   const older = hydrated ? items.filter((a) => !today.includes(a)).slice(0, 8) : [];
   const ep = hydrated ? todaysEpisode(p) : null;
   const talk = hydrated ? newsToday(p, items) : null;
+  // The radio after the news: Haru and Ken talk over the article to be told today (else the first).
+  const target = talk ?? today[0] ?? null;
+  const newsEp = target ? p.episodes.find((e) => e.news === target.id) : undefined;
   useEffect(() => {
     if (ep) ensureTitleJa(ep);
   }, [ep]);
@@ -78,12 +81,19 @@ export default function ListenTab() {
       )}
       <div className="tab-label">ほかに</div>
       <div className="pl-grid">
-        <Link href={ep ? `/ep/${ep.id}` : "/episodes"} className="pl">
-          <b>ラジオ</b>
-          <span>{ep ? (ep.title_ja ?? ep.title_zh) : "ゆるっと日本ラジオ"}</span>
-        </Link>
-        {ep && (
-          <Link href={`/ep/${ep.id}/song`} className="pl">
+        {target ? (
+          <Link href={newsEp ? `/ep/${newsEp.id}` : `/ep/new?news=${target.id}`} className="pl">
+            <b>ラジオ</b>
+            <span>ハルとケンが今朝のニュースを話す</span>
+          </Link>
+        ) : (
+          <Link href={ep ? `/ep/${ep.id}` : "/episodes"} className="pl">
+            <b>ラジオ</b>
+            <span>{ep ? (ep.title_ja ?? ep.title_zh) : "ゆるっと日本ラジオ"}</span>
+          </Link>
+        )}
+        {(newsEp ?? ep) && (
+          <Link href={`/ep/${(newsEp ?? ep)!.id}/song`} className="pl">
             <b>洗脳歌</b>
             <span>把这期唱成歌</span>
           </Link>

@@ -774,9 +774,9 @@ export const RADIO_VOICE = { A: "ja-JP-AoiNeural", B: "ja-JP-KeitaNeural" } as c
 
 // Keep a new episode with its notes, and put its key sentences into review from tomorrow (today
 // they are practised in the episode's own 練習).
-export function saveEpisode(radio: Radio): RadioEpisode {
+export function saveEpisode(radio: Radio, news?: string): RadioEpisode {
   const p = read();
-  const ep: RadioEpisode = { ...radio, id: `r${Date.now()}`, date: dayKey() };
+  const ep: RadioEpisode = { ...radio, id: `r${Date.now()}`, date: dayKey(), ...(news && { news }) };
   const skip = new Set([...p.cards.map((c) => c.id), ...p.removedCards]);
   const fresh = new Map<string, Card>();
   for (const ph of radio.phrases) {

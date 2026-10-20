@@ -13,7 +13,7 @@ const str = (s: unknown, n: number): s is string => typeof s === "string" && s.l
 // on the learner's own topic when they asked for one (点播), with one of their recent mistakes as
 // the listener's letter (お便り).
 export async function POST(request: Request) {
-  const body = (await request.json()) as { kind: "script" | "radio"; weak?: unknown; cards?: unknown; scenes?: unknown; avoid?: unknown; wish?: unknown; recent?: unknown; letter?: { said?: unknown; better?: unknown; where?: unknown } };
+  const body = (await request.json()) as { kind: "script" | "radio"; weak?: unknown; cards?: unknown; scenes?: unknown; avoid?: unknown; wish?: unknown; recent?: unknown; news?: { title?: unknown; summary?: unknown; words?: unknown }; letter?: { said?: unknown; better?: unknown; where?: unknown } };
   try {
     if ((body.kind === "script" || body.kind === "radio") && !(await spend(body.kind))) return tooMany();
     if (body.kind === "script") {
@@ -38,6 +38,9 @@ export async function POST(request: Request) {
       const avoid = (Array.isArray(body.avoid) ? body.avoid : []).slice(-30).filter((t) => str(t, 60));
       const wish = str(body.wish, 100) && body.wish.trim() ? body.wish.trim() : undefined;
       const recent = (Array.isArray(body.recent) ? body.recent : []).slice(0, 24).filter((w): w is string => str(w, 20) && w.trim().length > 0);
+      const n = body.news;
+      const strs = (x: unknown, len: number, max: number) => (Array.isArray(x) ? x : []).slice(0, len).filter((w): w is string => str(w, max) && w.trim().length > 0);
+      const news = n && str(n.title, 120) && n.title.trim() ? { title: n.title.trim(), summary: strs(n.summary, 4, 200), words: strs(n.words, 8, 30) } : undefined;
       const l = body.letter;
       const letter =
         l && str(l.said, 200) && str(l.better, 200) && l.said && l.better
@@ -49,7 +52,7 @@ export async function POST(request: Request) {
         async start(c) {
           const send = (o: object) => c.enqueue(enc.encode(JSON.stringify(o) + "\n"));
           try {
-            send({ episode: await makeRadio(avoid, wish, letter, recent, (m) => send({ making: m })) });
+            send({ episode: await makeRadio(avoid, wish, letter, recent, (m) => send({ making: m }), news) });
           } catch (e) {
             console.error(e);
             send({ error: e instanceof Error ? e.message : "生成失败" });

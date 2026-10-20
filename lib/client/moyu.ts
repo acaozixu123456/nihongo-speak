@@ -3,6 +3,7 @@
 import type { Podcast as Episode } from "@/lib/claude";
 import { useSyncExternalStore } from "react";
 import type { Making, Radio } from "@/lib/radio";
+import type { NewsArticle } from "@/lib/news-model";
 import { listenIntro, NARRATION, ZH_VOICE } from "@/content/narration";
 import { AUDIO_CACHE, ttsUrl } from "./player";
 import {
@@ -327,7 +328,8 @@ export function makingText(m: RadioMaking) {
 
 // The new episode is saved with its notes (see saveEpisode), so it can be looked back on in 听.
 // The server streams how far the script has got before the episode itself.
-export async function makeRadio(wish?: string): Promise<RadioEpisode> {
+// news: this morning's NHK article, for an episode where the hosts talk it over.
+export async function makeRadio(wish?: string, news?: NewsArticle): Promise<RadioEpisode> {
   let seen: string[] = [];
   try {
     seen = JSON.parse(localStorage.getItem(RADIO_SEEN_KEY) ?? "[]");
@@ -337,7 +339,14 @@ export async function makeRadio(wish?: string): Promise<RadioEpisode> {
     const res = await fetch("/api/podcast", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ kind: "radio", avoid: seen.slice(-30), wish, letter: radioLetter(), recent: radioRecentWords() }),
+      body: JSON.stringify({
+        kind: "radio",
+        avoid: seen.slice(-30),
+        wish,
+        letter: radioLetter(),
+        recent: radioRecentWords(),
+        ...(news && { news: { title: news.title_ja, summary: news.summary, words: [...news.keys, ...news.words].map((w) => w.ja) } }),
+      }),
     });
     if (!res.ok || !res.body) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "生成失败");
     const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
@@ -357,7 +366,7 @@ export async function makeRadio(wish?: string): Promise<RadioEpisode> {
           try {
             localStorage.setItem(RADIO_SEEN_KEY, JSON.stringify([...seen, msg.episode.title_zh].slice(-30)));
           } catch {}
-          return saveEpisode(msg.episode);
+          return saveEpisode(msg.episode, news?.id);
         }
       }
     }
