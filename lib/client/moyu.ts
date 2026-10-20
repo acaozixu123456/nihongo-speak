@@ -24,7 +24,7 @@ import {
 // Each round is about ten minutes of short clips. Every clip is synthesized once, cached on the
 // phone, and the round's clips are joined into one MP3 so playback carries on with the screen locked.
 
-export type Block = "radio" | "listen" | "quick" | "review" | "fix" | "podcast";
+export type Block = "radio" | "listen" | "quick" | "review" | "fix" | "podcast" | "news";
 export const BLOCK_LABEL: Record<Block, string> = {
   radio: "趣味电台",
   listen: "偷听",
@@ -32,6 +32,7 @@ export const BLOCK_LABEL: Record<Block, string> = {
   review: "复习收藏",
   fix: "错句对比",
   podcast: "今天的播客",
+  news: "NHKやさしいことばニュース",
 };
 
 export type Part = { voice: string; text?: string; pauseMs?: number };

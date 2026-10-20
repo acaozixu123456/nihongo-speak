@@ -8,6 +8,7 @@ import { teacherFix, useProgress } from "@/lib/client/progress";
 import { FixBlock, Marked } from "./TeacherMemo";
 import { SenseiLine, speak } from "./Sensei";
 import { useHydrated } from "@/lib/client/hydrated";
+import { morning, newsToday, preloadNews, useNews } from "@/lib/client/news";
 import { PILLARS, finished, oneFix, pillarOf, plan, quietPref, setQuiet, startRoute, todaysEpisode, useRoute, type Pillar, type Stop } from "@/lib/client/route";
 
 const WEEKDAY_JA = ["日", "月", "火", "水", "木", "金", "土"];
@@ -48,6 +49,12 @@ export default function Home() {
   const r = useRoute();
   const [quiet, setQ] = useState(false);
   useEffect(() => setQ(r?.quiet ?? quietPref()), [r]);
+  // This morning's news, fetched and its voice kept on the phone before the train.
+  const items = useNews();
+  useEffect(() => {
+    const today = morning(items);
+    if (today.length) preloadNews(today);
+  }, [items]);
 
   const d = new Date();
   const date = hydrated ? `${d.getMonth() + 1}月${d.getDate()}日（${WEEKDAY_JA[d.getDay()]}）` : "";
@@ -126,16 +133,23 @@ export default function Home() {
   }
 
   const [hi, hiZh] = greeting();
-  const [lead, leadZh] = LEAD[now!];
+  const [lead, leadZh] = s.href === "/news" ? (["まずは今朝のニュースを聴きましょう。", "先听今早的新闻吧。"] as const) : LEAD[now!];
   const say = at === 0 ? [hi + lead, hiZh + leadZh] : [lead, leadZh];
   const tf = teacherFix(p);
   const fix = s.key === "fix" ? tf : null;
   const ep = todaysEpisode(p);
+  const news = newsToday(p);
   let title = s.ja;
   let sub = s.meta;
-  if (s.key === "listen") {
+  if (s.key === "listen" && s.href === "/news") {
+    title = "今朝のニュース";
+    sub = `${s.meta.replace("今朝のニュース ", "")} · 声を出さなくていい`;
+  } else if (s.key === "listen") {
     title = s.meta === "新しい回" || !ep ? "今日の回を作ります" : (ep.title_ja ?? ep.title_zh);
     sub = "ゆるっと日本ラジオ";
+  } else if (s.key === "retell" && news) {
+    title = news.title_ja;
+    sub = "今朝のニュースを、自分の言葉で三回";
   } else if (s.key === "retell") {
     title = "さっきの話を三回話す";
     sub = "听完的那期，用自己的话讲三遍";

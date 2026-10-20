@@ -1030,3 +1030,29 @@ export async function teacherPlan(record: string): Promise<TeacherPlan> {
   if (!res.parsed_output) throw new Error(`AI 返回格式不对（${res.stop_reason}）`);
   return res.parsed_output;
 }
+
+// NHKやさしいことばニュース: each article's Chinese, its words and the skeleton for 三回話す, once when it is
+// fetched (lib/news.ts). The text comes with NHK's readings in （）; the words keep those readings.
+const NewsNotesSchema = z.object({
+  title_zh: z.string().describe("見出しの中国語訳（簡体字、短く）"),
+  zh: z.array(z.object({ n: z.number(), zh: z.string().describe("その文の自然な中国語訳（簡体字）。訳だけ") })).describe("全部の文の訳。n は入力の文番号"),
+  words: z
+    .array(z.object({ ja: z.string().describe("本文に出てくる形の語・表現（読みの（）は付けない）"), kana: z.string().describe("読み（ひらがな）。本文の（）の読みに合わせる"), zh: z.string().describe("中国語の意味（短く）") }))
+    .describe("覚えておくと仕事や生活で使える語・表現を3〜5個。N3〜N2 レベルで、この記事の内容を話すのに必要なもの。人名・地名は入れない"),
+  keys: z
+    .array(z.object({ ja: z.string().describe("本文の語・短い表現（読みの（）は付けない）"), kana: z.string().describe("読み（ひらがな）"), zh: z.string().describe("中国語の意味（短く）") }))
+    .describe("この記事を自分の言葉で話すときの骨組みになる語を3個、話の順番に。見れば話の流れを思い出せるもの"),
+  summary: z.array(z.string()).describe("記事の内容を、友だちに話すような自然な日本語の3文で（N4〜N3 の語と文法、です・ます）"),
+});
+export type NewsNotes = z.infer<typeof NewsNotesSchema>;
+
+export function newsNotes(title: string, sentences: string[]): Promise<NewsNotes> {
+  return haikuFirst(
+    NewsNotesSchema,
+    `学習者は日本に住んでIT企業で働いている中国人（日本語 N4〜N3）。毎朝 NHK のやさしい日本語のニュースを聞き、夜にその内容を自分の言葉で3回話す練習をする。そのための訳と語のメモを作る。
+本文の（）は NHK が付けた読み。読みはそれに従う。`,
+    `見出し：${title}\n\n${sentences.map((s, i) => `${i + 1}. ${s}`).join("\n")}`,
+    6000,
+    "low",
+  );
+}

@@ -120,6 +120,9 @@ export type RetellPoint = { tag: string; zh: string; focus_zh: string; you_said:
 // those in the middle of a sentence, the measure that depends least on the story told (Huensch 2023).
 // texts: what was said, word for word; natural: the last telling said naturally, checked the next
 // day. again: that day's one telling of an earlier day's story first, in the same units.
+export type NewsMark = { heard?: string; got?: number; told?: string };
+export const NEWS_MARKS_KEPT = 120;
+
 export type Retell = {
   date: string;
   topic: string;
@@ -178,6 +181,9 @@ export type Progress = {
   // 三回話す keywords: how many tellings in a row (across days) each was used right and without a
   // stall; at 2 it gives its place to a new one. at: when last counted, so the newer copy wins.
   keyRuns?: Record<string, { n: number; at: number }>;
+  // NHKやさしいことばニュース, by NHK's id: the day it was heard to the end, how much of it was understood
+  // the first time without the text (0 あまり, 1 半分, 2 ほとんど), the day it was told in 三回話す.
+  news?: Record<string, NewsMark>;
   rehearsals: Rehearsal[]; // newest last
   freezes: number; // streak protectors in hand
   frozen: string[]; // days covered by a protector
@@ -322,6 +328,15 @@ export function merge(a: Progress, b: Progress): Progress {
   const keyRuns = { ...(a.keyRuns ?? {}) };
   for (const [k, v] of Object.entries(b.keyRuns ?? {})) if (!keyRuns[k] || v.at > keyRuns[k].at) keyRuns[k] = v;
 
+  const news: Record<string, NewsMark> = { ...(a.news ?? {}) };
+  for (const [k, v] of Object.entries(b.news ?? {})) {
+    const o = news[k] ?? {};
+    const later = (x?: string, y?: string) => (x && y ? (x > y ? x : y) : (x ?? y));
+    news[k] = { heard: later(o.heard, v.heard), told: later(o.told, v.told), got: (newer === b ? v.got : o.got) ?? v.got ?? o.got };
+    for (const f of ["heard", "told", "got"] as const) if (news[k][f] === undefined) delete news[k][f];
+  }
+  const newsKept = Object.fromEntries(Object.entries(news).sort((x, y) => (x[0] < y[0] ? 1 : -1)).slice(0, NEWS_MARKS_KEPT));
+
   // The copy that got further (more rounds, or a report) wins.
   const rehearsals = [...[...(a.rehearsals ?? []), ...(b.rehearsals ?? [])]
     .reduce((m, r) => {
@@ -377,6 +392,7 @@ export function merge(a: Progress, b: Progress): Progress {
     people,
     retells,
     keyRuns,
+    news: newsKept,
     rehearsals,
     freezes: newer.freezes,
     frozen: [...new Set([...a.frozen, ...b.frozen])],
