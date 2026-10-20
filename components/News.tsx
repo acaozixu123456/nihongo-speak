@@ -55,6 +55,9 @@ export function NewsImage({ a, className }: { a: NewsArticle; className: string 
   return <img className={className} src={`/api/news/img/${a.id}`} alt="" loading="lazy" onError={() => setFailed(true)} />;
 }
 
+// The article's sentences grouped by NHK's paragraphs (indexes), one card each.
+const paras = (a: NewsArticle) =>
+  a.sentences.reduce<number[][]>((out, s, i) => (s.p || !out.length ? out.push([i]) : out[out.length - 1].push(i), out), []);
 const lenOf = (segs: Seg[]) => segs.reduce((n, s) => n + s.t.length, 0);
 
 function Controls({ j, extra }: { j: ReturnType<typeof useJoined>; extra?: React.ReactNode }) {
@@ -147,12 +150,19 @@ function Article({ a }: { a: NewsArticle }) {
       {zh && <div className="nw-zh">{a.title_zh}</div>}
       <div className="nw-date">{md(a.day)} · NHKやさしいことばニュース</div>
       <div className={`nw-body${hide ? " hidden" : ""}`}>
-        {a.sentences.map((s, i) => (
-          <div key={i} ref={(el) => void (lines.current[i] = el)} className={`nw-s${s.p ? " para" : ""}${i === at ? " now" : ""}${i < at ? " past" : ""}`}>
-            <p data-line={s.ja} onClick={() => (j.phase === "idle" || j.phase === "done" ? j.start().then(() => j.seek(i + 1)) : j.seek(i + 1))}>
-              <Ruby segs={s.segs} fill={i === at ? j.frac * lenOf(s.segs) : 0} />
-            </p>
-            {zh && s.zh && <div className="nw-zh">{s.zh}</div>}
+        {paras(a).map((para) => (
+          <div key={para[0]} className="nw-para">
+            {para.map((i) => {
+              const s = a.sentences[i];
+              return (
+                <div key={i} ref={(el) => void (lines.current[i] = el)} className={`nw-s${i === at ? " now" : ""}`}>
+                  <p data-line={s.ja} onClick={() => (j.phase === "idle" || j.phase === "done" ? j.start().then(() => j.seek(i + 1)) : j.seek(i + 1))}>
+                    <Ruby segs={s.segs} fill={i === at ? j.frac * lenOf(s.segs) : 0} />
+                  </p>
+                  {zh && s.zh && <div className="nw-zh">{s.zh}</div>}
+                </div>
+              );
+            })}
           </div>
         ))}
         {hide && <div className="nw-hidden">耳だけで聞いてみよう</div>}
