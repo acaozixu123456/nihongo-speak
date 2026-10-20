@@ -102,10 +102,10 @@ export default function SayAlong({ lines, voice, onClose }: { lines: Line[]; voi
   if (done) {
     return (
       <div className="today along-card" ref={box}>
-        <span className="kicker">一緒に言う</span>
+        <span className="kicker">跟着说</span>
         <p className="along-done">✓ {lines.length} 句都跟着说完了</p>
         <button className="today-go" onClick={() => start(0)}>
-          もう一回
+          再来一次
         </button>
         <button className="along-quit" onClick={close}>
           閉じる
@@ -142,7 +142,7 @@ export default function SayAlong({ lines, voice, onClose }: { lines: Line[]; voi
         {step === 2 && <i key={`${at}-${alone}`} style={{ animationDuration: `${alone}ms` }} />}
       </div>
       <div className="along-row">
-        <button onClick={() => start(at)}>もう一回</button>
+        <button onClick={() => start(at)}>再来一次</button>
         <button onClick={() => (at + 1 < lines.length ? start(at + 1) : (run.current++, stop(), setDone(true)))}>次 ›</button>
         <button onClick={close}>やめる</button>
       </div>

@@ -136,7 +136,7 @@ export function NewsArticlePage({ id }: { id: string }) {
   if (!a)
     return (
       <main className="page">
-        <Link href="/" className="back">‹ 聴く</Link>
+        <Link href="/" className="back">‹ 听</Link>
         <p className="muted">{items.length ? "这条新闻已经不在了（只保留 14 天）" : "正在读取…"}</p>
       </main>
     );
@@ -178,7 +178,7 @@ function Article({ a }: { a: NewsArticle }) {
   return (
     <main className="page nw-page">
       <div className="nw-top">
-        <Link href="/" className="back">‹ 聴く</Link>
+        <Link href="/" className="back">‹ 听</Link>
         <button className={`nw-chip${zh ? " on" : ""}`} onClick={() => setZh(!zh)}>訳</button>
       </div>
       <NewsImage a={a} className="nw-img" />
@@ -236,8 +236,8 @@ function Article({ a }: { a: NewsArticle }) {
       )}
 
       <div className="nw-end" ref={end}>
-        <Note ja="聞いたら、自分の言葉で三回話してみよう。" zh="听完了，用自己的话讲三遍。" />
-        <Link href={`/retell?news=${a.id}`} className="pil-go on">三回話す</Link>
+        <Note text="听完了，用自己的话讲三遍。" />
+        <Link href={`/retell?news=${a.id}`} className="pil-go on">讲三遍</Link>
       </div>
 
       <div className="nw-dock">
@@ -272,7 +272,7 @@ export function NewsPlay() {
   if (!set?.items.length)
     return (
       <main className="page">
-        <Link href="/" className="back">‹ 聴く</Link>
+        <Link href="/" className="back">‹ 听</Link>
         <p className="muted">还没有新闻（每天晚上 21:00 自动更新）</p>
       </main>
     );
@@ -335,7 +335,7 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
         </div>
         {!onRoute && tell && (
           <Link href={`/retell?news=${tell.id}`} className="pil-go on" style={{ marginTop: 18 }}>
-            三回話す
+            讲三遍
           </Link>
         )}
         <audio {...j.audioProps} />
@@ -347,11 +347,11 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
   return (
     <main className="page nw-page">
       <div className="nw-top">
-        <Link href="/" className="back">‹ 聴く</Link>
+        <Link href="/" className="back">‹ 听</Link>
         <span className="muted">{newsDay(set.day)} {idle ? today.length : `${n + 1} / ${today.length}`}</span>
       </div>
       <div className="kicker">{idle ? "2回ずつ · 1回目は文字なし" : asking ? "1回目 おわり" : second ? "2回目 · 文字あり" : "1回目 · 文字なし"}</div>
-      <h1 className="nw-title">{idle ? "ニュース" : <Ruby segs={a.title} />}</h1>
+      <h1 className="nw-title">{idle ? "新闻" : <Ruby segs={a.title} />}</h1>
       <div className="nw-dots">
         {today.map((x, i) => (
           <span key={x.id} className={i < n || (i === n && !idle) || (idle && p.news?.[x.id]?.heard === dayKey()) ? "on" : ""} />
@@ -408,7 +408,7 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
       <div className="nw-dock">
         {idle ? (
           <button className="pil-go on" onClick={() => j.start(from * 2)}>
-            {from > 0 ? `▶ 続きから（${from + 1}本目）` : "▶ 全部聞く"}
+            {from > 0 ? `▶ 続きから（${from + 1}本目）` : "▶ 全部听"}
           </button>
         ) : (
           <Controls

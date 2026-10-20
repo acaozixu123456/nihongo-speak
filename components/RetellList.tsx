@@ -19,15 +19,15 @@ export default function RetellList() {
   return (
     <main className="page">
       <Link href="/speak" className="back">
-        ← 話す
+        ← 说
       </Link>
-      <h1 className="ep-head">三回話す</h1>
+      <h1 className="ep-head">讲三遍</h1>
       <p className="rt-sum">
-        {list.times ? `${list.times}回 · ${list.stories}話` : "まだ"}
+        {list.times ? `${list.times} 次 · ${list.stories} 个话题` : "还没有"}
       </p>
       {list.eps.length > 0 && (
         <>
-          <div className="kicker tab-kicker">聴いた回</div>
+          <div className="kicker tab-kicker">听过的</div>
           <div className="rt-list">
             {list.eps.map((r) => (
               <RetellRow key={r.href} r={r} sub={sub(r)} />
@@ -35,7 +35,7 @@ export default function RetellList() {
           </div>
         </>
       )}
-      <div className="kicker tab-kicker">自分の話</div>
+      <div className="kicker tab-kicker">自己的事</div>
       <div className="rt-list">
         {list.life.map((r) => (
           <RetellRow key={r.href} r={r} sub={r.zh} />

@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import type { Feedback } from "@/lib/claude";
-import { play, ttsUrl, unlock } from "@/lib/client/player";
-import { hasCard, toggleCard, useProgress, type Progress } from "@/lib/client/progress";
-import Note from "./Note";
+import { useEffect, useRef } from "react";
+import { hasCard, recordNote, toggleCard, type Progress } from "@/lib/client/progress";
 
 export function Star({ p, ja, zh, reading, voice, scenarioId }: { p: Progress; ja: string; zh: string; reading?: string; voice: string; scenarioId: string }) {
   const saved = hasCard(p, ja);
@@ -19,75 +18,43 @@ export function Star({ p, ja, zh, reading, voice, scenarioId }: { p: Progress; j
   );
 }
 
-// The end-of-conversation review: one thing to fix next time, the line that shows it, and one
-// phrase to keep.
+// The end of a call or a scene. Its review (what went well, the one line to say better, one phrase to
+// keep) goes to the 先生 page; here only a link to it.
 export default function FeedbackCard({
   feedback,
-  voice,
-  scenarioId,
+  area,
+  title,
   children,
 }: {
   feedback: Feedback;
-  voice: string;
-  scenarioId: string;
+  area: "call" | "scene";
+  title: string;
   children?: React.ReactNode;
 }) {
-  const p = useProgress();
-  const card = { p, voice, scenarioId };
-  const say = (text: string) => {
-    unlock();
-    play(ttsUrl(text, voice), 1).catch(() => {});
-  };
-  const { fix, point } = feedback;
-  const phrase = feedback.phrases[0];
+  const saved = useRef<Feedback | null>(null);
+  useEffect(() => {
+    if (saved.current === feedback) return;
+    saved.current = feedback;
+    const { fix } = feedback;
+    const phrase = feedback.phrases[0];
+    recordNote({
+      area,
+      title,
+      good: feedback.overall_zh,
+      ...(fix.better && { fix: { said: fix.you_said, better: fix.better, zh: fix.why_zh || feedback.focus_zh } }),
+      ...(phrase && { lines: [{ ja: phrase.ja, zh: phrase.zh }] }),
+    });
+  }, [feedback, area, title]);
   return (
-    <div className="card">
-      <Note ja={fix.better ? "おつかれさま。次はここだけ。" : "おつかれさま。よく話せました。"} zh={feedback.overall_zh} />
-      {fix.better ? (
-        <div className="memo-blk m-bad fb-blk">
-          <div className="memo-hd">
-            <span className="memo-mk">!</span>ここを直そう
-          </div>
-          {fix.you_said && (
-            <div className="memo-ln m-wrong">
-              <span className="memo-t">言った</span>
-              <s>{fix.you_said}</s>
-            </div>
-          )}
-          <div className="memo-ln m-right">
-            <span className="memo-t">正しく</span>
-            <span>{fix.better}</span>
-            <button className="bag-play memo-play" aria-label="聞く" onClick={() => say(fix.better)}>
-              ▶
-            </button>
-          </div>
-          <div className="memo-zh">{fix.why_zh || feedback.focus_zh}</div>
-          {fix.zh && (
-            <div className="row">
-              <Star {...card} ja={fix.better} zh={fix.zh} />
-            </div>
-          )}
-        </div>
-      ) : (
-        feedback.focus_zh && <p className="muted">{feedback.focus_zh}</p>
-      )}
-      {point.tag && (
-        <Link href="/weak" className="fb-weak">
-          苦手に入れました：{point.tag} ›
-        </Link>
-      )}
-      {phrase && (
-        <div className="fb-keep">
-          <span className="kicker">覚えよう</span>
-          <div className="ja">{phrase.ja}</div>
-          <div className="kana">{phrase.reading}</div>
-          <div className="zh">{phrase.zh}</div>
-          <div className="row">
-            <button className="small" onClick={() => say(phrase.ja)}>▶ 聞く</button>
-            <Star {...card} ja={phrase.ja} zh={phrase.zh} reading={phrase.reading} />
-          </div>
-        </div>
-      )}
+    <div className="fb-done">
+      <div className="fb-done-t">结束了，辛苦了</div>
+      <Link href={`/me#${area}`} className="to-sensei">
+        <span>
+          <b>老师的点评</b>
+          <small>{feedback.fix.better ? "1 处要改" : "这次没有要改的"}</small>
+        </span>
+        <i>›</i>
+      </Link>
       {children && <div className="row">{children}</div>}
     </div>
   );

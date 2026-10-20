@@ -74,10 +74,10 @@ export default function NewScenario(props: { topic?: string; category?: "work" |
 
   return (
     <main>
-      <Link href="/scenes" className="back">← 場面</Link>
+      <Link href="/scenes" className="back">← 场景对话</Link>
       <header className="page-mast">
         <div>
-          <h1>やり直し</h1>
+          <h1>重来一次</h1>
           <p className="muted">把今天没说出来的话，变成场景再练一次</p>
         </div>
       </header>

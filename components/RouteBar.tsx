@@ -113,7 +113,7 @@ export default function RouteBar() {
       )}
       {count !== null && up && (
         <button className="route-next" onClick={go}>
-          <span className="kicker">次は</span>
+          <span className="kicker">下一个</span>
           <span className="display">{up.ja}</span>
           <span className="route-ring">{waiting ? <span className="spin" /> : count}</span>
           <span className="route-meta">{waiting && up.href.startsWith(NEW_EP) ? (making ? makingText(making) : "新しい回を作っています") : up.meta}</span>

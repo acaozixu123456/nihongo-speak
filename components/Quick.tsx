@@ -285,11 +285,11 @@ export default function Quick({ drill }: { drill?: string }) {
     return (
       <main>
         <div className="row spread">
-          <Link href="/weak" className="back">← 苦手</Link>
+          <Link href="/weak" className="back">← 常错的地方</Link>
         </div>
         <header className="page-mast">
           <div>
-            <h1>苦手</h1>
+            <h1>常错的地方</h1>
             <p className="muted">针对一个薄弱点的瞬间说</p>
           </div>
         </header>
@@ -327,7 +327,7 @@ export default function Quick({ drill }: { drill?: string }) {
             )}
             {error && (
               <p className="error">
-                {error} <button className="small" onClick={makeDrill}>もう一回</button>
+                {error} <button className="small" onClick={makeDrill}>再来一次</button>
               </p>
             )}
           </div>
@@ -343,10 +343,10 @@ export default function Quick({ drill }: { drill?: string }) {
     const mastered = quickMastered(p);
     return (
       <main>
-        <Link href="/speak" className="back">← 話す</Link>
+        <Link href="/speak" className="back">← 说</Link>
         <header className="page-mast">
           <div>
-            <h1>瞬間</h1>
+            <h1>马上说</h1>
             <p className="muted">看中文，3 秒内开口</p>
           </div>
         </header>
@@ -366,7 +366,7 @@ export default function Quick({ drill }: { drill?: string }) {
               ))}
             </div>
           </div>
-          <button className="primary next-cta" onClick={() => begin()}>始める</button>
+          <button className="primary next-cta" onClick={() => begin()}>开始</button>
         </div>
       </main>
     );
@@ -387,7 +387,7 @@ export default function Quick({ drill }: { drill?: string }) {
       <main>
         <header className="page-mast">
           <div>
-            <h1>瞬間</h1>
+            <h1>马上说</h1>
             <p className="muted">这一轮的结果</p>
           </div>
         </header>
@@ -450,7 +450,7 @@ export default function Quick({ drill }: { drill?: string }) {
           <button className="primary next-cta" onClick={() => begin()}>もう一組</button>
         )}
         <p style={{ textAlign: "center" }}>
-          <Link href="/speak" className="muted">話すへ</Link>
+          <Link href="/speak" className="muted">返回</Link>
         </p>
       </main>
     );
@@ -481,7 +481,7 @@ export default function Quick({ drill }: { drill?: string }) {
             ) : (
               overtime &&
               spokeAt === null && (
-                <button className="link-btn" onClick={() => setHinted(true)}>ヒント</button>
+                <button className="link-btn" onClick={() => setHinted(true)}>提示</button>
               )
             )}
           </>

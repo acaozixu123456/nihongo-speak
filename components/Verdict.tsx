@@ -130,7 +130,7 @@ export function VerdictSheet({
             )}
             {kind === "wrong" && along !== "ok" ? (
               <div style={{ flex: 1 }}>
-                <HoldButton label={busy ? "聞き取り中…" : along ? "もう一回" : "一緒に言う"} disabled={busy} onRecorded={onAlong} onError={setError} />
+                <HoldButton label={busy ? "聞き取り中…" : along ? "再来一次" : "跟着说"} disabled={busy} onRecorded={onAlong} onError={setError} />
               </div>
             ) : (
               <button className="vnext" onClick={onNext}>次へ</button>

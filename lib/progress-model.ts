@@ -162,6 +162,19 @@ export type Rehearsal = {
 };
 export const REHEARSALS_KEPT = 30;
 
+// What a practice's end said (三回話す, a call, a scene), kept for the 先生 page instead of being shown
+// on the practice page: what went well, the one line to say better, and the natural versions.
+export type PracticeNote = {
+  at: number;
+  day: string;
+  area: "retell" | "call" | "scene";
+  title: string;
+  good?: string; // zh
+  fix?: { said: string; better: string; zh: string };
+  lines?: { you?: string; ja: string; zh: string }[];
+};
+export const NOTES_KEPT = 30;
+
 export type Progress = {
   goal: number;
   days: Record<string, number>; // YYYY-MM-DD -> xp
@@ -186,6 +199,7 @@ export type Progress = {
   // the first time without the text (0 あまり, 1 半分, 2 ほとんど), the day it was told in 三回話す.
   news?: Record<string, NewsMark>;
   rehearsals: Rehearsal[]; // newest last
+  notes?: PracticeNote[]; // newest last
   freezes: number; // streak protectors in hand
   frozen: string[]; // days covered by a protector
   freezeAwardDay?: string;
@@ -349,6 +363,10 @@ export function merge(a: Progress, b: Progress): Progress {
     .sort((x, y) => (x.id < y.id ? -1 : 1))
     .slice(-REHEARSALS_KEPT);
 
+  const notes = [...new Map([...(a.notes ?? []), ...(b.notes ?? [])].map((n) => [n.at, n])).values()]
+    .sort((x, y) => x.at - y.at)
+    .slice(-NOTES_KEPT);
+
   const byId = <T extends { id: string }>(x: T[], y: T[]) => [...new Map([...x, ...y].map((i) => [i.id, i])).values()];
 
   return {
@@ -395,6 +413,7 @@ export function merge(a: Progress, b: Progress): Progress {
     keyRuns,
     news: newsKept,
     rehearsals,
+    notes,
     freezes: newer.freezes,
     frozen: [...new Set([...a.frozen, ...b.frozen])],
     freezeAwardDay: newer.freezeAwardDay,

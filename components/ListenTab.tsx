@@ -49,10 +49,10 @@ export default function ListenTab() {
   return (
     <main className="page">
       <h1 className="tab-h1">
-        聴く<small>听</small>
+        听
       </h1>
       <section className="now-card">
-        <div className="kicker">{set.day ? newsDay(set.day) : "ニュース"}</div>
+        <div className="kicker">{set.day ? newsDay(set.day) : "新闻"}</div>
         <div className="pil-what">
           <div className="pil-t">{today.length ? `${set.fresh ? "新しい" : "全部聞いた · "}${today.length}本 · ${newsMinutes(today)}分` : "まだありません"}</div>
           <div className="pil-m">2回ずつ · 1回目は文字なし</div>
@@ -61,11 +61,11 @@ export default function ListenTab() {
           today.length > 0 &&
           (onRoute ? (
             <button className="pil-go on" onClick={go}>
-              ▶ 全部聞く
+              ▶ 全部听
             </button>
           ) : (
             <Link href="/news" className="pil-go">
-              ▶ 全部聞く
+              ▶ 全部听
             </Link>
           ))}
       </section>
@@ -79,7 +79,7 @@ export default function ListenTab() {
                 <span>{a.title_zh}</span>
               </div>
               {target?.id === a.id && mark(a.id)?.told !== dayKey() ? (
-                <span className="nw-row-st go">話す</span>
+                <span className="nw-row-st go">要讲</span>
               ) : mark(a.id)?.heard ? (
                 <span className="ep-ok">✓</span>
               ) : null}
@@ -87,37 +87,37 @@ export default function ListenTab() {
           ))}
         </div>
       )}
-      <div className="tab-label">ほかに</div>
+      <div className="tab-label">其他</div>
       <div className="pl-grid">
         {target ? (
           <Link href={newsEp ? `/ep/${newsEp.id}` : `/ep/new?news=${target.id}`} className="pl">
-            <b>ラジオ</b>
+            <b>电台</b>
             <span>ハルとケンが今朝のニュースを話す</span>
           </Link>
         ) : (
           <Link href={ep ? `/ep/${ep.id}` : "/episodes"} className="pl">
-            <b>ラジオ</b>
+            <b>电台</b>
             <span>{ep ? (ep.title_ja ?? ep.title_zh) : "ゆるっと日本ラジオ"}</span>
           </Link>
         )}
         {(newsEp ?? ep) && (
           <Link href={`/ep/${(newsEp ?? ep)!.id}/song`} className="pl">
-            <b>洗脳歌</b>
+            <b>洗脑歌</b>
             <span>把这期唱成歌</span>
           </Link>
         )}
         <Link href="/moyu" className="pl">
-          <b>流す</b>
+          <b>只听</b>
           <span>不能出声时只听</span>
         </Link>
         <Link href="/episodes" className="pl">
-          <b>ラジオ一覧</b>
+          <b>全部电台</b>
           <span>全部的回・点播</span>
         </Link>
       </div>
       {older.length > 0 && (
         <>
-          <div className="tab-label">前の日</div>
+          <div className="tab-label">以前的</div>
           <div className="pl-grid">
             {older.map((a) => (
               <Link key={a.id} href={`/news/${a.id}`} className="pl ep-line">

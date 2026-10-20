@@ -14,6 +14,7 @@ import {
   knownTags,
   markNews,
   RADIO_VOICE,
+  recordNote,
   recordPoints,
   recordKeyRuns,
   recordRetell,
@@ -36,7 +37,6 @@ import { newsItems, newsToday } from "@/lib/client/news";
 import type { NewsArticle } from "@/lib/news-model";
 import { useHydrated } from "@/lib/client/hydrated";
 import { LIFE_TOPICS, latest, retellList, retellScore, topicLogs } from "@/lib/client/retell-history";
-import { Star } from "./FeedbackCard";
 import Note from "./Note";
 
 // 三回話す: tell today's radio story three times, each time to a different person (so there is nothing
@@ -614,6 +614,14 @@ export default function Retell() {
     try {
       const e = await post<RetellEnd>({ kind: "end", topic: topic!.about, first: next[0]!.text, last: text, focus: pt ? fix?.focus_zh : "" });
       setEnd(e);
+      const changed = e.natural.find((x) => x.you && x.you !== x.ja);
+      recordNote({
+        area: "retell",
+        title: topic!.ja,
+        good: e.praise_zh,
+        ...(changed && { fix: { said: changed.you, better: changed.ja, zh: changed.zh } }),
+        lines: e.natural,
+      });
       if (pt && e.used !== "unused") recordPoints([{ tag: pt.tag, zh: pt.zh, ok: e.used === "right" }], e.used === "right" ? [] : [pt]);
       const settled = pt && e.used === "right" && keep === pt;
       recordRetell({ ...day, ...(keep && !settled && { next: keep }), natural: e.natural.map((x) => x.ja) });
@@ -640,7 +648,7 @@ export default function Retell() {
 
   const back = !onRoute && (
     <Link href="/speak" className="back">
-      ← 話す
+      ← 说
     </Link>
   );
 
@@ -660,7 +668,7 @@ export default function Retell() {
     return (
       <main className="page">
         {back}
-        <h1 className="ep-head">三回話す</h1>
+        <h1 className="ep-head">讲三遍</h1>
         <div className="retell-score">
           <span className="kicker">{prior.current.times + 1}回目</span>
           <b className="retell-score-t">{topic.ja}</b>
@@ -702,43 +710,16 @@ export default function Retell() {
             </span>
           )}
         </div>
-        {busy === "end" && <Note wait ja="まとめています…" zh="在看你的第三遍…" />}
+        {busy === "end" && <Note wait text="在看你的第三遍…" />}
         {end && (
           <>
-            <Note ja="三回、おつかれさま。" zh={end.praise_zh} />
-            {all[2]?.good && <Good ja={all[2].good} onHear={hear} />}
-            {fix?.focus_zh && !stall && end.used !== "unused" && (
-              <p className="small-text">
-                {end.used === "right" ? "✓" : "△"} 这次要注意的：{fix.focus_zh}
-              </p>
-            )}
-            <span className="kicker" style={{ marginTop: 18 }}>你讲的 → 更自然的说法</span>
-            <div className="card">
-              {end.natural.map((x, i) => (
-                <div key={i} className="note">
-                  <div className="note-main" onClick={() => hear(x.ja)}>
-                    {x.you && x.you !== x.ja && <div className="muted retell-you">你：{x.you}</div>}
-                    <div className="ja">{x.ja}</div>
-                    <div className="zh">{x.zh}</div>
-                  </div>
-                  <Star p={p} ja={x.ja} zh={x.zh} voice={RADIO_VOICE.A} scenarioId="retell" />
-                </div>
-              ))}
-            </div>
-            {topic.model && topic.model.length > 0 && (
-              <>
-                <span className="kicker" style={{ marginTop: 18 }}>お手本</span>
-                <div className="card">
-                  {topic.model.map((ja) => (
-                    <div key={ja} className="note">
-                      <div className="note-main" onClick={() => hear(ja)}>
-                        <div className="ja">{ja}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
+            <Link href="/me#retell" className="to-sensei">
+              <span>
+                <b>老师的点评</b>
+                <small>你讲的 → 更自然的说法，{end.natural.filter((x) => x.you && x.you !== x.ja).length} 处</small>
+              </span>
+              <i>›</i>
+            </Link>
             {along ? (
               <SayAlong lines={end.natural.map((x) => ({ ja: x.ja, zh: x.zh }))} voice={RADIO_VOICE.A} onClose={() => setAlong(false)} />
             ) : (
@@ -750,7 +731,7 @@ export default function Retell() {
                     setAlong(true);
                   }}
                 >
-                  一緒に言う
+                  跟着说
                 </button>
                 <p className="muted retell-note">一句一句：先听，再跟着说，最后自己说。不打分。</p>
               </>
@@ -792,7 +773,7 @@ export default function Retell() {
   return (
     <main className="page">
       {!talking && back}
-      <h1 className="ep-head">三回話す</h1>
+      <h1 className="ep-head">讲三遍</h1>
       <div className="today retell">
         <span className="kicker">
           {warming ? `先把上次的故事再讲一遍 · 讲给${nameOf(listener)}` : `第 ${round + 1} 遍 · 讲给${nameOf(listener)}`}
@@ -851,7 +832,7 @@ export default function Retell() {
           </button>
         ) : (
           <button className="today-go retell-go" onClick={begin} disabled={phase === "starting" || !!busy}>
-            {phase === "starting" ? "マイク準備中…" : busy ? (BUSY[busy] ?? "…") : round === 0 ? "話す" : `${nameOf(listener)}に話す`}
+            {phase === "starting" ? "マイク準備中…" : busy ? (BUSY[busy] ?? "…") : round === 0 ? "说" : `${nameOf(listener)}に話す`}
           </button>
         )}
       </div>
@@ -899,7 +880,7 @@ export default function Retell() {
       {round === 1 && !talking && (
         <div className="retell-fix">
           {busy === "fix" ? (
-            <Note wait ja="聞いています…" zh="在看你的第一遍…" />
+            <Note wait text="在看你的第一遍…" />
           ) : busy ? null : fix ? (
             <>
               {carry && carried !== null && (
@@ -907,11 +888,11 @@ export default function Retell() {
                   {carried === "right" ? "✓ 上次那一点，这次说对了" : carried === "wrong" ? "△ 上次那一点还没改过来，明天再来" : "上次那一点这次没用到，明天接着留意"}
                 </p>
               )}
-              <Note ja="一回目、おつかれさま。次はここだけ。" zh="下一遍只改这一处。" />
+              <Note text="下一遍只改这一处。" />
               {take0?.good && <Good ja={take0.good} onHear={hear} />}
               <div className="fix-card">
                 <div className="fix-head">
-                  <span className="kicker">次はここだけ</span>
+                  <span className="kicker">下一遍只改这里</span>
                   {stall && fix.stall.better && <span className="fix-badge">卡了 {stall.secs} 秒</span>}
                 </div>
                 {stall && fix.stall.better ? (
@@ -968,11 +949,11 @@ export default function Retell() {
               </div>
             </>
           ) : take0 ? (
-            <Note ja="内容はばっちり。次の人にも話してみよう。" zh="内容不用改，再讲一遍给下一个人。" />
+            <Note text="内容不用改，再讲一遍给下一个人。" />
           ) : null}
         </div>
       )}
-      {round === 2 && !talking && !busy && <Note ja="あと一回。いちばん言いたいことだけで大丈夫。" zh="最后一遍，时间短一点，挑最想说的讲。" />}
+      {round === 2 && !talking && !busy && <Note text="最后一遍，时间短一点，挑最想说的讲。" />}
       {error && <p className="error">{error}</p>}
     </main>
   );

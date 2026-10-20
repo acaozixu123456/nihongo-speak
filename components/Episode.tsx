@@ -63,7 +63,7 @@ export function NewEpisode() {
   }, [router]);
   return (
     <main className="page">
-      <Link href="/" className="back">← 聴く</Link>
+      <Link href="/" className="back">← 听</Link>
       <p className="muted game-wait">
         <span className="spin" /> {making ? makingText(making) : "新しい回を作っています"}
       </p>
@@ -239,7 +239,7 @@ export default function Episode({ id }: { id: string }) {
   if (!ep) {
     return (
       <main className="page">
-        <Link href="/" className="back">← 聴く</Link>
+        <Link href="/" className="back">← 听</Link>
         <p className="muted">找不到这一期了（只保留最近 50 期）。</p>
       </main>
     );
@@ -403,7 +403,7 @@ export default function Episode({ id }: { id: string }) {
 
   return (
     <main className={`page ${started ? "on-air" : ""}`} data-ask-topic={episode.title_zh} data-ask-ep={episode.id}>
-      <Link href="/" className="back">← 聴く</Link>
+      <Link href="/" className="back">← 听</Link>
       {!started ? (
         <>
           <div className="kicker">
@@ -500,7 +500,7 @@ export default function Episode({ id }: { id: string }) {
               </button>
               <div className="hk-zh">{k.zh}</div>
               <Link href={`/ep/${ep.id}/game`} className="hk-go">
-                練習
+                练一练
               </Link>
             </div>
           )}
@@ -587,7 +587,7 @@ export default function Episode({ id }: { id: string }) {
             </button>
             <Link href={`/ep/${ep.id}/game`} className="radio-row">
               <span>
-                練習{ep.asked?.length ? <small> · 含你问过 AI 的 {ep.asked.length} 处</small> : null}
+                练一练{ep.asked?.length ? <small> · 含你问过 AI 的 {ep.asked.length} 处</small> : null}
               </span>
               <em>›</em>
             </Link>

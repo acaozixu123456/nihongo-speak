@@ -29,17 +29,17 @@ const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec 
 export function CallList() {
   return (
     <main>
-      <Link href="/speak" className="back">← 話す</Link>
+      <Link href="/speak" className="back">← 说</Link>
       <header className="page-mast">
         <div>
-          <h1>電話</h1>
+          <h1>打电话</h1>
           <p className="muted">只有声音，默认不显示文字。听不清就说「もう一度お願いします」。</p>
         </div>
       </header>
       {/* Grouped by direction instead of a 電/受 badge on every row. */}
       {[
-        { ja: "かける", zh: "我打出去", list: calls.filter((c) => !c.incoming) },
-        { ja: "かかってくる", zh: "别人打来", list: calls.filter((c) => c.incoming) },
+        { ja: "打出去", zh: "", list: calls.filter((c) => !c.incoming) },
+        { ja: "打进来", zh: "", list: calls.filter((c) => c.incoming) },
       ].map((g) => (
         <section key={g.ja}>
           <h2 className="pl-head">
@@ -251,7 +251,7 @@ export default function Call({ call, round }: { call: CallDef; round?: RoundProp
 
   return (
     <main className="call">
-      {phase !== "live" && <Link href={round?.back ?? "/call"} className="back">← {round ? "予行演習" : "打电话"}</Link>}
+      {phase !== "live" && <Link href={round?.back ?? "/call"} className="back">← {round ? "预演" : "打电话"}</Link>}
       <header className="call-head">
         <div className="call-avatar" aria-hidden>{call.incoming ? "受" : "電"}</div>
         <div className="call-who">{call.who}</div>
@@ -353,8 +353,8 @@ export default function Call({ call, round }: { call: CallDef; round?: RoundProp
               </div>
             </div>
           </div>
-          {busy === "feedback" && <Note wait ja="まとめています…" zh="在看这通电话…" />}
-          {feedback && <FeedbackCard feedback={feedback} voice={talk.aiVoice} scenarioId={scenarioId} />}
+          {busy === "feedback" && <Note wait text="在看这通电话…" />}
+          {feedback && <FeedbackCard feedback={feedback} area="call" title={`${call.who} · ${call.titleZh}`} />}
           <h2>通话记录</h2>
           <div className="card">
             {messages.map((m, i) => (
