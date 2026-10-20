@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { Feedback } from "@/lib/claude";
 import { play, ttsUrl, unlock } from "@/lib/client/player";
 import { hasCard, toggleCard, useProgress, type Progress } from "@/lib/client/progress";
-import { SenseiLine } from "./Sensei";
+import Note from "./Note";
 
 export function Star({ p, ja, zh, reading, voice, scenarioId }: { p: Progress; ja: string; zh: string; reading?: string; voice: string; scenarioId: string }) {
   const saved = hasCard(p, ja);
@@ -19,7 +19,7 @@ export function Star({ p, ja, zh, reading, voice, scenarioId }: { p: Progress; j
   );
 }
 
-// The end-of-conversation review, from 森先生: one thing to fix next time, the line that shows it, and one
+// The end-of-conversation review: one thing to fix next time, the line that shows it, and one
 // phrase to keep.
 export default function FeedbackCard({
   feedback,
@@ -42,11 +42,7 @@ export default function FeedbackCard({
   const phrase = feedback.phrases[0];
   return (
     <div className="card">
-      <SenseiLine
-        ja={fix.better ? "おつかれさま。次はここだけね。" : "おつかれさま。よく話せましたね。"}
-        zh={feedback.overall_zh}
-        nod={!fix.better}
-      />
+      <Note ja={fix.better ? "おつかれさま。次はここだけ。" : "おつかれさま。よく話せました。"} zh={feedback.overall_zh} />
       {fix.better ? (
         <div className="memo-blk m-bad fb-blk">
           <div className="memo-hd">

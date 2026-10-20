@@ -9,16 +9,6 @@ import { SenseiFace } from "./Sensei";
 const TABS = [
   {
     href: "/",
-    ja: "今日",
-    icon: (
-      <svg className="tab-i" viewBox="0 0 24 24" aria-hidden>
-        <circle cx="12" cy="12" r="4.2" />
-        <path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" />
-      </svg>
-    ),
-  },
-  {
-    href: "/listen",
     ja: "聴く",
     icon: (
       <svg className="tab-i" viewBox="0 0 24 24" aria-hidden>
@@ -44,7 +34,7 @@ const TABS = [
 // List pages opened from a tab keep the tabs, with their tab lit. Pages where something is played,
 // said or answered have their own controls at the bottom, so there the tabs give way to a back link.
 const UNDER: Record<string, string> = {
-  "/episodes": "/listen",
+  "/episodes": "/",
   "/scenes": "/speak",
   "/weak": "/me",
   "/bag": "/me",

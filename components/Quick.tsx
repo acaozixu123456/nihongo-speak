@@ -450,7 +450,7 @@ export default function Quick({ drill }: { drill?: string }) {
           <button className="primary next-cta" onClick={() => begin()}>もう一組</button>
         )}
         <p style={{ textAlign: "center" }}>
-          <Link href="/" className="muted">回到今日</Link>
+          <Link href="/speak" className="muted">話すへ</Link>
         </p>
       </main>
     );

@@ -18,7 +18,7 @@ import {
 import HoldButton from "./HoldButton";
 import TurnNote from "./TurnNote";
 import FeedbackCard, { Star } from "./FeedbackCard";
-import { SenseiLine } from "./Sensei";
+import Note from "./Note";
 
 type Message = Turn & { zh?: string };
 
@@ -236,7 +236,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
         </div>
       )}
 
-      {busy === "feedback" && <SenseiLine wait ja="うん、うん。聞いていましたよ…" zh="我在看你刚才的对话…" />}
+      {busy === "feedback" && <Note wait ja="まとめています…" zh="在看你刚才的对话…" />}
       {feedback && (
         <FeedbackCard feedback={feedback} voice={talk.aiVoice} scenarioId={scenario.id}>
           <Link href="/scenes" className="btn primary" style={{ flex: 1 }}>場面へ</Link>

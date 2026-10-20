@@ -218,7 +218,7 @@ export default function Review() {
               <Link href="/weak">看 AI 找出的薄弱点 →</Link>
             </p>
           )}
-          <Link href="/" className="btn primary next-cta" style={{ display: "block" }}>今日へ</Link>
+          <Link href="/me" className="btn primary next-cta" style={{ display: "block" }}>先生へ</Link>
         </div>
       </main>
     );
