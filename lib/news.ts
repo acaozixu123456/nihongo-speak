@@ -1,9 +1,9 @@
 import "server-only";
-import { BlobNotFoundError, get, put } from "@vercel/blob";
+import { BlobNotFoundError, del, get, put } from "@vercel/blob";
 import { newsNotes } from "@/lib/claude";
 import { addDays } from "@/lib/progress-model";
 import { NEWS_DAYS, NEWS_VOICE, type NewsArticle } from "@/lib/news-model";
-import { nhkArticle, nhkList, nhkSession, plain, spoken, spokenAll, withReadings } from "@/lib/nhk";
+import { nhkArticle, nhkImage, nhkList, nhkSession, plain, spoken, spokenAll, withReadings } from "@/lib/nhk";
 
 // Every morning (cron, 8:30 JST) the newest NHKやさしいことばニュース articles are fetched, given our
 // notes and kept in one private Blob file the phone reads through /api/news. Their sentences are then
@@ -18,6 +18,15 @@ export async function readNews(): Promise<NewsFile> {
     throw e;
   });
   return res?.statusCode === 200 ? ((await new Response(res.stream).json()) as NewsFile) : { made: 0, items: [] };
+}
+
+// NHK's picture for each article, kept as long as the article (it needs NHK's session, so the phone can't
+// get it from NHK itself).
+const imgPath = (id: string) => `news/img/${id}.jpg`;
+
+export async function readNewsImage(id: string): Promise<ArrayBuffer | null> {
+  const res = await get(imgPath(id), { access: "private" }).catch(() => null);
+  return res?.statusCode === 200 ? new Response(res.stream).arrayBuffer() : null;
 }
 
 async function writeNews(f: NewsFile) {
@@ -58,6 +67,7 @@ export async function refreshNews(today: string, opts: { days?: number; redo?: b
           keys: notes.keys,
           summary: notes.summary,
           url: a.url,
+          ...(read.items.find((o) => o.id === n.id)?.image ? { image: true as const } : {}),
         };
         added.push(n.id);
         return article;
@@ -79,7 +89,22 @@ export async function refreshNews(today: string, opts: { days?: number; redo?: b
     if (old && !items.some((a) => a.id === id)) items.push(old);
   }
   items.sort((x, y) => (x.day === y.day ? x.rank - y.rank : x.day < y.day ? 1 : -1));
-  if (added.length || items.length !== read.items.length) await writeNews(next);
+  // Pictures for the articles that have none yet (new ones, and any a run before couldn't get).
+  const uri = new Map(list.map((n) => [n.id, n.image]));
+  let pics = 0;
+  await Promise.all(
+    items.map(async (a, k) => {
+      const u = !a.image && uri.get(a.id);
+      const body = u ? await nhkImage(s, u) : null;
+      if (!body) return;
+      await put(imgPath(a.id), Buffer.from(body), { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: "image/jpeg" });
+      items[k] = { ...a, image: true };
+      pics++;
+    }),
+  );
+  const gone = read.items.filter((a) => a.image && !items.some((b) => b.id === a.id)).map((a) => imgPath(a.id));
+  if (gone.length) await del(gone).catch(() => {});
+  if (added.length || pics || items.length !== read.items.length) await writeNews(next);
   return { added, failed, file: next };
 }
 

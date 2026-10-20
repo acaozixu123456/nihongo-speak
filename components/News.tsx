@@ -15,7 +15,8 @@ import { SenseiLine } from "./Sensei";
 // NHKやさしいことばニュース in our own voice: one article to read along (/news/[id]), or the ones not heard
 // yet back to back for the train (/news), each article first without the text, then with it.
 
-// NHK's text with its readings. fill: how many characters of it have been said (they turn vermilion).
+// NHK's text with its readings. fill: how many characters of it have been said (they turn vermilion,
+// nothing else about them changes).
 export function Ruby({ segs, fill = 0 }: { segs: Seg[]; fill?: number }) {
   let at = 0;
   return (
@@ -28,15 +29,15 @@ export function Ruby({ segs, fill = 0 }: { segs: Seg[]; fill?: number }) {
         // isn't part of the text, so selecting a sentence to ask about it gets the sentence only.
         if (s.r)
           return (
-            <span key={i} className={`rb${done ? " said" : ""}`} data-r={s.r}>
+            <span key={i} className={`rb${done ? " rb-on" : ""}`} data-r={s.r}>
               {s.t}
             </span>
           );
-        if (done || fill <= from) return <span key={i} className={done ? "said" : undefined}>{s.t}</span>;
+        if (done || fill <= from) return <span key={i} className={done ? "rb-on" : undefined}>{s.t}</span>;
         const cut = Math.round(fill - from);
         return (
           <span key={i}>
-            <span className="said">{s.t.slice(0, cut)}</span>
+            <span className="rb-on">{s.t.slice(0, cut)}</span>
             {s.t.slice(cut)}
           </span>
         );
@@ -46,6 +47,14 @@ export function Ruby({ segs, fill = 0 }: { segs: Seg[]; fill?: number }) {
 }
 
 const md = (day: string) => `${Number(day.slice(5, 7))}月${Number(day.slice(8))}日`;
+// NHK's picture for the story (lib/news.ts keeps it with the article).
+export function NewsImage({ a, className }: { a: NewsArticle; className: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!a.image || failed) return null;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img className={className} src={`/api/news/img/${a.id}`} alt="" loading="lazy" onError={() => setFailed(true)} />;
+}
+
 const lenOf = (segs: Seg[]) => segs.reduce((n, s) => n + s.t.length, 0);
 
 function Controls({ j, extra }: { j: ReturnType<typeof useJoined>; extra?: React.ReactNode }) {
@@ -131,6 +140,7 @@ function Article({ a }: { a: NewsArticle }) {
         <Link href="/listen" className="back">‹ 聴く</Link>
         <button className={`nw-chip${zh ? " on" : ""}`} onClick={() => setZh(!zh)}>訳</button>
       </div>
+      <NewsImage a={a} className="nw-img" />
       <h1 className={`nw-title${at === -1 ? " now" : ""}`} data-ask-topic={a.title_ja}>
         <Ruby segs={a.title} fill={at === -1 ? j.frac * lenOf(a.title) : 0} />
       </h1>
@@ -140,7 +150,7 @@ function Article({ a }: { a: NewsArticle }) {
         {a.sentences.map((s, i) => (
           <div key={i} ref={(el) => void (lines.current[i] = el)} className={`nw-s${s.p ? " para" : ""}${i === at ? " now" : ""}${i < at ? " past" : ""}`}>
             <p data-line={s.ja} onClick={() => (j.phase === "idle" || j.phase === "done" ? j.start().then(() => j.seek(i + 1)) : j.seek(i + 1))}>
-              <Ruby segs={s.segs} fill={i === at ? j.frac * lenOf(s.segs) : i < at ? 999 : 0} />
+              <Ruby segs={s.segs} fill={i === at ? j.frac * lenOf(s.segs) : 0} />
             </p>
             {zh && s.zh && <div className="nw-zh">{s.zh}</div>}
           </div>
@@ -337,6 +347,7 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
           <div className="nw-hidden">{a.title_ja}</div>
         ) : (
           <>
+            <NewsImage a={a} className="nw-img" />
             <div className="nw-hidden">耳だけで聞いてみよう</div>
             <div className="nw-sdots" aria-label={`${Math.max(0, sentence + 1)} / ${a.sentences.length}`}>
               {a.sentences.map((_, i) => (
