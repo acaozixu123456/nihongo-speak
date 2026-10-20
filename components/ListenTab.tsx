@@ -8,6 +8,7 @@ import { dayKey, ensureTitleJa, useProgress } from "@/lib/client/progress";
 import { listenSet, newsDay, newsMinutes, newsToTell, preloadNews, useNews } from "@/lib/client/news";
 import { newsRadio } from "@/lib/client/moyu";
 import { useHydrated } from "@/lib/client/hydrated";
+import { NewsImage } from "./News";
 import { current, quietPref, startRoute, todaysEpisode, useRoute } from "@/lib/client/route";
 
 const md = (day: string) => `${Number(day.slice(5, 7))}/${Number(day.slice(8))}`;
@@ -71,7 +72,8 @@ export default function ListenTab() {
       {today.length > 0 && (
         <div className="pl-grid">
           {today.map((a) => (
-            <Link key={a.id} href={`/news/${a.id}`} className="pl two">
+            <Link key={a.id} href={`/news/${a.id}`} className="pl two nw-row">
+              <NewsImage a={a} className="nw-thumb" />
               <div className="pl-text">
                 <b>{a.title_ja}</b>
                 <span>{a.title_zh}</span>

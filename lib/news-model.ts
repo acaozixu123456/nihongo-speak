@@ -20,6 +20,7 @@ export type NewsArticle = {
   keys: NewsWord[]; // the skeleton for 三回話す, in the story's order
   summary: string[]; // the story in three sentences, a model for telling it
   url: string;
+  image?: true; // NHK's picture for the story is kept, at /api/news/img/<id>
 };
 
 // The anchor's voice: Gemini's Sulafat, Azure's Nanami behind it.

@@ -35,16 +35,31 @@ export async function nhkSession(): Promise<NhkSession> {
   return { token: jar.get("z_at")!, cookie: [...jar].map(([k, v]) => `${k}=${v}`).join("; ") };
 }
 
-export type ListItem = { id: string; day: string; at: string; title: string; rank: number };
+// image: NHK NEWS WEB's picture for the story (needs the session too).
+export type ListItem = { id: string; day: string; at: string; title: string; rank: number; image?: string };
 
 // Newest day first; within a day NHK's own order (top_priority_number).
 export async function nhkList(s: NhkSession): Promise<ListItem[]> {
   const res = await fetch(`${EASY}/news-list.json`, { headers: { authorization: `Bearer ${s.token}`, "user-agent": UA }, signal: AbortSignal.timeout(20000) });
   if (!res.ok) throw new Error(`NHK list: HTTP ${res.status}`);
-  const data = (await res.json()) as Record<string, { news_id: string; title: string; news_prearranged_time: string; top_priority_number: number }[]>[];
+  const data = (await res.json()) as Record<string, {
+    news_id: string;
+    title: string;
+    news_prearranged_time: string;
+    top_priority_number: number;
+    has_news_web_image?: boolean;
+    news_web_image_uri?: string;
+  }[]>[];
   const out: ListItem[] = [];
   for (const [day, items] of Object.entries(data[0] ?? {})) {
-    for (const n of items) out.push({ id: n.news_id, day, at: n.news_prearranged_time, title: n.title, rank: n.top_priority_number });
+    for (const n of items) out.push({
+      id: n.news_id,
+      day,
+      at: n.news_prearranged_time,
+      title: n.title,
+      rank: n.top_priority_number,
+      ...(n.has_news_web_image && n.news_web_image_uri?.startsWith("https://news.web.nhk/") ? { image: n.news_web_image_uri } : {}),
+    });
   }
   return out.sort((a, b) => (a.day === b.day ? a.rank - b.rank : a.day < b.day ? 1 : -1));
 }
@@ -119,6 +134,15 @@ export async function nhkArticle(s: NhkSession, id: string): Promise<NhkArticle>
   if (!title || !body) throw new Error(`NHK article ${id}: no article in the page`);
   const paras = [...body.matchAll(/<p>([\s\S]*?)<\/p>/g)].map((m) => sentences(segments(m[1]))).filter((p) => p.length);
   return { id, title: segments(title.trim()), paras, url };
+}
+
+// The story's picture as a JPEG: the 640×360 copy (_s) NHK keeps next to the full-size one (_l, ~500 KB).
+export async function nhkImage(s: NhkSession, uri: string): Promise<Uint8Array | null> {
+  for (const u of [uri.replace(/_l\.jpg$/, "_s.jpg"), uri]) {
+    const res = await fetch(u, { headers: { cookie: s.cookie, authorization: `Bearer ${s.token}`, "user-agent": UA }, signal: AbortSignal.timeout(20000) }).catch(() => null);
+    if (res?.ok && res.headers.get("content-type")?.startsWith("image/jpeg")) return new Uint8Array(await res.arrayBuffer());
+  }
+  return null;
 }
 
 export const plain = (segs: Seg[]) => segs.map((s) => s.t).join("");
