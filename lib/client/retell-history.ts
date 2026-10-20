@@ -1,4 +1,5 @@
 import { dayKey, teacherFix, type Progress, type Retell, type TeacherFix } from "./progress";
+import { newsItems, newsToday } from "./news";
 
 // 三回話す history: every story told, how many times, and one score per telling day.
 
@@ -98,14 +99,25 @@ export function retellList(p: Progress, todayEp?: { id: string } | null) {
     .filter((e) => e.heard)
     .map((e) => row(e.title_zh, e.title_ja ?? e.title_zh, e.title_ja ? e.title_zh : "", `/retell?ep=${e.id}`, logs, e.date));
   const life = LIFE_TOPICS.map((t, i) => row(t.zh, t.ja, t.zh, `/retell?life=${i}`, logs));
-  const all = [...eps, ...life];
-  const first = (todayEp && eps.find((r) => r.href === `/retell?ep=${todayEp.id}`)) || eps.find((r) => !r.times) || life.find((r) => !r.times) || life[0];
+  // NHK news heard (newest first), with eps in the list.
+  const news = newsItems()
+    .filter((a) => p.news?.[a.id]?.heard)
+    .map((a) => row(a.title_ja, a.title_ja, a.title_zh, `/retell?news=${a.id}`, logs, a.day));
+  const all = [...news, ...eps, ...life];
+  const today = newsToday(p);
+  const first =
+    (today && news.find((r) => r.href === `/retell?news=${today.id}`)) ||
+    (todayEp && eps.find((r) => r.href === `/retell?ep=${todayEp.id}`)) ||
+    news.find((r) => !r.times) ||
+    eps.find((r) => !r.times) ||
+    life.find((r) => !r.times) ||
+    life[0];
   const told = all.filter((r) => r !== first && r.times > 0 && !r.toldToday && r.mark !== "grad");
   const low = told.filter((r) => r.score !== null && r.score < GRAD_SCORE).sort((a, b) => a.score! - b.score!);
   const once = told.filter((r) => r.times === 1 && !low.includes(r));
   const picks = [...low, ...once].slice(0, MAX_PICKS);
   for (const r of picks) r.mark = "again";
-  return { today: first, picks, eps, life, times: totalTimes(p), stories: all.filter((r) => r.times).length };
+  return { today: first, picks, eps: [...news, ...eps], life, times: totalTimes(p), stories: all.filter((r) => r.times).length };
 }
 
 // What stops the learner most, as 森先生 shows it before telling: the point the last 三回話す left unfixed

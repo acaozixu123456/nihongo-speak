@@ -12,6 +12,7 @@ import {
   ensureReadings,
   hasCard,
   knownTags,
+  markNews,
   RADIO_VOICE,
   recordPoints,
   recordKeyRuns,
@@ -31,6 +32,8 @@ import { flowOf, moraRate, runClips, wavSlice, type Flow } from "@/lib/client/fl
 import { Recorder, transcribeLong } from "@/lib/client/recorder";
 import SayAlong from "@/components/SayAlong";
 import { heardToday, stepDone, useOnRoute } from "@/lib/client/route";
+import { newsItems, newsToday } from "@/lib/client/news";
+import type { NewsArticle } from "@/lib/news-model";
 import { useHydrated } from "@/lib/client/hydrated";
 import { LIFE_TOPICS, latest, retellList, retellScore, topicLogs } from "@/lib/client/retell-history";
 import { Star } from "./FeedbackCard";
@@ -75,7 +78,7 @@ const REACTIONS: Record<string, string[]> = {
 type Key = { ja: string; kana?: string };
 // pool: more words from the story, for the keywords that take a learned one's place.
 // title: how the story is stored in the history; ja / zh: how it is shown.
-type Topic = { title: string; ja: string; zh: string; about: string; keys: Key[]; pool: Key[]; starters: string[]; ep?: string };
+type Topic = { title: string; ja: string; zh: string; about: string; keys: Key[]; pool: Key[]; starters: string[]; ep?: string; news?: string };
 
 const epKeys = (ep: Progress["episodes"][number]) =>
   (ep.story?.keys.length ? ep.story.keys : (ep.words ?? [])).slice(0, 3).map((w) => ({ ja: w.ja, kana: w.kana }));
@@ -91,6 +94,20 @@ function epTopic(ep: Progress["episodes"][number]): Topic {
     pool: [...(ep.story?.keys ?? []), ...(ep.words ?? [])].map((w) => ({ ja: w.ja, kana: w.kana })),
     ep: ep.id,
     starters: ["今日ラジオで、〜って話を聞いたんですけど。", "びっくりしたのは、〜ってことです。", "だから、〜らしいですよ。"],
+  };
+}
+
+// An NHK news article heard this morning: its skeleton words, NHK's text as what it is about.
+function newsTopic(a: NewsArticle): Topic {
+  return {
+    title: a.title_ja,
+    ja: a.title_ja,
+    zh: a.title_zh,
+    about: `${a.title_ja}\n${a.sentences.map((s) => s.ja).join("").slice(0, 700)}`,
+    keys: a.keys.slice(0, 3).map((k) => ({ ja: k.ja, kana: k.kana })),
+    pool: [...a.keys, ...a.words].map((w) => ({ ja: w.ja, kana: w.kana })),
+    news: a.id,
+    starters: ["今日のニュースで、〜と言っていました。", "〜そうです。", "わたしは〜と思います。"],
   };
 }
 
@@ -111,17 +128,21 @@ const lifeTopic = (t: string): Topic => ({
 export function pickedTopic(p: Progress, q: URLSearchParams): Topic | null {
   const ep = q.get("ep") && p.episodes.find((e) => e.id === q.get("ep"));
   if (ep) return epTopic(ep);
+  const a = q.get("news") && newsItems().find((x) => x.id === q.get("news"));
+  if (a) return newsTopic(a);
   const life = LIFE_TOPICS[Number(q.get("life"))];
   return q.has("life") && life ? lifeTopic(life.zh) : null;
 }
 
 export function topicsFor(p: Progress): Topic[] {
-  // The episode heard on today's route, even one written the day before.
+  // The news article heard this morning, else the episode heard on today's route (even one written the day before).
+  const a = newsToday(p);
   const ep = heardToday(p);
   const day = Number(dayKey().replace(/-/g, ""));
   const life = LIFE_TOPICS.map((_, i) => lifeTopic(LIFE_TOPICS[(day + i) % LIFE_TOPICS.length].zh));
   const eps = p.episodes.filter((e) => e !== ep && e.heard).slice(0, 8).map(epTopic);
-  return ep ? [epTopic(ep), ...life.slice(0, 1), ...eps, ...life.slice(1)] : [life[0], ...eps, ...life.slice(1)];
+  const first = a ? newsTopic(a) : ep ? epTopic(ep) : null;
+  return first ? [first, ...life.slice(0, 1), ...(a && ep ? [epTopic(ep)] : []), ...eps, ...life.slice(1)] : [life[0], ...eps, ...life.slice(1)];
 }
 
 // An earlier day's story to tell once more, with how its last telling went.
@@ -131,7 +152,8 @@ function againFor(p: Progress): Again | null {
   const r = past[past.length - 1];
   if (!r || (Date.parse(dayKey()) - Date.parse(r.date)) / 86400000 > AGAIN_DAYS) return null;
   const ep = p.episodes.find((e) => e.title_zh === r.topic);
-  const topic = ep ? epTopic(ep) : LIFE_TOPICS.some((l) => l.zh === r.topic) ? lifeTopic(r.topic) : null;
+  const a = newsItems().find((x) => x.title_ja === r.topic);
+  const topic = ep ? epTopic(ep) : a ? newsTopic(a) : LIFE_TOPICS.some((l) => l.zh === r.topic) ? lifeTopic(r.topic) : null;
   return topic && { topic, last: r.mps?.[2], natural: r.natural };
 }
 
@@ -583,6 +605,7 @@ export default function Retell() {
         againTake && { again: { topic: again.topic.title, mps: againTake.mps, pauses: againTake.pauses, stalls: againTake.stalls, ...(uptake.length && { uptake }) } }),
     };
     recordRetell(keep ? { ...day, next: keep } : day);
+    if (topic!.news) markNews(topic!.news, { told: dayKey() });
     setPhase("end");
     stepDone();
     try {
@@ -763,10 +786,19 @@ export default function Retell() {
             <b>{shownT.ja}</b>
             {shownT.zh && <small>{shownT.zh}</small>}
           </span>
-          {!warming && round === 0 && phase === "ready" && !onRoute && (
-            <Link href="/retell/list" className="retell-other">
-              一覧 ›
+          {!warming && round === 0 && phase === "ready" && shownT.news ? (
+            <Link href={`/news/${shownT.news}`} className="retell-other">
+              聞き直す ›
             </Link>
+          ) : (
+            !warming &&
+            round === 0 &&
+            phase === "ready" &&
+            !onRoute && (
+              <Link href="/retell/list" className="retell-other">
+                一覧 ›
+              </Link>
+            )
           )}
           {talking && <span className={`today-big ${left < 10 ? "hurry" : ""}`}>{clock(left)}</span>}
         </span>

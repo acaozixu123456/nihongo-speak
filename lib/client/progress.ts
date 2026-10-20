@@ -25,6 +25,7 @@ import {
   type DiaryEntry,
   type DrillItem,
   type Learned,
+  type NewsMark,
   type PersonMemory,
   type Progress,
   type RadioEpisode,
@@ -662,6 +663,12 @@ export function recordKeyRuns(runs: Record<string, number>) {
   const at = Date.now();
   const all = { ...(p.keyRuns ?? {}), ...Object.fromEntries(Object.entries(runs).map(([k, n]) => [k, { n, at }])) };
   write({ ...p, keyRuns: Object.fromEntries(Object.entries(all).sort((x, y) => y[1].at - x[1].at).slice(0, 200)) });
+}
+
+// NHKやさしいことばニュース: heard to the end, understood (0–2), told in 三回話す.
+export function markNews(id: string, patch: NewsMark) {
+  const p = read();
+  write({ ...p, news: { ...(p.news ?? {}), [id]: { ...(p.news?.[id] ?? {}), ...patch } } });
 }
 
 // The point an earlier day's telling left unfixed, to carry into today's first telling.
