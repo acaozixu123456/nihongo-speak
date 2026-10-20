@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { makingText, radioClips, useRadioMaking, type Clip, type ClipState, type RadioPart } from "@/lib/client/moyu";
+import { makeRadio, makingText, radioClips, useRadioMaking, type Clip, type ClipState, type RadioPart } from "@/lib/client/moyu";
+import { newsItems } from "@/lib/client/news";
 import { mixRadio, type Mixed } from "@/lib/client/radio-mix";
 import { play, preload, SILENCE, ttsUrl, unlock } from "@/lib/client/player";
 import { easyLine, ensureEasy, ensureReadings, ensureTitleJa, findEpisode, hasEasy, markHeard, RADIO_VOICE, useProgress } from "@/lib/client/progress";
@@ -43,6 +44,18 @@ export function NewEpisode() {
   const making = useRadioMaking();
   useEffect(() => {
     let gone = false;
+    // /ep/new?news=<id>: an episode where the hosts talk over this morning's article.
+    const id = new URLSearchParams(location.search).get("news");
+    const a = id && newsItems().find((x) => x.id === id);
+    if (a) {
+      makeRadio(undefined, a).then(
+        (ep) => !gone && router.replace(`/ep/${ep.id}`),
+        () => !gone && router.replace("/listen"),
+      );
+      return () => {
+        gone = true;
+      };
+    }
     nextHref().then((h) => !gone && router.replace(h));
     return () => {
       gone = true;

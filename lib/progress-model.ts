@@ -63,7 +63,8 @@ export type DiaryEntry = {
 // One 趣味电台 episode, kept with its notes (transcript, key sentences, words, grammar) to look back on.
 // asked: what the learner selected and asked AI about on the episode's page (newest last), for 练一练.
 export type AskedItem = { text: string; meaning_zh: string };
-export type RadioEpisode = Radio & { id: string; date: string; heard?: boolean; asked?: AskedItem[] };
+// news: the NHK article (id) the episode talks about, for one made after this morning's news.
+export type RadioEpisode = Radio & { id: string; date: string; heard?: boolean; asked?: AskedItem[]; news?: string };
 export const EPISODES_KEPT = 50;
 
 export type CustomScenario = Scenario & { createdAt: number };
