@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NEWS_VOICE, type NewsArticle, type Seg } from "@/lib/news-model";
 import { useHydrated } from "@/lib/client/hydrated";
-import { RATES, useJoined } from "@/lib/client/joined";
+import { LOOPS, RATES, useJoined } from "@/lib/client/joined";
 import { articleClips, listenSet, newsDay, newsToTell, useNews } from "@/lib/client/news";
 import { play, ttsUrl, unlock } from "@/lib/client/player";
 import { dayKey, markNews, useProgress } from "@/lib/client/progress";
@@ -60,13 +61,50 @@ const paras = (a: NewsArticle) =>
   a.sentences.reduce<number[][]>((out, s, i) => (s.p || !out.length ? out.push([i]) : out[out.length - 1].push(i), out), []);
 const lenOf = (segs: Seg[]) => segs.reduce((n, s) => n + s.t.length, 0);
 
-function Controls({ j, extra }: { j: ReturnType<typeof useJoined>; extra?: React.ReactNode }) {
+const LOOP_LABEL = { off: "しない", one: "1文", all: "この記事" } as const;
+
+// 速さ (and, on the article page, ループ) in a sheet from the bottom, like MOJi's.
+function PlaySheet({ j, loop, onClose }: { j: ReturnType<typeof useJoined>; loop: boolean; onClose: () => void }) {
+  // Out of the dock: its backdrop-filter would hold a fixed sheet inside it.
+  return createPortal(
+    <div className="nw-sheet-bg" onClick={onClose}>
+      <div className="nw-sheet" onClick={(e) => e.stopPropagation()}>
+        {loop && (
+          <>
+            <div className="nw-sheet-h">ループ</div>
+            <div className="nw-sheet-row">
+              {LOOPS.map((l) => (
+                <button key={l} className={`nw-opt${j.loop === l ? " on" : ""}`} onClick={() => j.setLoop(l)}>
+                  {LOOP_LABEL[l]}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+        <div className="nw-sheet-h">速さ</div>
+        <div className="nw-sheet-row five">
+          {RATES.map((r) => (
+            <button key={r} className={`nw-opt${j.rate === r ? " on" : ""}`} onClick={() => j.setRate(r)}>
+              {r.toFixed(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function Controls({ j, extra, loop = false }: { j: ReturnType<typeof useJoined>; extra?: React.ReactNode; loop?: boolean }) {
   const playing = j.phase === "playing";
+  const [sheet, setSheet] = useState(false);
   return (
     <div className="nw-ctl">
-      <button className="nw-chip" onClick={() => j.setRate(RATES[(RATES.indexOf(j.rate) + 1) % RATES.length])}>
+      <button className={`nw-chip${loop && j.loop !== "off" ? " loop" : ""}`} onClick={() => setSheet(true)}>
+        {loop && j.loop !== "off" && <span className="nw-loop">↻ {LOOP_LABEL[j.loop]}</span>}
         {j.rate.toFixed(1)}×
       </button>
+      {sheet && <PlaySheet j={j} loop={loop} onClose={() => setSheet(false)} />}
       {extra}
       <button className="nw-play" onClick={j.toggle} disabled={j.phase === "loading"} aria-label={playing ? "一時停止" : "再生"}>
         {j.phase === "loading" ? "…" : playing ? "❚❚" : "▶"}
@@ -110,7 +148,7 @@ function Article({ a }: { a: NewsArticle }) {
   const [zh, setZh] = useState(false);
   const [hide, setHide] = useState(false);
   const rounds = useMemo(() => [articleClips(a, "read")], [a]);
-  const j = useJoined(rounds, { album: "NHKやさしいことばニュース", onDone: () => markNews(a.id, { heard: dayKey() }) });
+  const j = useJoined(rounds, { album: "NHKやさしいことばニュース", loopable: true, onDone: () => markNews(a.id, { heard: dayKey() }) });
   // Clip 0 is the title; sentence i is clip i + 1.
   const at = j.phase === "idle" ? -2 : j.idx - 1;
   useHeardAtHalf(a, at + 1);
@@ -206,7 +244,7 @@ function Article({ a }: { a: NewsArticle }) {
         <div className="nw-bar">
           <i style={{ width: `${j.idx < 0 ? 0 : Math.round(((j.idx + j.frac) / (a.sentences.length + 1)) * 100)}%` }} />
         </div>
-        <Controls j={j} extra={<button className={`nw-chip${hide ? " on" : ""}`} onClick={() => setHide(!hide)}>{hide ? "表示" : "隠す"}</button>} />
+        <Controls j={j} loop extra={<button className={`nw-chip${hide ? " on" : ""}`} onClick={() => setHide(!hide)}>{hide ? "表示" : "隠す"}</button>} />
         {j.error && <p className="error">{j.error}</p>}
       </div>
       <audio {...j.audioProps} />
