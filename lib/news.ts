@@ -2,7 +2,7 @@ import "server-only";
 import { BlobNotFoundError, del, get, put } from "@vercel/blob";
 import { newsNotes } from "@/lib/claude";
 import { addDays } from "@/lib/progress-model";
-import { NEWS_DAYS, NEWS_VOICE, type NewsArticle } from "@/lib/news-model";
+import { NEWS_DAYS, newsVoice, type NewsArticle } from "@/lib/news-model";
 import { nhkArticle, nhkImage, nhkList, nhkSession, plain, spoken, spokenAll, withReadings } from "@/lib/nhk";
 
 // Every morning (cron, 8:30 JST) the newest NHKやさしいことばニュース articles are fetched, given our
@@ -111,7 +111,7 @@ export async function refreshNews(today: string, opts: { days?: number; redo?: b
 // The voice of every sentence of these articles, asked for once through the public address (the same one
 // the phone asks for), so the CDN has it. A few at a time.
 export async function warmVoices(base: string, items: NewsArticle[]) {
-  const urls = items.flatMap((a) => [a.title_say ?? a.title_ja, ...a.sentences.map((s) => s.say)].map((t) => ttsAddress(base, t)));
+  const urls = items.flatMap((a) => [a.title_say ?? a.title_ja, ...a.sentences.map((s) => s.say)].map((t) => ttsAddress(base, t, newsVoice(a))));
   let i = 0;
   let ok = 0;
   const worker = async () => {
@@ -129,7 +129,7 @@ export async function warmVoices(base: string, items: NewsArticle[]) {
 }
 
 // Must match ttsUrl in lib/client/player.ts (news is never in the voice library).
-function ttsAddress(base: string, text: string) {
+function ttsAddress(base: string, text: string, voice: string) {
   const kanjiOnly = !/[\u3040-\u30f5\u30f7-\u30fa\u30fd-\u30ff]/.test(text);
-  return `${base}/api/tts?${new URLSearchParams({ text, voice: NEWS_VOICE, v: "2", ...(kanjiOnly ? { yomi: "3" } : {}) })}`;
+  return `${base}/api/tts?${new URLSearchParams({ text, voice, v: "2", ...(kanjiOnly ? { yomi: "3" } : {}) })}`;
 }

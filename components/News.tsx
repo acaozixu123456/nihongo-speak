@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { NEWS_VOICE, type NewsArticle, type Seg } from "@/lib/news-model";
+import { newsPace, newsVoice, type NewsArticle, type Seg } from "@/lib/news-model";
 import { useHydrated } from "@/lib/client/hydrated";
 import { LOOPS, RATES, useJoined } from "@/lib/client/joined";
 import { articleClips, listenSet, newsDay, newsToTell, useNews } from "@/lib/client/news";
@@ -217,7 +217,7 @@ function Article({ a }: { a: NewsArticle }) {
                   className="nw-word-say"
                   onClick={() => {
                     unlock();
-                    play(ttsUrl(w.ja, NEWS_VOICE)).catch(() => {});
+                    play(ttsUrl(w.ja, newsVoice(a))).catch(() => {});
                   }}
                   aria-label="読み方を聞く"
                 >
@@ -228,7 +228,7 @@ function Article({ a }: { a: NewsArticle }) {
                   <i>🔈</i>
                 </button>
                 <span>{w.zh}</span>
-                <Star p={p} ja={w.ja} reading={w.kana} zh={w.zh} voice={NEWS_VOICE} scenarioId={`news:${a.id}`} />
+                <Star p={p} ja={w.ja} reading={w.kana} zh={w.zh} voice={newsVoice(a)} scenarioId={`news:${a.id}`} />
               </div>
             ))}
           </div>
@@ -255,6 +255,7 @@ function Article({ a }: { a: NewsArticle }) {
 // ---- The articles not heard yet, back to back ----
 
 const GOT = ["あまり", "半分", "ほとんど"];
+const paceLabel = (pace: number) => (pace < 1 ? " · ゆっくり" : pace > 1.2 ? " · 速め" : pace > 1 ? " · 少し速め" : "");
 // How long 分かった？ waits between the two passes before the second starts on its own.
 const ASK_MS = 5000;
 
@@ -290,6 +291,8 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
   const [showZh, setShowZh] = useState(false);
   const j = useJoined(rounds, {
     album: newsDay(set.day),
+    // The pass without the text goes at the article's own pace (slower or faster), the pass with it at 1.
+    paceOf: (r) => (r % 2 === 0 && today[Math.floor(r / 2)] ? newsPace(today[Math.floor(r / 2)]) : 1),
     onRoundEnd: (r) => {
       const a = today[Math.floor(r / 2)];
       if (r % 2 === 1) return;
@@ -350,7 +353,7 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
         <Link href="/" className="back">‹ 听</Link>
         <span className="muted">{newsDay(set.day)} {idle ? today.length : `${n + 1} / ${today.length}`}</span>
       </div>
-      <div className="kicker">{idle ? "2回ずつ · 1回目は文字なし" : asking ? "1回目 おわり" : second ? "2回目 · 文字あり" : "1回目 · 文字なし"}</div>
+      <div className="kicker">{idle ? "2回ずつ · 1回目は文字なし" : asking ? "1回目 おわり" : second ? "2回目 · 文字あり" : `1回目 · 文字なし${paceLabel(newsPace(a))}`}</div>
       <h1 className="nw-title">{idle ? "新闻" : <Ruby segs={a.title} />}</h1>
       <div className="nw-dots">
         {today.map((x, i) => (
