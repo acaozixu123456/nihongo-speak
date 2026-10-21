@@ -1,5 +1,6 @@
 {
   "regions": ["hnd1"],
+  "git": { "deploymentEnabled": { "claude/**": false } },
   "crons": [
     { "path": "/api/cron/noon", "schedule": "0 3 * * *" },
     { "path": "/api/cron/evening", "schedule": "0 11 * * *" },
