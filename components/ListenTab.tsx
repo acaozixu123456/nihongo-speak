@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { dayKey, ensureTitleJa, useProgress } from "@/lib/client/progress";
-import { listenSet, newsDay, newsMinutes, newsToTell, preloadNews, useNews } from "@/lib/client/news";
+import { ensureTitleJa, useProgress } from "@/lib/client/progress";
+import { listenSet, newsDay, newsToTell, preloadNews, useNews } from "@/lib/client/news";
 import { newsRadio } from "@/lib/client/moyu";
 import { useHydrated } from "@/lib/client/hydrated";
 import type { NewsArticle } from "@/lib/news-model";
@@ -11,8 +11,8 @@ import { todaysEpisode } from "@/lib/client/route";
 
 const md = (day: string) => `${Number(day.slice(5, 7))}/${Number(day.slice(8))}`;
 
-// 聴く: one article big (picture, title, one button), the day's others small beside it, and everything else
-// (radio, song, listening to all of them back to back, earlier days) folded under 更多.
+// 聴く: one article big (picture, title, one button), every other article in a row to swipe through below it,
+// and the rest (radio, song, listening to all of them back to back) folded under 更多.
 export default function ListenTab() {
   const p = useProgress();
   const hydrated = useHydrated();
@@ -20,7 +20,6 @@ export default function ListenTab() {
   // The set is fixed once shown, so marking one heard doesn't move it off the list.
   const set = useMemo(() => (hydrated ? listenSet(p, items) : { day: "", items: [], fresh: false }), [hydrated, items]); // eslint-disable-line react-hooks/exhaustive-deps
   const today = set.items;
-  const older = hydrated ? items.filter((a) => !today.includes(a)).slice(0, 8) : [];
   const ep = hydrated ? todaysEpisode(p) : null;
   // The article to tell tonight, marked from the start: Haru and Ken talk it over on the radio too.
   const target = hydrated ? newsToTell(p, today, items) : null;
@@ -39,9 +38,9 @@ export default function ListenTab() {
   // One article up front (tonight's to tell, else the first not heard), the rest of the day small beside it.
   const pool = today.length ? today : items.slice(0, 4);
   const hero = (target && pool.includes(target) ? target : null) ?? pool.find((a) => !mark(a.id)?.heard) ?? pool[0];
-  const rest = pool.filter((a) => a !== hero);
+  // Every other article kept, newest first, to swipe through below it.
+  const rest = hydrated ? items.filter((a) => a !== hero) : [];
   const [more, setMore] = useState(false);
-  const toTell = hero && target?.id === hero.id && mark(hero.id)?.told !== dayKey();
 
   return (
     <main className="page">
@@ -52,10 +51,10 @@ export default function ListenTab() {
         <Link href={`/news/${hero.id}`} className="lt-hero">
           <Art a={hero} />
           <div className="lt-body">
-            {toTell ? <div className="lt-tag">今天要讲这篇</div> : mark(hero.id)?.heard ? <div className="lt-tag done">✓ 听过</div> : null}
+            {mark(hero.id)?.heard && <div className="lt-tag done">✓ 听过</div>}
             <div className="lt-title">{hero.title_ja}</div>
             <div className="lt-zh">{hero.title_zh}</div>
-            <div className="lt-go">▶ 听这篇<span>约{newsMinutes([hero], 1)}分</span></div>
+            <div className="lt-go">▶ 听这篇</div>
           </div>
         </Link>
       ) : (
@@ -67,6 +66,7 @@ export default function ListenTab() {
             <Link key={a.id} href={`/news/${a.id}`} className="lt-card">
               <Art a={a} />
               <b>{a.title_ja}</b>
+              <span className="lt-d">{md(a.day)}</span>
               {mark(a.id)?.heard && <i className="lt-ok">✓</i>}
             </Link>
           ))}
@@ -103,13 +103,6 @@ export default function ListenTab() {
           <Link href="/episodes" className="pl">
             <b>全部电台</b>
           </Link>
-          {older.map((a) => (
-            <Link key={a.id} href={`/news/${a.id}`} className="pl ep-line">
-              {mark(a.id)?.heard && <span className="ep-ok">✓</span>}
-              <b>{a.title_ja}</b>
-              <span className="ep-d">{md(a.day)}</span>
-            </Link>
-          ))}
         </div>
       )}
     </main>
