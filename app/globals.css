@@ -1945,3 +1945,9 @@ body:has(.on-air) .ask-acts, body:has(.on-air) .ask-bar:not(.ask-acts .ask-bar) 
 .to-sensei b { display: block; font-size: 16px; }
 .to-sensei small { font-size: 12px; color: var(--muted); }
 .to-sensei i { font-style: normal; color: var(--faint); font-size: 18px; }
+
+/* ？: a sentence not caught by ear (News.tsx) */
+.nw-q { display: block; margin: 14px auto 0; }
+.nw-q.on { background: var(--accent); color: #fff; }
+.nw-s.miss p::before { content: "？"; color: var(--accent); font-size: 12px; margin-right: 3px; }
+.nw-back { color: var(--accent); font-weight: 600; }

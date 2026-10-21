@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { newsPace, newsVoice, type NewsArticle, type Seg } from "@/lib/news-model";
 import { useHydrated } from "@/lib/client/hydrated";
 import { LOOPS, RATES, useJoined } from "@/lib/client/joined";
-import { articleClips, listenSet, newsDay, newsToTell, useNews } from "@/lib/client/news";
+import { articleClips, backClips, backSet, clearBack, listenSet, missOf, newsDay, newsToTell, toggleMiss, useNews } from "@/lib/client/news";
 import { play, ttsUrl, unlock } from "@/lib/client/player";
 import { dayKey, markNews, useProgress } from "@/lib/client/progress";
 import { stepDone, useOnRoute } from "@/lib/client/route";
@@ -152,6 +152,7 @@ function Article({ a }: { a: NewsArticle }) {
   // Clip 0 is the title; sentence i is clip i + 1.
   const at = j.phase === "idle" ? -2 : j.idx - 1;
   useHeardAtHalf(a, at + 1);
+  const miss = missOf(p, a);
 
   // The sentence being said stays in the top third of the screen, unless the learner scrolled a moment ago.
   const lines = useRef<(HTMLDivElement | null)[]>([]);
@@ -193,7 +194,7 @@ function Article({ a }: { a: NewsArticle }) {
             {para.map((i) => {
               const s = a.sentences[i];
               return (
-                <div key={i} ref={(el) => void (lines.current[i] = el)} className={`nw-s${i === at ? " now" : ""}`}>
+                <div key={i} ref={(el) => void (lines.current[i] = el)} className={`nw-s${i === at ? " now" : ""}${miss.includes(i) ? " miss" : ""}`}>
                   <p data-line={s.ja} onClick={() => (j.phase === "idle" || j.phase === "done" ? j.start().then(() => j.seek(i + 1)) : j.seek(i + 1))}>
                     <Ruby segs={s.segs} fill={i === at ? j.frac * lenOf(s.segs) : 0} />
                   </p>
@@ -244,7 +245,16 @@ function Article({ a }: { a: NewsArticle }) {
         <div className="nw-bar">
           <i style={{ width: `${j.idx < 0 ? 0 : Math.round(((j.idx + j.frac) / (a.sentences.length + 1)) * 100)}%` }} />
         </div>
-        <Controls j={j} loop extra={<button className={`nw-chip${hide ? " on" : ""}`} onClick={() => setHide(!hide)}>{hide ? "表示" : "隠す"}</button>} />
+        <Controls
+          j={j}
+          loop
+          extra={
+            <>
+              <button className={`nw-chip${hide ? " on" : ""}`} onClick={() => setHide(!hide)}>{hide ? "表示" : "隠す"}</button>
+              <button className={`nw-chip${at >= 0 && miss.includes(at) ? " on" : ""}`} onClick={() => toggleMiss(p, a, at)} disabled={at < 0} aria-label="聞き取れなかった">？</button>
+            </>
+          }
+        />
         {j.error && <p className="error">{j.error}</p>}
       </div>
       <audio {...j.audioProps} />
@@ -284,17 +294,27 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
   const today = set.items;
   const p = useProgress();
   const onRoute = useOnRoute();
-  // Two rounds per article: 2i without the text, 2i + 1 with it.
-  const rounds = useMemo(() => today.flatMap((a) => [articleClips(a, "ear"), articleClips(a, "text")]), [today]);
+  // Sentences marked ？ on earlier days come first, in two rounds (off): in another voice without the text, then
+  // with it. Then two rounds per article: off + 2i without the text, off + 2i + 1 with it.
+  const [back] = useState(() => backSet(p, today));
+  const off = back.length ? 2 : 0;
+  const rounds = useMemo(
+    () => [...(back.length ? [backClips(back, "ear"), backClips(back, "text")] : []), ...today.flatMap((a) => [articleClips(a, "ear"), articleClips(a, "text")])],
+    [today, back],
+  );
   const [asking, setAsking] = useState<{ id: string; done: () => void } | null>(null);
   const skipAsk = useRef(false);
   const [showZh, setShowZh] = useState(false);
   const j = useJoined(rounds, {
     album: newsDay(set.day),
     // The pass without the text goes at the article's own pace (slower or faster), the pass with it at 1.
-    paceOf: (r) => (r % 2 === 0 && today[Math.floor(r / 2)] ? newsPace(today[Math.floor(r / 2)]) : 1),
+    paceOf: (r) => (r >= off && r % 2 === 0 && today[Math.floor((r - off) / 2)] ? newsPace(today[Math.floor((r - off) / 2)]) : 1),
     onRoundEnd: (r) => {
-      const a = today[Math.floor(r / 2)];
+      if (r < off) {
+        if (r === off - 1) clearBack(p, back);
+        return;
+      }
+      const a = today[Math.floor((r - off) / 2)];
       if (r % 2 === 1) return;
       markNews(a.id, { heard: dayKey() });
       // 分かった？ right after the pass without the text, before the text is seen. Not with the screen off
@@ -315,11 +335,13 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
     onDone: () => stepDone(),
   });
   useEffect(() => setShowZh(false), [j.idx]);
-  const n = Math.floor(j.round / 2);
+  const inBack = j.round < off && j.phase !== "idle";
+  const n = Math.floor(Math.max(0, j.round - off) / 2);
   const a = today[n];
+  // off is even, so this holds for the rounds of ？ sentences too.
   const second = j.round % 2 === 1;
   const sentence = j.idx < 0 ? -2 : j.idx - 1;
-  useHeardAtHalf(j.phase === "idle" || second ? undefined : a, sentence + 1);
+  useHeardAtHalf(j.phase === "idle" || second || inBack ? undefined : a, sentence + 1);
   // Carry on from the first article not heard yet today.
   const from = Math.max(0, today.findIndex((x) => p.news?.[x.id]?.heard !== dayKey()));
   const tell = newsToTell(p, today);
@@ -346,23 +368,25 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
     );
 
   const idle = j.phase === "idle";
-  const s = !idle && sentence >= 0 ? a.sentences[sentence] : null;
+  const backNow = inBack && j.idx >= 0 ? back[j.idx] : null;
+  const s = backNow ? backNow.a.sentences[backNow.i] : !idle && !inBack && sentence >= 0 ? a.sentences[sentence] : null;
   return (
     <main className="page nw-page">
       <div className="nw-top">
         <Link href="/" className="back">‹ 听</Link>
-        <span className="muted">{newsDay(set.day)} {idle ? today.length : `${n + 1} / ${today.length}`}</span>
+        <span className="muted">{newsDay(set.day)} {idle ? today.length : inBack ? "" : `${n + 1} / ${today.length}`}</span>
       </div>
-      <div className="kicker">{idle ? "2回ずつ · 1回目は文字なし" : asking ? "1回目 おわり" : second ? "2回目 · 文字あり" : `1回目 · 文字なし${paceLabel(newsPace(a))}`}</div>
-      <h1 className="nw-title">{idle ? "新闻" : <Ruby segs={a.title} />}</h1>
+      <div className="kicker">{idle ? "2回ずつ · 1回目は文字なし" : inBack ? (second ? "聞き直す · 文字あり" : "聞き直す · 別の声で") : asking ? "1回目 おわり" : second ? "2回目 · 文字あり" : `1回目 · 文字なし${paceLabel(newsPace(a))}`}</div>
+      <h1 className="nw-title">{idle ? "新闻" : inBack ? "前に聞き取れなかった文" : <Ruby segs={a.title} />}</h1>
       <div className="nw-dots">
         {today.map((x, i) => (
-          <span key={x.id} className={i < n || (i === n && !idle) || (idle && p.news?.[x.id]?.heard === dayKey()) ? "on" : ""} />
+          <span key={x.id} className={(!inBack && (i < n || (i === n && !idle))) || (idle && p.news?.[x.id]?.heard === dayKey()) ? "on" : ""} />
         ))}
       </div>
       <div className="nw-stage">
         {idle ? (
           <div className="nw-list">
+            {back.length > 0 && <div className="nw-back">？ 聞き直す {back.length}文</div>}
             {today.map((x) => (
               <div key={x.id}>{x.title_ja}</div>
             ))}
@@ -393,9 +417,29 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
               <Ruby segs={s.segs} fill={j.frac * lenOf(s.segs)} />
             </p>
             {showZh ? <div className="nw-zh">{s.zh}</div> : <small className="muted nw-tap">点一下看中文</small>}
+            {!inBack && (
+              <button
+                className={`nw-chip nw-q${missOf(p, a).includes(sentence) ? " on" : ""}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleMiss(p, a, sentence);
+                }}
+              >
+                ？ 聞き取れなかった
+              </button>
+            )}
           </div>
         ) : second ? (
           <div className="nw-hidden">{a.title_ja}</div>
+        ) : inBack ? (
+          <>
+            <div className="nw-hidden">耳だけで聞いてみよう</div>
+            <div className="nw-sdots" aria-label={`${Math.max(0, j.idx + 1)} / ${back.length}`}>
+              {back.map((_, i) => (
+                <span key={i} className={i < j.idx ? "on" : i === j.idx ? "now" : ""} />
+              ))}
+            </div>
+          </>
         ) : (
           <>
             <NewsImage a={a} className="nw-img" />
@@ -410,7 +454,7 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
       </div>
       <div className="nw-dock">
         {idle ? (
-          <button className="pil-go on" onClick={() => j.start(from * 2)}>
+          <button className="pil-go on" onClick={() => j.start(from > 0 ? off + from * 2 : 0)}>
             {from > 0 ? `▶ 続きから（${from + 1}本目）` : "▶ 全部听"}
           </button>
         ) : (
@@ -426,7 +470,7 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
                 }}
                 disabled={j.idx < 0 || !!asking}
               >
-                {second ? "次の記事 ›" : "文字あり ›"}
+                {second ? (inBack ? "次 ›" : "次の記事 ›") : "文字あり ›"}
               </button>
             }
           />
