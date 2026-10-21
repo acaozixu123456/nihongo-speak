@@ -18,7 +18,8 @@ const LOOP_KEY = "nihongo-speak:news-loop";
 
 // onRoundEnd may hold the next round back until it settles (a question between rounds).
 // idx, seek: the clip's place in the round as passed in, even when prepare dropped one that failed.
-export function useJoined(rounds: Clip[][], o: { album: string; loopable?: boolean; onRoundEnd?: (round: number) => void | Promise<void>; onDone?: () => void }) {
+// paceOf: how much faster (or slower) a round goes on top of the speed the learner picked.
+export function useJoined(rounds: Clip[][], o: { album: string; loopable?: boolean; paceOf?: (round: number) => number; onRoundEnd?: (round: number) => void | Promise<void>; onDone?: () => void }) {
   const audio = useRef<HTMLAudioElement>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [round, setRound] = useState(0);
@@ -49,10 +50,13 @@ export function useJoined(rounds: Clip[][], o: { album: string; loopable?: boole
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The speed the audio plays at: the learner's, times this round's pace.
+  const speed = () => Math.min(1.6, Math.max(0.6, s.rate * (s.o.paceOf?.(s.round) ?? 1)));
+
   function setRate(r: number) {
     s.rate = r;
     setRateState(r);
-    if (audio.current) audio.current.playbackRate = r;
+    if (audio.current) audio.current.playbackRate = speed();
     try {
       localStorage.setItem(RATE_KEY, String(r));
     } catch {}
@@ -89,8 +93,8 @@ export function useJoined(rounds: Clip[][], o: { album: string; loopable?: boole
     setIdx(-1);
     s.hold = -1;
     a.src = prep.url;
-    a.defaultPlaybackRate = s.rate;
-    a.playbackRate = s.rate;
+    a.defaultPlaybackRate = speed();
+    a.playbackRate = speed();
     a.play().catch((e) => setError(e instanceof Error ? e.message : "播放失败"));
     if (old) URL.revokeObjectURL(old.url);
     s.next = make(i + 1);
@@ -235,7 +239,7 @@ export function useJoined(rounds: Clip[][], o: { album: string; loopable?: boole
     onEnded: () => s.cur && audio.current?.src === s.cur.url && onEnded(),
     onTimeUpdate: onTime,
     onPlaying: () => {
-      if (audio.current) audio.current.playbackRate = s.rate;
+      if (audio.current) audio.current.playbackRate = speed();
       if (s.cur && audio.current?.src === s.cur.url) setPhase("playing");
     },
     onPause: () => {

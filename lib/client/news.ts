@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
-import { NEWS_VOICE, type NewsArticle } from "@/lib/news-model";
+import { newsPace, newsVoice, type NewsArticle } from "@/lib/news-model";
 import type { Clip } from "./moyu";
 import { preload, ttsUrl } from "./player";
 import { dayKey, teacherPlan, type Progress } from "./progress";
@@ -111,10 +111,12 @@ export function newsToTell(p: Progress, set: NewsArticle[], items: NewsArticle[]
 export const titleSay = (a: NewsArticle) => a.title_say ?? a.title_ja;
 
 // How long listening takes, in minutes: the voice says about 5.2 characters a second, plus the pause after
-// each clip; passes: each article is played this many times (twice back to back on /news).
+// each clip; passes: each article is played this many times (twice back to back on /news, the first at its pace).
 export function newsSeconds(as: NewsArticle[], passes = 2) {
-  const one = as.reduce((n, a) => n + (titleSay(a).length + a.sentences.reduce((m, s) => m + s.say.length, 0)) / 5.2 + (a.sentences.length + 1) * 0.45, 0);
-  return one * passes;
+  return as.reduce((n, a) => {
+    const one = (titleSay(a).length + a.sentences.reduce((m, s) => m + s.say.length, 0)) / 5.2 + (a.sentences.length + 1) * 0.45;
+    return n + (passes > 1 ? one / newsPace(a) + one * (passes - 1) : one);
+  }, 0);
 }
 export const newsMinutes = (as: NewsArticle[], passes = 2) => Math.max(1, Math.round(newsSeconds(as, passes) / 60));
 
@@ -122,14 +124,15 @@ export const newsMinutes = (as: NewsArticle[], passes = 2) => Math.max(1, Math.r
 // lock screen shows only the title and how far it has got, not the sentence.
 export function articleClips(a: NewsArticle, mode: "read" | "ear" | "text" = "read"): Clip[] {
   const n = a.sentences.length;
+  const voice = newsVoice(a);
   return [
-    { block: "news", show: a.title_ja, sub: mode === "text" ? "2回目" : undefined, parts: [{ voice: NEWS_VOICE, text: titleSay(a), pauseMs: 900 }] },
+    { block: "news", show: a.title_ja, sub: mode === "text" ? "2回目" : undefined, parts: [{ voice, text: titleSay(a), pauseMs: 900 }] },
     ...a.sentences.map(
       (s, i): Clip => ({
         block: "news",
         show: mode === "ear" ? `${a.title_ja}（${i + 1}/${n}）` : s.ja,
         sub: s.zh,
-        parts: [{ voice: NEWS_VOICE, text: s.say, pauseMs: a.sentences[i + 1]?.p ? 700 : 350 }],
+        parts: [{ voice, text: s.say, pauseMs: a.sentences[i + 1]?.p ? 700 : 350 }],
       }),
     ),
   ];
@@ -137,5 +140,5 @@ export function articleClips(a: NewsArticle, mode: "read" | "ear" | "text" = "re
 
 // Every sentence of these articles fetched ahead of the train.
 export function preloadNews(as: NewsArticle[]) {
-  preload(as.flatMap((a) => [titleSay(a), ...a.sentences.map((s) => s.say)].map((t) => ttsUrl(t, NEWS_VOICE))));
+  preload(as.flatMap((a) => [titleSay(a), ...a.sentences.map((s) => s.say)].map((t) => ttsUrl(t, newsVoice(a)))));
 }
