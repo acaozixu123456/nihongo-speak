@@ -1,25 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo } from "react";
-import { unlock } from "@/lib/client/player";
+import { useEffect, useMemo, useState } from "react";
 import { dayKey, ensureTitleJa, useProgress } from "@/lib/client/progress";
 import { listenSet, newsDay, newsMinutes, newsToTell, preloadNews, useNews } from "@/lib/client/news";
 import { newsRadio } from "@/lib/client/moyu";
 import { useHydrated } from "@/lib/client/hydrated";
-import { NewsImage } from "./News";
-import { current, quietPref, startRoute, todaysEpisode, useRoute } from "@/lib/client/route";
+import type { NewsArticle } from "@/lib/news-model";
+import { todaysEpisode } from "@/lib/client/route";
 
 const md = (day: string) => `${Number(day.slice(5, 7))}/${Number(day.slice(8))}`;
 
-// 聴く: the NHK news not heard yet on top (all of it back to back, or one by one), then the radio and the
-// rest, then the news of the days before.
+// 聴く: one article big (picture, title, one button), the day's others small beside it, and everything else
+// (radio, song, listening to all of them back to back, earlier days) folded under 更多.
 export default function ListenTab() {
   const p = useProgress();
   const hydrated = useHydrated();
-  const router = useRouter();
-  const r = useRoute();
   const items = useNews();
   // The set is fixed once shown, so marking one heard doesn't move it off the list.
   const set = useMemo(() => (hydrated ? listenSet(p, items) : { day: "", items: [], fresh: false }), [hydrated, items]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -39,96 +35,96 @@ export default function ListenTab() {
   useEffect(() => {
     if (target && !newsEp && set.fresh) newsRadio(target).catch(() => {});
   }, [target, newsEp, set.fresh]);
-  const onRoute = current(r)?.key === "listen";
-  const go = () => {
-    unlock();
-    router.push(startRoute(p, r?.quiet ?? quietPref()));
-  };
   const mark = (id: string) => p.news?.[id];
+  // One article up front (tonight's to tell, else the first not heard), the rest of the day small beside it.
+  const pool = today.length ? today : items.slice(0, 4);
+  const hero = (target && pool.includes(target) ? target : null) ?? pool.find((a) => !mark(a.id)?.heard) ?? pool[0];
+  const rest = pool.filter((a) => a !== hero);
+  const [more, setMore] = useState(false);
+  const toTell = hero && target?.id === hero.id && mark(hero.id)?.told !== dayKey();
 
   return (
     <main className="page">
       <h1 className="tab-h1">
-        听
+        听{set.day && <small>{newsDay(set.day)}</small>}
       </h1>
-      <section className="now-card">
-        <div className="kicker">{set.day ? newsDay(set.day) : "新闻"}</div>
-        <div className="pil-what">
-          <div className="pil-t">{today.length ? `${set.fresh ? "新しい" : "全部聞いた · "}${today.length}本 · ${newsMinutes(today)}分` : "まだありません"}</div>
-          <div className="pil-m">2回ずつ · 1回目は文字なし</div>
-        </div>
-        {hydrated &&
-          today.length > 0 &&
-          (onRoute ? (
-            <button className="pil-go on" onClick={go}>
-              ▶ 全部听
-            </button>
-          ) : (
-            <Link href="/news" className="pil-go">
-              ▶ 全部听
-            </Link>
-          ))}
-      </section>
-      {today.length > 0 && (
-        <div className="pl-grid">
-          {today.map((a) => (
-            <Link key={a.id} href={`/news/${a.id}`} className="pl two nw-row">
-              <NewsImage a={a} className="nw-thumb" />
-              <div className="pl-text">
-                <b>{a.title_ja}</b>
-                <span>{a.title_zh}</span>
-              </div>
-              {target?.id === a.id && mark(a.id)?.told !== dayKey() ? (
-                <span className="nw-row-st go">要讲</span>
-              ) : mark(a.id)?.heard ? (
-                <span className="ep-ok">✓</span>
-              ) : null}
+      {hero ? (
+        <Link href={`/news/${hero.id}`} className="lt-hero">
+          <Art a={hero} />
+          <div className="lt-body">
+            {toTell ? <div className="lt-tag">今天要讲这篇</div> : mark(hero.id)?.heard ? <div className="lt-tag done">✓ 听过</div> : null}
+            <div className="lt-title">{hero.title_ja}</div>
+            <div className="lt-zh">{hero.title_zh}</div>
+            <div className="lt-go">▶ 听这篇<span>约{newsMinutes([hero], 1)}分</span></div>
+          </div>
+        </Link>
+      ) : (
+        hydrated && <p className="muted">还没有新闻（每天晚上 21:00 自动更新）</p>
+      )}
+      {rest.length > 0 && (
+        <div className="lt-rest">
+          {rest.map((a) => (
+            <Link key={a.id} href={`/news/${a.id}`} className="lt-card">
+              <Art a={a} />
+              <b>{a.title_ja}</b>
+              {mark(a.id)?.heard && <i className="lt-ok">✓</i>}
             </Link>
           ))}
         </div>
       )}
-      <div className="tab-label">其他</div>
-      <div className="pl-grid">
-        {target ? (
-          <Link href={newsEp ? `/ep/${newsEp.id}` : `/ep/new?news=${target.id}`} className="pl">
-            <b>电台</b>
-            <span>ハルとケンが今朝のニュースを話す</span>
+      <button className={`lt-more${more ? " open" : ""}`} onClick={() => setMore(!more)}>
+        更多<span>›</span>
+      </button>
+      {more && (
+        <div className="pl-grid">
+          {target ? (
+            <Link href={newsEp ? `/ep/${newsEp.id}` : `/ep/new?news=${target.id}`} className="pl">
+              <b>电台</b>
+              <span>ハルとケンが今朝のニュースを話す</span>
+            </Link>
+          ) : (
+            <Link href={ep ? `/ep/${ep.id}` : "/episodes"} className="pl">
+              <b>电台</b>
+              <span>{ep ? (ep.title_ja ?? ep.title_zh) : "ゆるっと日本ラジオ"}</span>
+            </Link>
+          )}
+          {(newsEp ?? ep) && (
+            <Link href={`/ep/${(newsEp ?? ep)!.id}/song`} className="pl">
+              <b>洗脑歌</b>
+            </Link>
+          )}
+          <Link href="/news" className="pl">
+            <b>连着听</b>
+            <span>每篇两遍 · 第一遍不看字</span>
           </Link>
-        ) : (
-          <Link href={ep ? `/ep/${ep.id}` : "/episodes"} className="pl">
-            <b>电台</b>
-            <span>{ep ? (ep.title_ja ?? ep.title_zh) : "ゆるっと日本ラジオ"}</span>
+          <Link href="/moyu" className="pl">
+            <b>只听</b>
           </Link>
-        )}
-        {(newsEp ?? ep) && (
-          <Link href={`/ep/${(newsEp ?? ep)!.id}/song`} className="pl">
-            <b>洗脑歌</b>
-            <span>把这期唱成歌</span>
+          <Link href="/episodes" className="pl">
+            <b>全部电台</b>
           </Link>
-        )}
-        <Link href="/moyu" className="pl">
-          <b>只听</b>
-          <span>不能出声时只听</span>
-        </Link>
-        <Link href="/episodes" className="pl">
-          <b>全部电台</b>
-          <span>全部的回・点播</span>
-        </Link>
-      </div>
-      {older.length > 0 && (
-        <>
-          <div className="tab-label">以前的</div>
-          <div className="pl-grid">
-            {older.map((a) => (
-              <Link key={a.id} href={`/news/${a.id}`} className="pl ep-line">
-                {mark(a.id)?.heard && <span className="ep-ok">✓</span>}
-                <b>{a.title_ja}</b>
-                <span className="ep-d">{md(a.day)}</span>
-              </Link>
-            ))}
-          </div>
-        </>
+          {older.map((a) => (
+            <Link key={a.id} href={`/news/${a.id}`} className="pl ep-line">
+              {mark(a.id)?.heard && <span className="ep-ok">✓</span>}
+              <b>{a.title_ja}</b>
+              <span className="ep-d">{md(a.day)}</span>
+            </Link>
+          ))}
+        </div>
       )}
     </main>
+  );
+}
+
+// The article's picture, or for one without, the same shape in a soft colour with its first key word.
+function Art({ a }: { a: NewsArticle }) {
+  const [failed, setFailed] = useState(false);
+  if (a.image && !failed)
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img className="lt-art" src={`/api/news/img/${a.id}`} alt="" loading="lazy" onError={() => setFailed(true)} />;
+  return (
+    <div className="lt-art lt-ph">
+      <span>{a.keys[0]?.ja ?? a.title_ja.slice(0, 4)}</span>
+    </div>
   );
 }
