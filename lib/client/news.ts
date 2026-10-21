@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
-import { newsPace, newsVoice, type NewsArticle } from "@/lib/news-model";
+import { NEWS_VOICES, newsPace, newsVoice, type NewsArticle } from "@/lib/news-model";
 import type { Clip } from "./moyu";
 import { preload, ttsUrl } from "./player";
-import { dayKey, teacherPlan, type Progress } from "./progress";
+import { dayKey, markNews, teacherPlan, type Progress } from "./progress";
 
 // NHKやさしいことばニュース on the phone: the kept articles (/api/news), saved here too so the train
 // without signal still has them.
@@ -141,4 +141,49 @@ export function articleClips(a: NewsArticle, mode: "read" | "ear" | "text" = "re
 // Every sentence of these articles fetched ahead of the train.
 export function preloadNews(as: NewsArticle[]) {
   preload(as.flatMap((a) => [titleSay(a), ...a.sentences.map((s) => s.say)].map((t) => ttsUrl(t, newsVoice(a)))));
+}
+
+// ---- ？: sentences not caught by ear ----
+
+export const missOf = (p: Progress, a: NewsArticle) => p.news?.[a.id]?.miss ?? [];
+
+export function toggleMiss(p: Progress, a: NewsArticle, i: number) {
+  const m = missOf(p, a);
+  markNews(a.id, { miss: m.includes(i) ? m.filter((x) => x !== i) : [...m, i].sort((x, y) => x - y) });
+}
+
+// A voice of the other sex from the article's (the list goes woman, man in turn), for hearing a sentence again.
+export const otherVoice = (a: NewsArticle) => NEWS_VOICES[(Math.max(0, NEWS_VOICES.indexOf(newsVoice(a))) + 3) % NEWS_VOICES.length];
+
+export type Back = { a: NewsArticle; i: number };
+const BACK_MAX = 8;
+// The sentences marked ？ in articles other than these, oldest first, at most eight.
+export function backSet(p: Progress, not: NewsArticle[], items: NewsArticle[] = newsItems()): Back[] {
+  const skip = new Set(not.map((a) => a.id));
+  return [...items]
+    .filter((a) => !skip.has(a.id))
+    .sort((x, y) => (x.id < y.id ? -1 : 1))
+    .flatMap((a) => missOf(p, a).filter((i) => a.sentences[i]).map((i) => ({ a, i })))
+    .slice(0, BACK_MAX);
+}
+
+// The sentences again: first in the other voice without the text, then in the article's own with it.
+export function backClips(back: Back[], mode: "ear" | "text"): Clip[] {
+  return back.map(({ a, i }, k) => {
+    const s = a.sentences[i];
+    return {
+      block: "news",
+      show: mode === "ear" ? `聞き直す（${k + 1}/${back.length}）` : s.ja,
+      sub: s.zh,
+      parts: [{ voice: mode === "ear" ? otherVoice(a) : newsVoice(a), text: s.say, pauseMs: 1200 }],
+    };
+  });
+}
+
+// Once heard again, those marks are cleared.
+export function clearBack(p: Progress, back: Back[]) {
+  for (const a of new Set(back.map((b) => b.a))) {
+    const done = back.filter((b) => b.a === a).map((b) => b.i);
+    markNews(a.id, { miss: missOf(p, a).filter((i) => !done.includes(i)) });
+  }
 }
