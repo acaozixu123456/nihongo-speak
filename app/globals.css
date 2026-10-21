@@ -1977,8 +1977,10 @@ body:has(.on-air) .ask-acts, body:has(.on-air) .ask-bar:not(.ask-acts .ask-bar) 
 .lt-ph { display: grid; place-items: center; background: linear-gradient(135deg, #efe4d6, #e6dccd); color: #8a7a64; }
 .lt-ph span { font-family: var(--serif); font-size: 22px; font-weight: 600; letter-spacing: 0.08em; }
 .lt-hero .lt-ph span { font-size: 34px; }
-.lt-rest { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
-.lt-card { position: relative; text-decoration: none; color: var(--text); }
+.lt-rest { display: flex; gap: 10px; margin: 14px -22px 0; padding: 0 22px 4px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding: 0 22px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.lt-rest::-webkit-scrollbar { display: none; }
+.lt-card { position: relative; flex: 0 0 42%; max-width: 180px; scroll-snap-align: start; text-decoration: none; color: var(--text); }
+.lt-d { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
 .lt-card b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-top: 6px; font-family: var(--ja); font-size: 13px; font-weight: 500; line-height: 1.45; }
 .lt-ok { position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; background: var(--good); color: #fff; font-size: 11px; font-style: normal; }
 .lt-more { display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%; margin: 22px 0 8px; border: none; background: none; color: var(--muted); font-size: 14px; cursor: pointer; }
@@ -1992,3 +1994,5 @@ body:has(.on-air) .ask-acts, body:has(.on-air) .ask-bar:not(.ask-acts .ask-bar) 
 .sp-fix b { font-family: var(--ja); font-size: 16px; font-weight: 700; color: var(--accent-ink); }
 .lt-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 2px; }
 .pl::after { margin-left: auto; }
+.sp-due { display: block; margin-top: 12px; text-align: center; font-size: 14px; color: var(--muted); text-decoration: none; }
+.lt-more + .sp-letter, .sp-rec { margin-top: 14px; }

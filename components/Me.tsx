@@ -133,8 +133,8 @@ function Areas({ p }: { p: Progress }) {
   );
 }
 
-// 先生: the only place 森先生 appears, and where every practice's review is kept. Top to bottom: her
-// letter, the one thing to fix today, each practice's review, what to practise, and the record.
+// 先生: the only place 森先生 appears, and where every practice's review is kept. One thing up front (today's
+// fix, else the review due), and her letter, what went well, the practice lists, reviews and record under 更多.
 export default function Me() {
   const p = useProgress();
   const hydrated = useHydrated();
@@ -148,96 +148,128 @@ export default function Me() {
   const days21 = lastDays(21);
   const top = Math.max(1, ...days21.map((d) => p.days[d] ?? 0));
 
+  const due = hydrated ? todaysCards(p).length : 0;
+  const [more, setMore] = useState(false);
+
   return (
     <main className="page">
       <header className="sp-head">
         <SenseiFace size={64} nod={!!good} />
         <div>
           <h1>森老师</h1>
-          <small>{day ? `${day}的信 · 你的每个练习她都看过` : "每天晚上看你说过的话"}</small>
         </div>
       </header>
 
-      {t?.letter_ja ? (
-        <section className="sp-letter">
-          <div className="sp-letter-ja">
-            <span>{t.letter_ja}</span>
-            <button className="bag-play" aria-label="听" onClick={() => speak(t.letter_ja!)}>
-              ▶
-            </button>
-          </div>
-          {t.note_zh &&
-            (zh ? (
-              <p className="sp-letter-zh">{t.note_zh}</p>
-            ) : (
-              <button className="sp-zh" onClick={() => setZh(true)}>
-                中文 ›
-              </button>
-            ))}
-          <div className="sig">森より</div>
-        </section>
-      ) : (
-        hydrated && <SenseiSays ja="毎晩、あなたの話したことを読んで、明日の練習を決めていますよ。" zh="每天晚上我会看你说过的话，安排第二天的练习。" />
-      )}
-
-      {(fix || good) && (
-        <h2 className="pl-head">今天改这一处</h2>
-      )}
-      {fix && (
+      {/* One thing up front: today's fix, else the review that's due, else what she does. */}
+      {fix ? (
         <section className="sp-blk">
           <FixBlock f={fix} />
           <Link href={`/quick?drill=${encodeURIComponent(fix.tag)}`} className="pil-go on">
-            练 1 分钟
+            练习
+          </Link>
+          {due > 0 && (
+            <Link href="/review" className="sp-due">
+              复习 {due} 句 ›
+            </Link>
+          )}
+        </section>
+      ) : due > 0 ? (
+        <section className="sp-blk">
+          <SenseiSays ja={`今日は${due}文、復習しましょう。`} zh={`今天复习 ${due} 句`} />
+          <Link href="/review" className="pil-go on">
+            复习
           </Link>
         </section>
-      )}
-      {good && (
-        <section className="sp-blk">
-          <GoodBlock g={good} />
-        </section>
+      ) : (
+        hydrated && (
+          <SenseiSays ja="毎晩、あなたの話したことを読んで、明日の練習を決めていますよ。" zh="每天晚上我会看你说过的话，安排第二天的练习。" />
+        )
       )}
 
-      {hydrated && (
+      <button className={`lt-more${more ? " open" : ""}`} onClick={() => setMore(!more)}>
+        更多<span>›</span>
+      </button>
+      {more && (
         <>
-          <h2 className="pl-head">各项练习的点评</h2>
-          <Areas p={p} />
+          {t?.letter_ja && (
+            <section className="sp-letter">
+              <div className="sp-letter-ja">
+                <span>{t.letter_ja}</span>
+                <button className="bag-play" aria-label="听" onClick={() => speak(t.letter_ja!)}>
+                  ▶
+                </button>
+              </div>
+              {t.note_zh &&
+                (zh ? (
+                  <p className="sp-letter-zh">{t.note_zh}</p>
+                ) : (
+                  <button className="sp-zh" onClick={() => setZh(true)}>
+                    中文 ›
+                  </button>
+                ))}
+              <div className="sig">{day && `${day} · `}森より</div>
+            </section>
+          )}
+          {good && (
+            <section className="sp-blk">
+              <GoodBlock g={good} />
+            </section>
+          )}
+
+          <div className="pl-grid">
+            <Link href="/review" className="pl">
+              <b>复习</b>
+              {n(due)}
+            </Link>
+            <Link href="/practice" className="pl">
+              <b>练一练</b>
+              {n(hydrated ? dueSkillCount(p) : 0)}
+            </Link>
+            <Link href="/weak" className="pl">
+              <b>常错的地方</b>
+              {n(hydrated ? weakList(p).length : 0)}
+            </Link>
+            <Link href="/bag" className="pl">
+              <b>收藏的句子</b>
+            </Link>
+          </div>
+
+          {hydrated && <Areas p={p} />}
+
+          <Link href="/stats" className="me-card sp-rec">
+            <div className="me-nums">
+              <span>
+                <b className="accent">{hydrated ? streak(p) : "–"}</b>
+                <small>连续天数</small>
+              </span>
+              <span>
+                <b>{hydrated ? allTime(p).said : "–"}</b>
+                <small>说过的句子</small>
+              </span>
+              <span className="chev">›</span>
+            </div>
+            <div className="me-days" aria-hidden>
+              {days21.map((d) => {
+                const xp = hydrated ? (p.days[d] ?? 0) : 0;
+                return (
+                  <i
+                    key={d}
+                    className={d === today ? "now" : undefined}
+                    style={
+                      xp
+                        ? {
+                            opacity: 0.35 + 0.65 * Math.min(1, xp / top),
+                            background: "var(--accent)",
+                          }
+                        : undefined
+                    }
+                  />
+                );
+              })}
+            </div>
+          </Link>
         </>
       )}
-
-      <h2 className="pl-head">要做的练习</h2>
-      <div className="pl-grid">
-        <Link href="/review" className="pl"><b>复习</b><span>今天该复习的句子</span>{n(hydrated ? todaysCards(p).length : 0)}</Link>
-        <Link href="/practice" className="pl"><b>练一练</b><span>做过的题再练</span>{n(hydrated ? dueSkillCount(p) : 0)}</Link>
-        <Link href="/weak" className="pl"><b>常错的地方</b><span />{n(hydrated ? weakList(p).length : 0)}</Link>
-        <Link href="/bag" className="pl"><b>收藏的句子</b><span /></Link>
-      </div>
-
-      <h2 className="pl-head">记录</h2>
-      <Link href="/stats" className="me-card sp-rec">
-        <div className="me-nums">
-          <span>
-            <b className="accent">{hydrated ? streak(p) : "–"}</b>
-            <small>连续天数</small>
-          </span>
-          <span>
-            <b>{hydrated ? allTime(p).said : "–"}</b>
-            <small>说过的句子</small>
-          </span>
-          <span className="chev">›</span>
-        </div>
-        <div className="me-days" aria-hidden>
-          {days21.map((d) => {
-            const xp = hydrated ? (p.days[d] ?? 0) : 0;
-            return (
-              <i
-                key={d}
-                className={d === today ? "now" : undefined}
-                style={xp ? { opacity: 0.35 + 0.65 * Math.min(1, xp / top), background: "var(--accent)" } : undefined}
-              />
-            );
-          })}
-        </div>
-      </Link>
     </main>
   );
 }

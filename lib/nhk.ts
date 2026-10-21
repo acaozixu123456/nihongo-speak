@@ -35,8 +35,11 @@ export async function nhkSession(): Promise<NhkSession> {
   return { token: jar.get("z_at")!, cookie: [...jar].map(([k, v]) => `${k}=${v}`).join("; ") };
 }
 
-// image: NHK NEWS WEB's picture for the story (needs the session too).
+// image: NHK's picture for the story (needs the session too).
 export type ListItem = { id: string; day: string; at: string; title: string; rank: number; image?: string };
+
+// NHK NEWS WEB's picture, else the one NHK made for sharing the easy article (some stories have only that).
+const pic = (has?: boolean, uri?: string) => (has && uri?.startsWith("https://news.web.nhk/") ? { image: uri } : undefined);
 
 // Newest day first; within a day NHK's own order (top_priority_number).
 export async function nhkList(s: NhkSession): Promise<ListItem[]> {
@@ -49,6 +52,8 @@ export async function nhkList(s: NhkSession): Promise<ListItem[]> {
     top_priority_number: number;
     has_news_web_image?: boolean;
     news_web_image_uri?: string;
+    has_news_easy_image?: boolean;
+    news_easy_image_uri?: string;
   }[]>[];
   const out: ListItem[] = [];
   for (const [day, items] of Object.entries(data[0] ?? {})) {
@@ -58,7 +63,7 @@ export async function nhkList(s: NhkSession): Promise<ListItem[]> {
       at: n.news_prearranged_time,
       title: n.title,
       rank: n.top_priority_number,
-      ...(n.has_news_web_image && n.news_web_image_uri?.startsWith("https://news.web.nhk/") ? { image: n.news_web_image_uri } : {}),
+      ...(pic(n.has_news_web_image, n.news_web_image_uri) ?? pic(n.has_news_easy_image, n.news_easy_image_uri) ?? {}),
     });
   }
   return out.sort((a, b) => (a.day === b.day ? a.rank - b.rank : a.day < b.day ? 1 : -1));
