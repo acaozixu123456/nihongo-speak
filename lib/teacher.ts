@@ -46,8 +46,6 @@ function record(p: Progress, day: string, past: Memo[], news: NewsArticle[]) {
     .filter((r) => r.date >= week && r.texts?.length)
     .slice(-6)
     .map((r) => `- ${r.date}「${r.topic}」\n    1回目：${r.texts![0]}\n    3回目：${r.texts![r.texts!.length - 1]}${r.next?.tag ? `\n    その日の注意：${r.next.tag}` : ""}`);
-  const got = Object.entries(p.news ?? {}).filter(([, m]) => m.heard && m.heard >= week && m.got !== undefined);
-  const gotLine = got.length ? ["あまり", "半分", "ほとんど"].map((g, i) => `${g} ${got.filter(([, m]) => m.got === i).length}`).join("・") : "";
   return `今日：${day}
 弱点の記録（新しい順）：
 ${weak.join("\n") || "（なし）"}
@@ -57,7 +55,7 @@ ${tellings.join("\n") || "（なし）"}
 
 明日のニュース（NHKやさしいことばニュース。id：見出し / 内容）：
 ${news.map((a) => `- ${a.id}：${a.title_ja} / ${a.summary.join("")}`).join("\n") || "（なし）"}
-${gotLine ? `この1週間、ニュースを文字なしで1回聞いて分かった度合い（自己評価）：${gotLine}\n` : ""}
+
 これまでのメモ（あなたが前に書いたもの、新しい順）：
 ${past.map((m) => `- ${m.day}${m.good ? `\n    伸びた：${m.good.before} → ${m.good.after}` : ""}${m.fix ? `\n    直そう：${m.fix.said} → ${m.fix.better}（${m.fix.tag}）` : ""}`).join("\n") || "（なし）"}`;
 }

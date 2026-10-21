@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
-import { NEWS_VOICES, newsPace, newsVoice, type NewsArticle } from "@/lib/news-model";
+import { newsPace, newsVoice, otherVoice, type NewsArticle } from "@/lib/news-model";
 import type { Clip } from "./moyu";
 import { preload, ttsUrl } from "./player";
 import { dayKey, markNews, teacherPlan, type Progress } from "./progress";
@@ -122,9 +122,8 @@ export const newsMinutes = (as: NewsArticle[], passes = 2) => Math.max(1, Math.r
 
 // The title, then every sentence (a little pause between paragraphs). ear: the pass without the text, whose
 // lock screen shows only the title and how far it has got, not the sentence.
-export function articleClips(a: NewsArticle, mode: "read" | "ear" | "text" = "read"): Clip[] {
+export function articleClips(a: NewsArticle, voice: string, mode: "read" | "ear" | "text" = "read"): Clip[] {
   const n = a.sentences.length;
-  const voice = newsVoice(a);
   return [
     { block: "news", show: a.title_ja, sub: mode === "text" ? "2回目" : undefined, parts: [{ voice, text: titleSay(a), pauseMs: 900 }] },
     ...a.sentences.map(
@@ -139,8 +138,8 @@ export function articleClips(a: NewsArticle, mode: "read" | "ear" | "text" = "re
 }
 
 // Every sentence of these articles fetched ahead of the train.
-export function preloadNews(as: NewsArticle[]) {
-  preload(as.flatMap((a) => [titleSay(a), ...a.sentences.map((s) => s.say)].map((t) => ttsUrl(t, newsVoice(a)))));
+export function preloadNews(p: Progress, as: NewsArticle[]) {
+  preload(as.flatMap((a) => [titleSay(a), ...a.sentences.map((s) => s.say)].map((t) => ttsUrl(t, voiceOf(p, a)))));
 }
 
 // ---- ？: sentences not caught by ear ----
@@ -152,8 +151,8 @@ export function toggleMiss(p: Progress, a: NewsArticle, i: number) {
   markNews(a.id, { miss: m.includes(i) ? m.filter((x) => x !== i) : [...m, i].sort((x, y) => x - y) });
 }
 
-// A voice of the other sex from the article's (the list goes woman, man in turn), for hearing a sentence again.
-export const otherVoice = (a: NewsArticle) => NEWS_VOICES[(Math.max(0, NEWS_VOICES.indexOf(newsVoice(a))) + 3) % NEWS_VOICES.length];
+// The voice the article is read in: the one picked for it, else the anchor's.
+export const voiceOf = (p: Progress, a: NewsArticle) => newsVoice(p.news?.[a.id]?.voice);
 
 export type Back = { a: NewsArticle; i: number };
 const BACK_MAX = 8;
@@ -167,15 +166,15 @@ export function backSet(p: Progress, not: NewsArticle[], items: NewsArticle[] = 
     .slice(0, BACK_MAX);
 }
 
-// The sentences again: first in the other voice without the text, then in the article's own with it.
-export function backClips(back: Back[], mode: "ear" | "text"): Clip[] {
+// The sentences again: first in a voice of the other sex without the text, then in the article's own with it.
+export function backClips(p: Progress, back: Back[], mode: "ear" | "text"): Clip[] {
   return back.map(({ a, i }, k) => {
     const s = a.sentences[i];
     return {
       block: "news",
       show: mode === "ear" ? `聞き直す（${k + 1}/${back.length}）` : s.ja,
       sub: s.zh,
-      parts: [{ voice: mode === "ear" ? otherVoice(a) : newsVoice(a), text: s.say, pauseMs: 1200 }],
+      parts: [{ voice: mode === "ear" ? otherVoice(voiceOf(p, a)) : voiceOf(p, a), text: s.say, pauseMs: 1200 }],
     };
   });
 }
