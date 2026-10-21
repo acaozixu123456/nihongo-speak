@@ -11,9 +11,10 @@ import { setAudioSession } from "./recorder";
 export type Phase = "idle" | "loading" | "playing" | "paused" | "done";
 export const RATES = [0.8, 1, 1.2, 1.4];
 const RATE_KEY = "nihongo-speak:news-rate";
-// Loop: off, the sentence playing, or the whole round (the article) again and again.
-export type Loop = "off" | "one" | "all";
-export const LOOPS: Loop[] = ["off", "one", "all"];
+// Loop: off, the sentence playing, or the whole round (the article) again and again. voices: the round again
+// in the next voice, which the page does (here it ends like off).
+export type Loop = "off" | "one" | "all" | "voices";
+export const LOOPS: Loop[] = ["off", "one", "all", "voices"];
 const LOOP_KEY = "nihongo-speak:news-loop";
 
 // onRoundEnd may hold the next round back until it settles (a question between rounds).
@@ -120,7 +121,7 @@ export function useJoined(rounds: Clip[][], o: { album: string; loopable?: boole
 
   async function onEnded() {
     const a = audio.current;
-    if (a && s.cur && s.loop !== "off") {
+    if (a && s.cur && (s.loop === "one" || s.loop === "all")) {
       // Again from the start of the sentence held, or of the round.
       a.currentTime = s.loop === "one" && s.hold >= 0 ? s.cur.starts[s.hold] + 0.01 : 0;
       a.play().catch(() => {});

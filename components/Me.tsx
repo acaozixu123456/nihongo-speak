@@ -91,9 +91,6 @@ function Areas({ p }: { p: Progress }) {
   const [prev, now] = weeks(p, 2);
   // Not the one already on top as today's fix.
   const weak = weakList(p).find((w) => w.tag !== teacherFix(p)?.tag);
-  const week = addDays(dayKey(), -6);
-  const got = Object.values(p.news ?? {}).filter((m) => m.heard && m.heard >= week && m.got !== undefined);
-  const most = got.filter((m) => m.got === 2).length;
   const sec = (ms: number | null) => (ms === null ? null : Math.round(ms / 100) / 10);
   const fast = sec(now.quickMs);
   const before = sec(prev.quickMs);
@@ -130,16 +127,6 @@ function Areas({ p }: { p: Progress }) {
           ) : (
             weak && <div className="a-num">还常错：{weak.tag}</div>
           )}
-        </Area>
-      )}
-      {got.length > 0 && (
-        <Area id="listen" title="听新闻">
-          <div className="a-num">
-            <span>
-              这 7 天第一遍就听懂大部分：<b>{most}/{got.length}</b> 篇
-            </span>
-          </div>
-          {most < got.length && <div className="a-tip">第一遍别看文字，先听到最后，再看文字听第二遍。</div>}
         </Area>
       )}
     </>

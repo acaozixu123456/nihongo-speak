@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { newsPace, newsVoice, type NewsArticle, type Seg } from "@/lib/news-model";
+import { NEWS_VOICES, VOICE_LABEL, newsPace, type NewsArticle, type Seg } from "@/lib/news-model";
 import { useHydrated } from "@/lib/client/hydrated";
 import { LOOPS, RATES, useJoined } from "@/lib/client/joined";
-import { articleClips, backClips, backSet, clearBack, listenSet, missOf, newsDay, newsToTell, toggleMiss, useNews } from "@/lib/client/news";
+import { articleClips, backClips, backSet, clearBack, listenSet, missOf, newsDay, newsToTell, toggleMiss, useNews, voiceOf } from "@/lib/client/news";
 import { play, ttsUrl, unlock } from "@/lib/client/player";
 import { dayKey, markNews, useProgress } from "@/lib/client/progress";
 import { stepDone, useOnRoute } from "@/lib/client/route";
@@ -61,57 +61,105 @@ const paras = (a: NewsArticle) =>
   a.sentences.reduce<number[][]>((out, s, i) => (s.p || !out.length ? out.push([i]) : out[out.length - 1].push(i), out), []);
 const lenOf = (segs: Seg[]) => segs.reduce((n, s) => n + s.t.length, 0);
 
-const LOOP_LABEL = { off: "しない", one: "1文", all: "この記事" } as const;
+const LOOP_LABEL = { off: "しない", one: "1文", all: "この記事", voices: "声を変えて" } as const;
 
-// 速さ (and, on the article page, ループ) in a sheet from the bottom, like MOJi's.
-function PlaySheet({ j, loop, onClose }: { j: ReturnType<typeof useJoined>; loop: boolean; onClose: () => void }) {
+// The article's voice: picked here, kept with the article (Progress.news[id].voice).
+type VoicePick = { voice: string; set: (v: string) => void };
+
+// One setting as an iOS-style segmented control.
+function Seg<T extends string | number>({ label, value, options, show, onPick }: { label: string; value: T; options: readonly T[]; show: (o: T) => string; onPick: (o: T) => void }) {
+  return (
+    <div className="nw-set">
+      <div className="nw-set-h">{label}</div>
+      <div className="nw-seg">
+        {options.map((o) => (
+          <button key={String(o)} className={value === o ? "on" : ""} onClick={() => onPick(o)}>
+            {show(o)}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+type TextPick = { hide: boolean; set: (hide: boolean) => void };
+
+// 速さ, 声, and on the article page ループ and 文字, in one sheet from the bottom.
+function PlaySheet({ j, loop, voice, text, onClose }: { j: ReturnType<typeof useJoined>; loop: boolean; voice?: VoicePick; text?: TextPick; onClose: () => void }) {
   // Out of the dock: its backdrop-filter would hold a fixed sheet inside it.
   return createPortal(
     <div className="nw-sheet-bg" onClick={onClose}>
       <div className="nw-sheet" onClick={(e) => e.stopPropagation()}>
-        {loop && (
-          <>
-            <div className="nw-sheet-h">ループ</div>
-            <div className="nw-sheet-row">
-              {LOOPS.map((l) => (
-                <button key={l} className={`nw-opt${j.loop === l ? " on" : ""}`} onClick={() => j.setLoop(l)}>
-                  {LOOP_LABEL[l]}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-        <div className="nw-sheet-h">速さ</div>
-        <div className="nw-sheet-row five">
-          {RATES.map((r) => (
-            <button key={r} className={`nw-opt${j.rate === r ? " on" : ""}`} onClick={() => j.setRate(r)}>
-              {r.toFixed(1)}
-            </button>
-          ))}
-        </div>
+        <div className="nw-grab" />
+        <Seg label="速さ" value={j.rate} options={RATES} show={(r) => r.toFixed(1)} onPick={j.setRate} />
+        {voice && <Seg label="声" value={voice.voice} options={NEWS_VOICES} show={(v) => VOICE_LABEL[NEWS_VOICES.indexOf(v)]} onPick={voice.set} />}
+        {loop && <Seg label="ループ" value={j.loop} options={LOOPS} show={(l) => LOOP_LABEL[l]} onPick={j.setLoop} />}
+        {text && <Seg label="文字" value={text.hide ? "hide" : "show"} options={["show", "hide"] as const} show={(t) => (t === "show" ? "表示" : "隠す")} onPick={(t) => text.set(t === "hide")} />}
       </div>
     </div>,
     document.body,
   );
 }
 
-function Controls({ j, extra, loop = false }: { j: ReturnType<typeof useJoined>; extra?: React.ReactNode; loop?: boolean }) {
+const Icon = {
+  play: <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z" fill="currentColor" />,
+  pause: (
+    <>
+      <rect x="6.5" y="5" width="4" height="14" rx="1.2" fill="currentColor" />
+      <rect x="13.5" y="5" width="4" height="14" rx="1.2" fill="currentColor" />
+    </>
+  ),
+  prev: (
+    <>
+      <rect x="5" y="6" width="2.2" height="12" rx="1" fill="currentColor" />
+      <path d="M19 6.9v10.2a.9.9 0 0 1-1.38.76L9.6 12.76a.9.9 0 0 1 0-1.52l8.02-5.1A.9.9 0 0 1 19 6.9z" fill="currentColor" />
+    </>
+  ),
+  next: (
+    <>
+      <rect x="16.8" y="6" width="2.2" height="12" rx="1" fill="currentColor" />
+      <path d="M5 6.9v10.2a.9.9 0 0 0 1.38.76l8.02-5.1a.9.9 0 0 0 0-1.52L6.38 6.14A.9.9 0 0 0 5 6.9z" fill="currentColor" />
+    </>
+  ),
+  more: (
+    <g fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+      <path d="M4 7h9M17 7h3M4 17h3M11 17h9" />
+      <circle cx="15" cy="7" r="2" />
+      <circle cx="9" cy="17" r="2" />
+    </g>
+  ),
+};
+const Svg = ({ d }: { d: React.ReactNode }) => (
+  <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden>
+    {d}
+  </svg>
+);
+
+// The dock, like a podcast player's: speed, back a sentence, play, on, and everything else behind ⚙.
+// next: what ⏭ does (default: the next sentence).
+function Controls({ j, next, loop = false, voice, text }: { j: ReturnType<typeof useJoined>; next?: { go: () => void; label: string }; loop?: boolean; voice?: VoicePick; text?: TextPick }) {
   const playing = j.phase === "playing";
   const [sheet, setSheet] = useState(false);
+  const looping = loop && j.loop !== "off";
   return (
     <div className="nw-ctl">
-      <button className={`nw-chip${loop && j.loop !== "off" ? " loop" : ""}`} onClick={() => setSheet(true)}>
-        {loop && j.loop !== "off" && <span className="nw-loop">↻ {LOOP_LABEL[j.loop]}</span>}
+      <button className="nw-ic nw-rate" onClick={() => setSheet(true)} aria-label="速さ">
         {j.rate.toFixed(1)}×
       </button>
-      {sheet && <PlaySheet j={j} loop={loop} onClose={() => setSheet(false)} />}
-      {extra}
+      <button className="nw-ic" onClick={j.again} disabled={j.idx < 0} aria-label="前の文">
+        <Svg d={Icon.prev} />
+      </button>
       <button className="nw-play" onClick={j.toggle} disabled={j.phase === "loading"} aria-label={playing ? "一時停止" : "再生"}>
-        {j.phase === "loading" ? "…" : playing ? "❚❚" : "▶"}
+        {j.phase === "loading" ? <span className="nw-spin" /> : <Svg d={playing ? Icon.pause : Icon.play} />}
       </button>
-      <button className="nw-chip" onClick={j.again} disabled={j.idx < 0}>
-        ↺ 1文
+      <button className="nw-ic" onClick={next?.go ?? j.skip} disabled={j.idx < 0} aria-label={next?.label ?? "次の文"}>
+        <Svg d={Icon.next} />
       </button>
+      <button className={`nw-ic${looping ? " on" : ""}`} onClick={() => setSheet(true)} aria-label="設定">
+        <Svg d={Icon.more} />
+        {looping && <i className="nw-dot" />}
+      </button>
+      {sheet && <PlaySheet j={j} loop={loop} voice={voice} text={text} onClose={() => setSheet(false)} />}
     </div>
   );
 }
@@ -147,12 +195,35 @@ function Article({ a }: { a: NewsArticle }) {
   const p = useProgress();
   const [zh, setZh] = useState(false);
   const [hide, setHide] = useState(false);
-  const rounds = useMemo(() => [articleClips(a, "read")], [a]);
-  const j = useJoined(rounds, { album: "NHKやさしいことばニュース", loopable: true, onDone: () => markNews(a.id, { heard: dayKey() }) });
+  const voice = voiceOf(p, a);
+  const rounds = useMemo(() => [articleClips(a, voice, "read")], [a, voice]);
+  // ループ 声を変えて: at the end, the next voice (women, then men), and the article again in it.
+  const cycling = useRef(false);
+  const j = useJoined(rounds, {
+    album: "NHKやさしいことばニュース",
+    loopable: true,
+    onDone: () => {
+      markNews(a.id, { heard: dayKey() });
+      if (j.loop !== "voices") return;
+      cycling.current = true;
+      markNews(a.id, { voice: NEWS_VOICES[(NEWS_VOICES.indexOf(voice) + 1) % NEWS_VOICES.length] });
+    },
+  });
   // Clip 0 is the title; sentence i is clip i + 1.
   const at = j.phase === "idle" ? -2 : j.idx - 1;
   useHeardAtHalf(a, at + 1);
   const miss = missOf(p, a);
+  // Another voice picked while playing: on from the same sentence in it.
+  const said = useRef(voice);
+  useEffect(() => {
+    if (said.current === voice) return;
+    said.current = voice;
+    if (cycling.current) {
+      cycling.current = false;
+      j.start();
+    } else if (j.phase !== "idle" && j.phase !== "done") j.start().then(() => j.seek(Math.max(0, at + 1)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voice]);
 
   // The sentence being said stays in the top third of the screen, unless the learner scrolled a moment ago.
   const lines = useRef<(HTMLDivElement | null)[]>([]);
@@ -198,6 +269,11 @@ function Article({ a }: { a: NewsArticle }) {
                   <p data-line={s.ja} onClick={() => (j.phase === "idle" || j.phase === "done" ? j.start().then(() => j.seek(i + 1)) : j.seek(i + 1))}>
                     <Ruby segs={s.segs} fill={i === at ? j.frac * lenOf(s.segs) : 0} />
                   </p>
+                  {i === at && (
+                    <button className={`nw-qi${miss.includes(i) ? " on" : ""}`} onClick={() => toggleMiss(p, a, i)}>
+                      ？ 聞き取れなかった
+                    </button>
+                  )}
                   {zh && s.zh && <div className="nw-zh">{s.zh}</div>}
                 </div>
               );
@@ -218,7 +294,7 @@ function Article({ a }: { a: NewsArticle }) {
                   className="nw-word-say"
                   onClick={() => {
                     unlock();
-                    play(ttsUrl(w.ja, newsVoice(a))).catch(() => {});
+                    play(ttsUrl(w.ja, voice)).catch(() => {});
                   }}
                   aria-label="読み方を聞く"
                 >
@@ -229,7 +305,7 @@ function Article({ a }: { a: NewsArticle }) {
                   <i>🔈</i>
                 </button>
                 <span>{w.zh}</span>
-                <Star p={p} ja={w.ja} reading={w.kana} zh={w.zh} voice={newsVoice(a)} scenarioId={`news:${a.id}`} />
+                <Star p={p} ja={w.ja} reading={w.kana} zh={w.zh} voice={voice} scenarioId={`news:${a.id}`} />
               </div>
             ))}
           </div>
@@ -248,12 +324,8 @@ function Article({ a }: { a: NewsArticle }) {
         <Controls
           j={j}
           loop
-          extra={
-            <>
-              <button className={`nw-chip${hide ? " on" : ""}`} onClick={() => setHide(!hide)}>{hide ? "表示" : "隠す"}</button>
-              <button className={`nw-chip${at >= 0 && miss.includes(at) ? " on" : ""}`} onClick={() => toggleMiss(p, a, at)} disabled={at < 0} aria-label="聞き取れなかった">？</button>
-            </>
-          }
+          voice={{ voice, set: (v) => markNews(a.id, { voice: v }) }}
+          text={{ hide, set: setHide }}
         />
         {j.error && <p className="error">{j.error}</p>}
       </div>
@@ -264,10 +336,7 @@ function Article({ a }: { a: NewsArticle }) {
 
 // ---- The articles not heard yet, back to back ----
 
-const GOT = ["あまり", "半分", "ほとんど"];
 const paceLabel = (pace: number) => (pace < 1 ? " · ゆっくり" : pace > 1.2 ? " · 速め" : pace > 1 ? " · 少し速め" : "");
-// How long 分かった？ waits between the two passes before the second starts on its own.
-const ASK_MS = 5000;
 
 export function NewsPlay() {
   const p = useProgress();
@@ -298,12 +367,15 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
   // with it. Then two rounds per article: off + 2i without the text, off + 2i + 1 with it.
   const [back] = useState(() => backSet(p, today));
   const off = back.length ? 2 : 0;
+  const voices = today.map((a) => voiceOf(p, a)).join();
   const rounds = useMemo(
-    () => [...(back.length ? [backClips(back, "ear"), backClips(back, "text")] : []), ...today.flatMap((a) => [articleClips(a, "ear"), articleClips(a, "text")])],
-    [today, back],
+    () => [
+      ...(back.length ? [backClips(p, back, "ear"), backClips(p, back, "text")] : []),
+      ...today.flatMap((a) => [articleClips(a, voiceOf(p, a), "ear"), articleClips(a, voiceOf(p, a), "text")]),
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [today, back, voices],
   );
-  const [asking, setAsking] = useState<{ id: string; done: () => void } | null>(null);
-  const skipAsk = useRef(false);
   const [showZh, setShowZh] = useState(false);
   const j = useJoined(rounds, {
     album: newsDay(set.day),
@@ -314,23 +386,7 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
         if (r === off - 1) clearBack(p, back);
         return;
       }
-      const a = today[Math.floor((r - off) / 2)];
-      if (r % 2 === 1) return;
-      markNews(a.id, { heard: dayKey() });
-      // 分かった？ right after the pass without the text, before the text is seen. Not with the screen off
-      // (the train, phone in a pocket): the next pass just carries on.
-      const skip = skipAsk.current;
-      skipAsk.current = false;
-      if (skip || document.visibilityState !== "visible") return;
-      return new Promise<void>((done) => {
-        const t = setTimeout(() => finish(), ASK_MS);
-        const finish = () => {
-          clearTimeout(t);
-          setAsking(null);
-          done();
-        };
-        setAsking({ id: a.id, done: finish });
-      });
+      if (r % 2 === 0) markNews(today[Math.floor((r - off) / 2)].id, { heard: dayKey() });
     },
     onDone: () => stepDone(),
   });
@@ -342,6 +398,14 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
   const second = j.round % 2 === 1;
   const sentence = j.idx < 0 ? -2 : j.idx - 1;
   useHeardAtHalf(j.phase === "idle" || second || inBack ? undefined : a, sentence + 1);
+  // Another voice picked for this article while playing: this pass again from the same sentence, in it.
+  const said = useRef(voices);
+  useEffect(() => {
+    if (said.current === voices) return;
+    said.current = voices;
+    if (j.phase !== "idle" && j.phase !== "done") j.start(j.round).then(() => j.seek(Math.max(0, j.idx)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voices]);
   // Carry on from the first article not heard yet today.
   const from = Math.max(0, today.findIndex((x) => p.news?.[x.id]?.heard !== dayKey()));
   const tell = newsToTell(p, today);
@@ -376,7 +440,7 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
         <Link href="/" className="back">‹ 听</Link>
         <span className="muted">{newsDay(set.day)} {idle ? today.length : inBack ? "" : `${n + 1} / ${today.length}`}</span>
       </div>
-      <div className="kicker">{idle ? "2回ずつ · 1回目は文字なし" : inBack ? (second ? "聞き直す · 文字あり" : "聞き直す · 別の声で") : asking ? "1回目 おわり" : second ? "2回目 · 文字あり" : `1回目 · 文字なし${paceLabel(newsPace(a))}`}</div>
+      <div className="kicker">{idle ? "2回ずつ · 1回目は文字なし" : inBack ? (second ? "聞き直す · 文字あり" : "聞き直す · 別の声で") : second ? "2回目 · 文字あり" : `1回目 · 文字なし${paceLabel(newsPace(a))}`}</div>
       <h1 className="nw-title">{idle ? "新闻" : inBack ? "前に聞き取れなかった文" : <Ruby segs={a.title} />}</h1>
       <div className="nw-dots">
         {today.map((x, i) => (
@@ -390,26 +454,6 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
             {today.map((x) => (
               <div key={x.id}>{x.title_ja}</div>
             ))}
-          </div>
-        ) : asking ? (
-          <div className="nw-got">
-            <div>分かった？</div>
-            <div className="nw-got-row">
-              {GOT.map((g, i) => (
-                <button
-                  key={g}
-                  className="nw-chip big"
-                  onClick={() => {
-                    markNews(asking.id, { got: i });
-                    asking.done();
-                  }}
-                >
-                  {g}
-                </button>
-              ))}
-            </div>
-            <div className="nw-wait" style={{ animationDuration: `${ASK_MS}ms` }} />
-            <small className="muted">このあと文字ありでもう一度</small>
           </div>
         ) : second && s ? (
           <div onClick={() => setShowZh(!showZh)}>
@@ -460,19 +504,9 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
         ) : (
           <Controls
             j={j}
-            extra={
-              <button
-                className="nw-chip"
-                onClick={() => {
-                  // 1回目: on to the pass with the text (no question: it wasn't listened to); 2回目: the next article.
-                  if (!second) skipAsk.current = true;
-                  j.seek(999);
-                }}
-                disabled={j.idx < 0 || !!asking}
-              >
-                {second ? (inBack ? "次 ›" : "次の記事 ›") : "文字あり ›"}
-              </button>
-            }
+            voice={inBack || !a ? undefined : { voice: voiceOf(p, a), set: (v) => markNews(a.id, { voice: v }) }}
+            // 1回目: on to the pass with the text; 2回目: the next article.
+            next={{ go: () => j.seek(999), label: second ? "次へ" : "文字ありへ" }}
           />
         )}
         {j.error && <p className="error">{j.error}</p>}

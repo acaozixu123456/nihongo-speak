@@ -111,7 +111,7 @@ export async function refreshNews(today: string, opts: { days?: number; redo?: b
 // The voice of every sentence of these articles, asked for once through the public address (the same one
 // the phone asks for), so the CDN has it. A few at a time.
 export async function warmVoices(base: string, items: NewsArticle[]) {
-  const urls = items.flatMap((a) => [a.title_say ?? a.title_ja, ...a.sentences.map((s) => s.say)].map((t) => ttsAddress(base, t, newsVoice(a))));
+  const urls = items.flatMap((a) => [a.title_say ?? a.title_ja, ...a.sentences.map((s) => s.say)].map((t) => ttsAddress(base, t, newsVoice())));
   let i = 0;
   let ok = 0;
   const worker = async () => {

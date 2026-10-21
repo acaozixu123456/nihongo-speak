@@ -33,8 +33,8 @@ export default function ListenTab() {
     if (ep) ensureTitleJa(ep);
   }, [ep]);
   useEffect(() => {
-    if (today.length) preloadNews(today);
-  }, [today]);
+    if (today.length) preloadNews(p, today);
+  }, [today]); // eslint-disable-line react-hooks/exhaustive-deps
   // Its radio is made in the background, so the row plays on a tap.
   useEffect(() => {
     if (target && !newsEp && set.fresh) newsRadio(target).catch(() => {});
