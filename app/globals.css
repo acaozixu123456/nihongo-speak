@@ -1996,3 +1996,7 @@ body:has(.on-air) .ask-acts, body:has(.on-air) .ask-bar:not(.ask-acts .ask-bar) 
 .pl::after { margin-left: auto; }
 .sp-due { display: block; margin-top: 12px; text-align: center; font-size: 14px; color: var(--muted); text-decoration: none; }
 .lt-more + .sp-letter, .sp-rec { margin-top: 14px; }
+.nw-six { display: flex; gap: 6px; margin: 6px 0 0; }
+.nw-six i { font-style: normal; font-size: 12px; color: var(--faint); padding: 2px 8px; border-radius: 999px; background: var(--soft); }
+.nw-six i.past { color: var(--muted); }
+.nw-six i.on { color: #fff; background: var(--accent-fill); font-weight: 600; }
