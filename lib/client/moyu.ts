@@ -36,7 +36,7 @@ export const BLOCK_LABEL: Record<Block, string> = {
   news: "NHKやさしいことばニュース",
 };
 
-// sound: a short sound of the site's own (/beep.mp3) instead of a voice.
+// sound: a short sound of the site's own (/beep2.mp3) instead of a voice.
 export type Part = { voice: string; text?: string; sound?: string; pauseMs?: number };
 export type Clip = {
   block: Block;
