@@ -12,9 +12,9 @@ export type Phase = "idle" | "loading" | "playing" | "paused" | "done";
 export const RATES = [0.8, 1, 1.2, 1.4];
 const RATE_KEY = "nihongo-speak:news-rate";
 // Loop: off, the sentence playing, or the whole round (the article) again and again. voices: the round again
-// in the next voice, which the page does (here it ends like off).
-export type Loop = "off" | "one" | "all" | "voices";
-export const LOOPS: Loop[] = ["off", "one", "all", "voices"];
+// in the next voice, and six: each sentence in all six voices, which the page does (here both end like off).
+export type Loop = "off" | "one" | "all" | "voices" | "six";
+export const LOOPS: Loop[] = ["off", "one", "all", "voices", "six"];
 const LOOP_KEY = "nihongo-speak:news-loop";
 
 // onRoundEnd may hold the next round back until it settles (a question between rounds).

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
-import { newsPace, newsVoice, otherVoice, type NewsArticle } from "@/lib/news-model";
+import { NEWS_VOICES, VOICE_LABEL, newsPace, newsVoice, otherVoice, type NewsArticle } from "@/lib/news-model";
 import type { Clip } from "./moyu";
 import { preload, ttsUrl } from "./player";
 import { dayKey, markNews, teacherPlan, type Progress } from "./progress";
@@ -133,6 +133,24 @@ export function articleClips(a: NewsArticle, voice: string, mode: "read" | "ear"
         sub: s.zh,
         parts: [{ voice, text: s.say, pauseMs: a.sentences[i + 1]?.p ? 700 : 350 }],
       }),
+    ),
+  ];
+}
+
+// 6つの声: the title, then each sentence said by all six voices before the next, one round per sentence (so
+// it starts at once and the next sentence is made while this one plays). Round r + 1 is sentence r.
+export function sixRounds(a: NewsArticle, voice: string): Clip[][] {
+  return [
+    [{ block: "news", show: a.title_ja, parts: [{ voice, text: titleSay(a), pauseMs: 900 }] }],
+    ...a.sentences.map((s, i) =>
+      NEWS_VOICES.map(
+        (v, k): Clip => ({
+          block: "news",
+          show: s.ja,
+          sub: `${VOICE_LABEL[k]} · ${s.zh}`,
+          parts: [{ voice: v, text: s.say, pauseMs: k === NEWS_VOICES.length - 1 ? (a.sentences[i + 1]?.p ? 1000 : 800) : 450 }],
+        }),
+      ),
     ),
   ];
 }
