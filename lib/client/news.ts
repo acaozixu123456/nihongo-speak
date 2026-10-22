@@ -151,7 +151,7 @@ export function sixRounds(a: NewsArticle, voice: string, talk = false): Clip[][]
           show: s.ja,
           sub: `${VOICE_LABEL[k]} · ${s.zh}`,
           parts: talk
-            ? [{ voice: v, text: s.say, pauseMs: 250 }, { voice: v, sound: "/beep.mp3", pauseMs: talkGap(s.say) }]
+            ? [{ voice: v, text: s.say, pauseMs: 250 }, { voice: v, sound: "/beep2.mp3", pauseMs: talkGap(s.say) }]
             : [{ voice: v, text: s.say, pauseMs: k === NEWS_VOICES.length - 1 ? (a.sentences[i + 1]?.p ? 1000 : 800) : 450 }],
         }),
       ),
