@@ -61,7 +61,7 @@ const paras = (a: NewsArticle) =>
   a.sentences.reduce<number[][]>((out, s, i) => (s.p || !out.length ? out.push([i]) : out[out.length - 1].push(i), out), []);
 const lenOf = (segs: Seg[]) => segs.reduce((n, s) => n + s.t.length, 0);
 
-const LOOP_LABEL = { off: "なし", one: "1文", all: "記事", voices: "声替え", six: "1文6声" } as const;
+const LOOP_LABEL = { off: "なし", one: "1文", all: "記事", voices: "声替え", six: "6声", talk: "6声+話" } as const;
 
 // The article's voice: picked here, kept with the article (Progress.news[id].voice).
 type VoicePick = { voice: string; set: (v: string) => void };
@@ -196,9 +196,11 @@ function Article({ a }: { a: NewsArticle }) {
   const [zh, setZh] = useState(false);
   const [hide, setHide] = useState(false);
   const voice = voiceOf(p, a);
-  // ループ 1文6声: each sentence in all six voices, one round per sentence (lib/client/news.ts sixRounds).
-  const [six, setSix] = useState(false);
-  const rounds = useMemo(() => (six ? sixRounds(a, voice) : [articleClips(a, voice, "read")]), [a, voice, six]);
+  // ループ 6声: each sentence in all six voices, one round per sentence (lib/client/news.ts sixRounds);
+  // 6声+話: with a beep and time to say it after each voice.
+  const [mode, setMode] = useState<"" | "six" | "talk">("");
+  const six = mode !== "";
+  const rounds = useMemo(() => (mode ? sixRounds(a, voice, mode === "talk") : [articleClips(a, voice, "read")]), [a, voice, mode]);
   // ループ 声を変えて: at the end, the next voice (women, then men), and the article again in it.
   const cycling = useRef(false);
   const j = useJoined(rounds, {
@@ -211,15 +213,16 @@ function Article({ a }: { a: NewsArticle }) {
       markNews(a.id, { voice: NEWS_VOICES[(NEWS_VOICES.indexOf(voice) + 1) % NEWS_VOICES.length] });
     },
   });
-  // Clip 0 is the title; sentence i is clip i + 1 (in 1文6声, round i + 1, its clips the six voices).
+  // Clip 0 is the title; sentence i is clip i + 1 (in 6声, round i + 1, its clips the six voices).
   const at = j.phase === "idle" ? -2 : six ? j.round - 1 : j.idx - 1;
   const goTo = (i: number) => (six ? j.start(i + 1) : j.phase === "idle" || j.phase === "done" ? j.start().then(() => j.seek(i + 1)) : j.seek(i + 1));
-  // Switched into or out of 1文6声 while playing: on from the same sentence.
+  // Switched between 6声, 6声+話 and the rest while playing: on from the same sentence.
   useEffect(() => {
-    if (six === (j.loop === "six")) return;
+    const m = j.loop === "six" || j.loop === "talk" ? j.loop : "";
+    if (mode === m) return;
     const from = at;
-    setSix(j.loop === "six");
-    if (j.phase !== "idle" && j.phase !== "done") setTimeout(() => (j.loop === "six" ? j.start(Math.max(0, from + 1)) : j.start().then(() => j.seek(Math.max(0, from + 1)))), 50);
+    setMode(m);
+    if (j.phase !== "idle" && j.phase !== "done") setTimeout(() => (m ? j.start(Math.max(0, from + 1)) : j.start().then(() => j.seek(Math.max(0, from + 1)))), 50);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [j.loop]);
   useHeardAtHalf(a, at + 1);

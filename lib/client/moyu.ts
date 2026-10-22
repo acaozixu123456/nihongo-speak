@@ -36,7 +36,8 @@ export const BLOCK_LABEL: Record<Block, string> = {
   news: "NHKやさしいことばニュース",
 };
 
-export type Part = { voice: string; text?: string; pauseMs?: number };
+// sound: a short sound of the site's own (/beep.mp3) instead of a voice.
+export type Part = { voice: string; text?: string; sound?: string; pauseMs?: number };
 export type Clip = {
   block: Block;
   show: string; // the line on screen and on the lock screen
@@ -455,7 +456,7 @@ async function clipAudio(parts: Part[], report?: Report): Promise<Frames & { fal
       // Only the Japanese line itself counts: the Chinese narration is always Azure.
       if (got.fallback && p.voice.startsWith("ja-")) out.fallback = true;
       said = mp3Frames(got.buf);
-    }
+    } else if (p.sound) said = mp3Frames((await fetchAudio(p.sound, report)).buf);
     for (const a of [said, p.pauseMs ? pause(p.pauseMs) : null]) {
       if (!a) continue;
       out.chunks.push(...a.chunks);
