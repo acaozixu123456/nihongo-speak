@@ -11,7 +11,6 @@ import { play, ttsUrl, unlock } from "@/lib/client/player";
 import { dayKey, markNews, useProgress } from "@/lib/client/progress";
 import { stepDone, useOnRoute } from "@/lib/client/route";
 import { Star } from "./FeedbackCard";
-import Note from "./Note";
 
 // NHKやさしいことばニュース in our own voice: one article to read along (/news/[id]), or the ones not heard
 // yet back to back for the train (/news), each article first without the text, then with it.
@@ -270,17 +269,20 @@ function Article({ a }: { a: NewsArticle }) {
   }, [j.phase]);
 
   return (
-    <main className="page nw-page">
-      <div className="nw-top">
-        <Link href="/" className="back">‹ 听</Link>
-        <button className={`nw-chip${zh ? " on" : ""}`} onClick={() => setZh(!zh)}>訳</button>
+    <main className="page nw-page mag">
+      {/* The picture as the cover, the article on a sheet of paper laid over its foot. */}
+      <div className={`mg-cover${a.image ? "" : " bare"}`}>
+        <NewsImage a={a} className="mg-cover-img" />
+        <Link href="/" className="mg-fab l" aria-label="听">‹</Link>
+        <button className={`mg-fab r${zh ? " on" : ""}`} onClick={() => setZh(!zh)}>訳</button>
       </div>
-      <NewsImage a={a} className="nw-img" />
+      <div className="mg-sheet">
+      <div className="mg-dl">{md(a.day)} · NHK やさしいことばニュース</div>
       <h1 className={`nw-title${at === -1 ? " now" : ""}`} data-ask-topic={a.title_ja}>
         <Ruby segs={a.title} fill={at === -1 ? j.frac * lenOf(a.title) : 0} />
       </h1>
       {zh && <div className="nw-zh">{a.title_zh}</div>}
-      <div className="nw-date">{md(a.day)} · NHKやさしいことばニュース</div>
+      <div className="mg-orn">◆</div>
       <div className={`nw-body${hide ? " hidden" : ""}`}>
         {paras(a).map((para) => (
           <div key={para[0]} className="nw-para">
@@ -289,7 +291,9 @@ function Article({ a }: { a: NewsArticle }) {
               return (
                 <div key={i} ref={(el) => void (lines.current[i] = el)} className={`nw-s${i === at ? " now" : ""}${miss.includes(i) ? " miss" : ""}`}>
                   <p data-line={s.ja} onClick={() => goTo(i)}>
-                    <Ruby segs={s.segs} fill={i === at ? j.frac * lenOf(s.segs) : 0} />
+                    <span className="mg-hl">
+                      <Ruby segs={s.segs} fill={i === at ? j.frac * lenOf(s.segs) : 0} />
+                    </span>
                   </p>
                   {i === at && six && j.idx >= 0 && (
                     <div className="nw-six">
@@ -314,12 +318,13 @@ function Article({ a }: { a: NewsArticle }) {
         ))}
         {hide && <div className="nw-hidden">耳だけで聞いてみよう</div>}
       </div>
+      <div className="mg-fin">― 終 ―</div>
       <a className="nw-src" href={a.url} target="_blank" rel="noreferrer">出典：NHK NEWS WEB EASY ›</a>
 
       {a.words.length > 0 && (
         <>
-          <div className="tab-label" id="words">単語</div>
-          <div className="rowlist">
+          <div className="mg-gloss" id="words">
+            <h4>ことば</h4>
             {a.words.map((w) => (
               <div key={w.ja} className="rowlist-row nw-word" data-line={w.ja}>
                 <button
@@ -344,14 +349,19 @@ function Article({ a }: { a: NewsArticle }) {
         </>
       )}
 
-      <div className="nw-end" ref={end}>
-        <Note text="听完了，用自己的话讲三遍。" />
+      <div className="nw-end mg-end" ref={end}>
+        <div className="mg-endq">
+          この記事を、
+          <br />
+          自分のことばで。
+        </div>
         <Link href={`/retell?news=${a.id}`} className={`pil-go${fullOpen(p, a) ? "" : " on"}`}>讲三遍</Link>
         {fullOpen(p, a) ? (
           <Link href={`/news/${a.id}/full`} className="pil-go on">全文モード{p.news?.[a.id]?.full !== undefined ? `（ベスト ${p.news[a.id].full}）` : ""}</Link>
         ) : (
           <div className="nw-lock">每句都 ✓ 后解锁全文模式（{saidCount(p, a)} / {a.sentences.length}）</div>
         )}
+      </div>
       </div>
 
       <div className="nw-dock">
