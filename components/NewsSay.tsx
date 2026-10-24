@@ -8,6 +8,7 @@ import { useNews, voiceOf } from "@/lib/client/news";
 import { play, stop, ttsUrl, unlock } from "@/lib/client/player";
 import { hasCard, markNews, toggleCard, useProgress } from "@/lib/client/progress";
 import { verdict } from "@/lib/client/fx";
+import { loadPause, startPause, stopPause } from "@/lib/client/bgm";
 import HoldButton from "./HoldButton";
 import { Ruby } from "./News";
 
@@ -106,6 +107,11 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
     markNews(a.id, { voice: v });
     listen(v);
   };
+  // The quiet music of 三回話す fills the wait after the third telling, ready before it is needed.
+  useEffect(() => {
+    void loadPause();
+    return () => void stopPause(0);
+  }, []);
   // Each sentence starts by being heard once.
   useEffect(() => {
     if (!end) listen();
@@ -119,6 +125,7 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
     const mine = turn.current;
     setGot((g) => Object.assign([...g], { [at]: "wait" }));
     setK(at + 1);
+    if (at === 2) void startPause();
     try {
       const res = await fetch("/api/say", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ja: s.ja, audio: await toBase64(wav) }) });
       const c = (await res.json()) as Check & { error?: string };
@@ -126,17 +133,21 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
       if (turn.current !== mine) return;
       setGot((g) => Object.assign([...g], { [at]: c }));
       if (at === 2) {
+        void stopPause(1);
         verdict(whole(c) ? "right" : share(c) >= 0.7 ? "close" : "wrong");
         markNews(a.id, { said: { ...p.news?.[a.id]?.said, [i]: whole(c) ? 1 : 0 } });
         if (!whole(c) && !hasCard(p, s.ja)) toggleCard({ ja: s.ja, zh: s.zh, voice, scenarioId: `news:${a.id}` });
       }
     } catch {
-      if (turn.current === mine) setGot((g) => Object.assign([...g], { [at]: "fail" }));
+      if (turn.current !== mine) return;
+      if (at === 2) void stopPause(1);
+      setGot((g) => Object.assign([...g], { [at]: "fail" }));
     }
   }
 
   function again() {
     turn.current++;
+    void stopPause(0.3);
     setGot([]);
     setK(0);
     setError("");
