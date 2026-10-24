@@ -2073,3 +2073,8 @@ body:has(.on-air) .ask-acts, body:has(.on-air) .ask-bar:not(.ask-acts .ask-bar) 
 .say-row i { width: 24px; height: 24px; flex: none; border-radius: 50%; background: var(--soft); display: flex; align-items: center; justify-content: center; color: #fff; font-style: normal; font-size: 13px; font-weight: 900; }
 .say-row i.g { background: var(--ok); }
 .say-row i.r { background: var(--no); }
+.say-listen-row { margin-top: 14px; }
+.say-listen-row .say-listen { margin-top: 0; }
+.say-voices { display: flex; gap: 6px; margin-top: 10px; }
+.say-voices button { flex: 1; border: none; border-radius: 10px; background: var(--soft); color: var(--text); padding: 7px 0; font-family: var(--ja); font-size: 13px; cursor: pointer; }
+.say-voices button.on { background: var(--text); color: var(--card); }

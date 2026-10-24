@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import type { NewsArticle, Seg } from "@/lib/news-model";
+import { NEWS_VOICES, VOICE_LABEL, type NewsArticle, type Seg } from "@/lib/news-model";
 import { useHydrated } from "@/lib/client/hydrated";
 import { useNews, voiceOf } from "@/lib/client/news";
 import { play, stop, ttsUrl, unlock } from "@/lib/client/player";
@@ -97,9 +97,14 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
   const s = a.sentences[i];
   const turn = useRef(0);
 
-  const listen = () => {
+  const listen = (v = voice) => {
     unlock();
-    play(ttsUrl(s.say, voice)).catch(() => {});
+    play(ttsUrl(s.say, v)).catch(() => {});
+  };
+  // Another of the six voices: kept as the article's voice (the article page uses it too) and heard at once.
+  const pick = (v: string) => {
+    markNews(a.id, { voice: v });
+    listen(v);
   };
   // Each sentence starts by being heard once.
   useEffect(() => {
@@ -208,9 +213,18 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
             {k !== 1 && s.zh && <div className="say-zh">{s.zh}</div>}
           </div>
           {k === 0 && !rec && (
-            <button className="say-listen" onClick={listen}>
-              <i>▶</i>もう一度聞く
-            </button>
+            <div className="say-listen-row">
+              <button className="say-listen" onClick={() => listen()}>
+                <i>▶</i>もう一度聞く
+              </button>
+              <div className="say-voices">
+                {NEWS_VOICES.map((v, x) => (
+                  <button key={v} className={v === voice ? "on" : ""} onClick={() => pick(v)}>
+                    {VOICE_LABEL[x]}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
           <div className="say-mic">
             <HoldButton
@@ -264,7 +278,7 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
                   <div className="say-bh"><i>!</i>ここが抜けた</div>
                   <div className="say-miss">
                     <b>{last.parts.filter((x) => !x.ok && !MARK.test(x.t)).map((x) => x.t).join(" … ")}</b>
-                    <button className="say-play" onClick={listen} aria-label="原文を聞く">▶</button>
+                    <button className="say-play" onClick={() => listen()} aria-label="原文を聞く">▶</button>
                   </div>
                   {last.miss_zh && <div className="say-zh">{last.miss_zh}</div>}
                 </div>
