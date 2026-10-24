@@ -88,13 +88,13 @@ async function drawOne(prompt: string, aspect: string, log: string[]): Promise<{
 
 // Draws one picture and has it looked at; a second go when the first isn't right. drawn: false when no picture
 // came at all (tried again on a later run), as against one that was looked at and turned down.
-async function drawChecked(path: string, prompt: string, aspect: string, ja: string, zh: string, log: string[], kind: "word" | "sentence" = "word"): Promise<Drawn> {
+async function drawChecked(path: string, prompt: string, aspect: string, ja: string, zh: string, log: string[]): Promise<Drawn> {
   let why = "";
   for (let attempt = 0; attempt < 2; attempt++) {
     const got = await drawOne(`${prompt}\n\n${STYLE}`, aspect, log);
     if (!got) return { ok: false, why: "not drawn", drawn: false };
     const jpeg = await toJpeg(got.img);
-    const check = await pictureCheck(jpeg, ja, zh, prompt, kind).catch((e) => ({ ok: false, why: `check failed: ${e instanceof Error ? e.message : e}` }));
+    const check = await pictureCheck(jpeg, ja, zh, prompt).catch((e) => ({ ok: false, why: `check failed: ${e instanceof Error ? e.message : e}` }));
     if (check.ok) {
       await put(path, jpeg, { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: "image/jpeg" });
       return { ok: true, why: check.why, engine: got.engine };
@@ -137,7 +137,7 @@ async function picturesFor(a: NewsArticle, until: number, log: string[], redraw 
     jobs.push(async () => {
       if (Date.now() > until) return void (left = true);
       const path = scenePath(a.id, i);
-      const r = !redraw && (await exists(path)) ? { ok: true, why: "kept" } : await drawChecked(path, p, "4:3", s.ja, s.zh, log, "sentence");
+      const r = !redraw && (await exists(path)) ? { ok: true, why: "kept" } : await drawChecked(path, p, "4:3", s.ja, s.zh, log);
       if (r.ok) s.scene_image = sceneUrl(a.id, i);
       if ("drawn" in r && r.drawn === false) left = true;
       log.push(`${a.id} s${i} ${r.ok ? "ok" : "none"} ${r.why}`);
@@ -160,7 +160,7 @@ async function picturesFor(a: NewsArticle, until: number, log: string[], redraw 
     while (k < jobs.length) await jobs[k++]();
   };
   await Promise.all([worker(), worker()]);
-  return { a: { ...a, sentences, words, pics: left ? ((a.pics ?? 0) >= PICS_DONE ? 1 : (a.pics ?? 0) + 1) : PICS_DONE }, done: !left };
+  return { a: { ...a, sentences, words, pics: left ? (a.pics ?? 0) + 1 : PICS_DONE }, done: !left };
 }
 
 // Draws what is missing for the newest articles (only: older ones were heard already), until the time is up.
