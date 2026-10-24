@@ -1059,3 +1059,28 @@ export function newsNotes(title: string, sentences: string[]): Promise<NewsNotes
     "low",
   );
 }
+
+// 一文ずつ三回話す: one NHK sentence said back from memory. The sentence is cut into its parts in order, each
+// marked said or not, so the screen can paint what was said green and what was left out red.
+const SayCheckSchema = z.object({
+  parts: z
+    .array(z.object({ t: z.string().describe("元の文の一部分（そのまま抜き出す）"), ok: z.boolean().describe("学習者がこの部分を言えたら true") }))
+    .describe("元の文を、頭から順に意味のまとまり（文節程度）に切ったもの。全部つなげると元の文と一字一句同じになること"),
+  miss_zh: z.string().describe("言えなかった部分の意味と、言うときのコツを中国語で一言（20字以内）。全部言えたら空文字"),
+});
+export type SayCheck = z.infer<typeof SayCheckSchema>;
+
+export async function sayCheck(a: { ja: string; said: string }): Promise<SayCheck> {
+  const res = await parse({
+    ...smart(1500),
+    system: `${COACH}
+学習者はニュースの一文を聞いて、それを覚えて口で言い直す練習をしています。元の文と、学習者が言ったこと（音声認識の結果）を比べてください。
+音声認識の結果なので、同音の漢字違い・ひらがなと漢字の違い・句読点・数字の書き方は違いとして扱わない。
+意味が同じでも、語が抜けた・別の語に変わった・活用や助詞が違う部分は ok を false にする。`,
+    messages: [{ role: "user", content: `元の文：${a.ja}\n学習者が言ったこと：${a.said}` }],
+    output_config: { effort: "low", format: zodOutputFormat(SayCheckSchema) },
+  });
+  checkStop(res.stop_reason);
+  if (!res.parsed_output) throw new Error(`AI 返回格式不对（${res.stop_reason}）`);
+  return res.parsed_output;
+}

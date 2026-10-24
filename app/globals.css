@@ -2000,3 +2000,76 @@ body:has(.on-air) .ask-acts, body:has(.on-air) .ask-bar:not(.ask-acts .ask-bar) 
 .nw-six i { font-style: normal; font-size: 12px; color: var(--faint); padding: 2px 8px; border-radius: 999px; background: var(--soft); }
 .nw-six i.past { color: var(--muted); }
 .nw-six i.on { color: #fff; background: var(--accent-fill); font-weight: 600; }
+
+/* 一文ずつ三回話す: the button beside each sentence of an article, and its page (components/NewsSay.tsx). */
+.nw-s { position: relative; }
+.nw-s p { padding-right: 40px; }
+.nw-say { position: absolute; right: 0; top: 5px; width: 30px; height: 30px; border-radius: 50%; background: var(--soft); color: var(--muted); display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 14px; font-weight: 900; }
+.nw-say svg { width: 15px; height: 15px; }
+.nw-say.g { background: var(--ok-bg); color: var(--ok-ink); }
+.nw-say.r { background: var(--no-bg); color: var(--no-ink); }
+.nw-body.hidden .nw-say { visibility: hidden; }
+.say-page { padding-bottom: 150px; }
+.say-top { display: flex; justify-content: space-between; align-items: baseline; }
+.say-top .back { margin-bottom: 0; }
+.say-bar { display: flex; gap: 4px; margin-top: 12px; }
+.say-bar i { flex: 1; height: 4px; border-radius: 4px; background: var(--line); }
+.say-bar i.d { background: var(--ok); }
+.say-bar i.n { background: var(--accent); }
+.say-title { font-family: var(--ja); font-size: 13px; color: var(--muted); margin-top: 10px; }
+.say-steps { display: flex; gap: 8px; margin-top: 22px; font-family: var(--ja); font-size: 13px; }
+.say-steps span { flex: 1; text-align: center; padding: 6px 0; border-radius: 99px; background: var(--soft); color: var(--muted); }
+.say-steps span.on { background: var(--accent-fill); color: #fff; font-weight: 700; }
+.say-steps span.ok { background: var(--ok-bg); color: var(--ok-ink); font-weight: 700; }
+.say-steps span.past { color: var(--text); font-weight: 700; }
+.say-kind { font-family: var(--ja); font-size: 14px; font-weight: 700; color: var(--accent); margin: 16px 2px 0; letter-spacing: 0.04em; }
+.say-card { margin-top: 8px; background: var(--card); border-radius: 22px; padding: 20px 20px 18px; min-height: 200px; box-shadow: var(--shadow); }
+.say-s { margin: 0; font-family: var(--ja); font-size: 21px; font-weight: 500; line-height: 2.05; color: var(--text); }
+.say-hint { margin: 0; font-family: var(--ja); font-size: 21px; font-weight: 500; line-height: 2.5; }
+.say-chip { font-weight: 700; background: var(--soft); border-radius: 8px; padding: 2px 7px; margin: 0 2px; }
+.say-hint u { display: inline-block; width: 40px; border-bottom: 2px dashed var(--faint); margin: 0 3px; vertical-align: middle; }
+.say-q { font-family: var(--ja); font-size: 24px; font-weight: 700; color: var(--faint); text-align: center; padding: 48px 0 8px; }
+.say-zh { font-size: 14px; color: var(--muted); margin-top: 10px; line-height: 1.6; }
+.say-card .say-q + .say-zh { text-align: center; }
+.say-listen { display: flex; align-items: center; gap: 8px; margin-top: 14px; border: none; background: none; padding: 0; font-family: var(--ja); font-size: 14px; color: var(--muted); cursor: pointer; }
+.say-listen i { width: 34px; height: 34px; border-radius: 50%; background: var(--soft); display: flex; align-items: center; justify-content: center; color: var(--text); font-style: normal; font-size: 12px; }
+.say-mic { position: fixed; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 34px); display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.say-mic .error { margin: 0; }
+.hold.compact { width: 88px; height: 88px; min-height: 0; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; box-shadow: 0 10px 24px -8px rgba(181, 69, 46, 0.55); }
+.hold.compact svg { width: 36px; height: 36px; }
+.hold.compact .rec-dot { margin-right: 5px; }
+.say-miclab { font-family: var(--ja); font-size: 16px; font-weight: 700; text-align: center; }
+.say-miclab small { display: block; font-family: var(--sans); font-weight: 400; font-size: 13px; color: var(--muted); min-height: 1em; }
+.say-three { display: flex; gap: 8px; margin-top: 18px; }
+.say-three div { flex: 1; background: var(--card); border-radius: 14px; padding: 10px 0; text-align: center; font-family: var(--ja); }
+.say-three b { display: block; font-size: 20px; font-weight: 900; color: var(--faint); }
+.say-three span { font-size: 12px; color: var(--muted); }
+.say-three .ok b { color: var(--ok-ink); }
+.say-three .mid b { color: var(--mid-ink); }
+.say-three .no b { color: var(--no-ink); }
+.say-wait { margin-top: 40px; text-align: center; font-family: var(--ja); color: var(--muted); }
+.say-blk { border-radius: 18px; padding: 14px 16px; margin-top: 12px; }
+.say-blk.g { background: var(--ok-bg); }
+.say-blk.r { background: var(--no-bg); }
+.say-bh { display: flex; align-items: center; gap: 8px; font-family: var(--ja); font-size: 15px; font-weight: 700; }
+.say-bh i { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: #fff; font-style: normal; font-size: 13px; font-weight: 900; }
+.say-blk.g .say-bh { color: var(--ok-ink); } .say-blk.g .say-bh i { background: var(--ok); }
+.say-blk.r .say-bh { color: var(--no-ink); } .say-blk.r .say-bh i { background: var(--no); }
+.say-res { margin: 6px 0 0; font-family: var(--ja); font-size: 18px; line-height: 2; font-weight: 500; }
+.say-res .y { color: var(--ok-ink); font-weight: 700; }
+.say-res .m { color: var(--no-ink); font-weight: 700; text-decoration: underline 3px var(--no); text-underline-offset: 5px; }
+.say-miss { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
+.say-miss b { flex: 1; font-family: var(--ja); font-size: 21px; color: var(--no-ink); line-height: 1.5; }
+.say-play { width: 38px; height: 38px; flex: none; border: none; border-radius: 50%; background: #fff; font-size: 12px; cursor: pointer; }
+.say-blk .say-zh { margin-top: 4px; }
+.say-sub { display: block; width: 100%; margin-top: 10px; border: none; background: none; text-align: center; font-family: var(--ja); font-size: 14px; color: var(--muted); cursor: pointer; }
+.say-big { font-family: var(--ja); font-size: 24px; font-weight: 700; line-height: 1.4; margin: 26px 0 0; }
+.say-big em { font-style: normal; color: var(--ok-ink); }
+.say-bigzh { font-size: 14px; color: var(--muted); margin-top: 4px; }
+.say-list { margin-top: 18px; }
+.say-row { width: 100%; border: none; border-bottom: 1px solid var(--line); background: none; text-align: left; font-family: var(--ja); font-size: 15px; cursor: pointer; }
+.say-row:last-child { border-bottom: none; }
+.say-row span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.say-row i { width: 24px; height: 24px; flex: none; border-radius: 50%; background: var(--soft); display: flex; align-items: center; justify-content: center; color: #fff; font-style: normal; font-size: 13px; font-weight: 900; }
+.say-row i.g { background: var(--ok); }
+.say-row i.r { background: var(--no); }
