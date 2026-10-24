@@ -9,6 +9,7 @@ import { play, stop, ttsUrl, unlock } from "@/lib/client/player";
 import { hasCard, markNews, toggleCard, useProgress } from "@/lib/client/progress";
 import { verdict } from "@/lib/client/fx";
 import { loadPause, startPause, stopPause } from "@/lib/client/bgm";
+import { renewAudio } from "@/lib/client/audio";
 import HoldButton from "./HoldButton";
 import { Ruby } from "./News";
 
@@ -244,7 +245,12 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
                   <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
                 </svg>
               }
-              onStart={() => setRec(true)}
+              onStart={() => {
+                // iPhone only lets a Web Audio context start inside a tap, and the music after the third telling
+                // starts once the recording is sent, well after the tap. So the tap that opens the mic makes it.
+                renewAudio();
+                setRec(true);
+              }}
               onRecorded={onRecorded}
               onError={(e) => {
                 if (e) setRec(false);
