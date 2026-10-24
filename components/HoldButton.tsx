@@ -10,6 +10,8 @@ type Props = {
   disabled?: boolean;
   // Round button with an icon: while recording it shows the clock only, the words go under it.
   compact?: boolean;
+  // Seconds before it stops by itself (60 unless given).
+  limit?: number;
   onStart?: () => void;
   onRecorded: (wav: Blob) => void;
   onError: (message: string) => void;
@@ -25,7 +27,7 @@ const LIMIT_S = 60;
 // really capturing, so nothing said before that is lost without warning.
 // iPhone sometimes loses the release (the mic permission sheet, a system gesture), so the release is
 // also caught on the whole window and recording state lives in refs, never in a stale render.
-export default function HoldButton({ label = "点一下说话", disabled, compact, onStart, onRecorded, onError }: Props) {
+export default function HoldButton({ label = "点一下说话", disabled, compact, limit = LIMIT_S, onStart, onRecorded, onError }: Props) {
   const recorder = useRef<Recorder | null>(null);
   const starting = useRef<Promise<void> | null>(null);
   const active = useRef(false);
@@ -142,7 +144,7 @@ export default function HoldButton({ label = "点一下说话", disabled, compac
     const t = setInterval(() => {
       const s = (Date.now() - liveAt.current) / 1000;
       setElapsed(s);
-      if (s >= LIMIT_S) finish();
+      if (s >= limit) finish();
     }, 250);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -164,7 +166,7 @@ export default function HoldButton({ label = "点一下说话", disabled, compac
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const secs = `0:${String(Math.floor(elapsed)).padStart(2, "0")}`;
+  const secs = `${Math.floor(elapsed / 60)}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}`;
   return (
     <button
       className={`hold${compact ? " compact" : ""} ${phase !== "idle" ? "recording" : ""} ${phase === "starting" ? "starting" : ""}`}

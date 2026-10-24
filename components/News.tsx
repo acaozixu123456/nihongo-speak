@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { NEWS_VOICES, VOICE_LABEL, newsPace, type NewsArticle, type Seg } from "@/lib/news-model";
 import { useHydrated } from "@/lib/client/hydrated";
 import { LOOPS, RATES, useJoined } from "@/lib/client/joined";
-import { articleClips, sixRounds, backClips, backSet, clearBack, listenSet, missOf, newsDay, newsToTell, toggleMiss, useNews, voiceOf } from "@/lib/client/news";
+import { articleClips, fullOpen, saidCount, sixRounds, backClips, backSet, clearBack, listenSet, missOf, newsDay, newsToTell, toggleMiss, useNews, voiceOf } from "@/lib/client/news";
 import { play, ttsUrl, unlock } from "@/lib/client/player";
 import { dayKey, markNews, useProgress } from "@/lib/client/progress";
 import { stepDone, useOnRoute } from "@/lib/client/route";
@@ -346,7 +346,12 @@ function Article({ a }: { a: NewsArticle }) {
 
       <div className="nw-end" ref={end}>
         <Note text="听完了，用自己的话讲三遍。" />
-        <Link href={`/retell?news=${a.id}`} className="pil-go on">讲三遍</Link>
+        <Link href={`/retell?news=${a.id}`} className={`pil-go${fullOpen(p, a) ? "" : " on"}`}>讲三遍</Link>
+        {fullOpen(p, a) ? (
+          <Link href={`/news/${a.id}/full`} className="pil-go on">全文モード{p.news?.[a.id]?.full !== undefined ? `（ベスト ${p.news[a.id].full}）` : ""}</Link>
+        ) : (
+          <div className="nw-lock">每句都 ✓ 后解锁全文模式（{saidCount(p, a)} / {a.sentences.length}）</div>
+        )}
       </div>
 
       <div className="nw-dock">
