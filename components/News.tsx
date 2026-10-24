@@ -3,16 +3,15 @@
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { NEWS_VOICES, VOICE_LABEL, kanaOf, newsPace, type CaptionMode, type NewsArticle, type Seg } from "@/lib/news-model";
+import { NEWS_VOICES, VOICE_LABEL, newsPace, type NewsArticle, type Seg } from "@/lib/news-model";
 import { useHydrated } from "@/lib/client/hydrated";
 import { LOOPS, RATES, useJoined } from "@/lib/client/joined";
-import { articleClips, sixRounds, talkGap, backClips, backSet, clearBack, listenSet, missOf, newsDay, newsToTell, toggleMiss, useNews, voiceOf } from "@/lib/client/news";
+import { articleClips, sixRounds, backClips, backSet, clearBack, listenSet, missOf, newsDay, newsToTell, toggleMiss, useNews, voiceOf } from "@/lib/client/news";
 import { play, ttsUrl, unlock } from "@/lib/client/player";
 import { dayKey, markNews, useProgress } from "@/lib/client/progress";
 import { stepDone, useOnRoute } from "@/lib/client/route";
 import { Star } from "./FeedbackCard";
 import Note from "./Note";
-import { CaptionSwitch, PicQuiz, SceneStage, WordPic } from "./NewsPics";
 
 // NHKやさしいことばニュース in our own voice: one article to read along (/news/[id]), or the ones not heard
 // yet back to back for the train (/news), each article first without the text, then with it.
@@ -44,18 +43,6 @@ export function Ruby({ segs, fill = 0 }: { segs: Seg[]; fill?: number }) {
           </span>
         );
       })}
-    </>
-  );
-}
-
-// The sentence in kana only, the part said so far in vermilion.
-function Kana({ segs, fill = 0 }: { segs: Seg[]; fill?: number }) {
-  const k = kanaOf(segs);
-  const cut = Math.round((fill / Math.max(1, lenOf(segs))) * k.length);
-  return (
-    <>
-      <span className="rb-on">{k.slice(0, cut)}</span>
-      {k.slice(cut)}
     </>
   );
 }
@@ -206,16 +193,14 @@ export function NewsArticlePage({ id }: { id: string }) {
 
 function Article({ a }: { a: NewsArticle }) {
   const p = useProgress();
-  const all = useNews();
-  // 字幕: the first time no text, only each sentence's picture; once heard, in kana. The learner switches.
-  const [cap, setCap] = useState<CaptionMode>(() => (p.news?.[a.id]?.heard ? "kana" : "none"));
-  const pics = cap === "none";
+  const [zh, setZh] = useState(false);
+  const [hide, setHide] = useState(false);
   const voice = voiceOf(p, a);
   // ループ 6声: each sentence in all six voices, one round per sentence (lib/client/news.ts sixRounds);
   // 6声+話: with a beep and time to say it after each voice.
   const [mode, setMode] = useState<"" | "six" | "talk">("");
   const six = mode !== "";
-  const rounds = useMemo(() => (mode ? sixRounds(a, voice, mode === "talk", pics) : [articleClips(a, voice, "read", pics)]), [a, voice, mode, pics]);
+  const rounds = useMemo(() => (mode ? sixRounds(a, voice, mode === "talk") : [articleClips(a, voice, "read")]), [a, voice, mode]);
   // ループ 声を変えて: at the end, the next voice (women, then men), and the article again in it.
   const cycling = useRef(false);
   const j = useJoined(rounds, {
@@ -242,8 +227,6 @@ function Article({ a }: { a: NewsArticle }) {
   }, [j.loop]);
   useHeardAtHalf(a, at + 1);
   const miss = missOf(p, a);
-  // 6声+話: while the learner says it (after the beep), the picture fades, so it is said from the sound alone.
-  const saying = mode === "talk" && at >= 0 && j.idx >= 0 && j.pos.at > j.pos.span - talkGap(a.sentences[at]?.say ?? "") / 1000 - 0.35;
   // Another voice picked while playing: on from the same sentence in it.
   const said = useRef(voice);
   useEffect(() => {
@@ -282,45 +265,23 @@ function Article({ a }: { a: NewsArticle }) {
     <main className="page nw-page">
       <div className="nw-top">
         <Link href="/" className="back">‹ 听</Link>
-        <CaptionSwitch mode={cap} set={setCap} />
+        <button className={`nw-chip${zh ? " on" : ""}`} onClick={() => setZh(!zh)}>訳</button>
       </div>
-      <SceneStage a={a} at={at} off={saying} big={pics} />
+      <NewsImage a={a} className="nw-img" />
       <h1 className={`nw-title${at === -1 ? " now" : ""}`} data-ask-topic={a.title_ja}>
-        {cap === "zh" ? a.title_zh : cap === "kana" ? <Kana segs={a.title} fill={at === -1 ? j.frac * lenOf(a.title) : 0} /> : <Ruby segs={a.title} fill={at === -1 ? j.frac * lenOf(a.title) : 0} />}
+        <Ruby segs={a.title} fill={at === -1 ? j.frac * lenOf(a.title) : 0} />
       </h1>
+      {zh && <div className="nw-zh">{a.title_zh}</div>}
       <div className="nw-date">{md(a.day)} · NHKやさしいことばニュース</div>
-      {pics && (
-        <div className="sc-under">
-          <div className="nw-sdots big" aria-label={`${Math.max(0, at + 1)} / ${a.sentences.length}`}>
-            {a.sentences.map((_, i) => (
-              <button key={i} className={`${i < at ? "on" : i === at ? "now" : ""}${miss.includes(i) ? " miss" : ""}`} onClick={() => goTo(i)} aria-label={`${i + 1}`} />
-            ))}
-          </div>
-          {at >= 0 && six && j.idx >= 0 && (
-            <div className="nw-six">
-              {VOICE_LABEL.map((l, k) => (
-                <i key={l} className={k === j.idx ? "on" : k < j.idx ? "past" : undefined}>{l}</i>
-              ))}
-            </div>
-          )}
-          {at >= 0 ? (
-            <button className={`nw-qi${miss.includes(at) ? " on" : ""}`} onClick={() => toggleMiss(p, a, at)}>
-              ？ 聞き取れなかった
-            </button>
-          ) : (
-            <div className="nw-hidden">耳だけで聞いてみよう</div>
-          )}
-        </div>
-      )}
-      <div className={`nw-body${pics ? " gone" : ""}`}>
+      <div className={`nw-body${hide ? " hidden" : ""}`}>
         {paras(a).map((para) => (
           <div key={para[0]} className="nw-para">
             {para.map((i) => {
               const s = a.sentences[i];
               return (
                 <div key={i} ref={(el) => void (lines.current[i] = el)} className={`nw-s${i === at ? " now" : ""}${miss.includes(i) ? " miss" : ""}`}>
-                  <p data-line={s.ja} className={cap === "zh" ? "zh-only" : undefined} onClick={() => goTo(i)}>
-                    {cap === "zh" ? s.zh : cap === "kana" ? <Kana segs={s.segs} fill={i === at ? j.frac * lenOf(s.segs) : 0} /> : <Ruby segs={s.segs} fill={i === at ? j.frac * lenOf(s.segs) : 0} />}
+                  <p data-line={s.ja} onClick={() => goTo(i)}>
+                    <Ruby segs={s.segs} fill={i === at ? j.frac * lenOf(s.segs) : 0} />
                   </p>
                   {i === at && six && j.idx >= 0 && (
                     <div className="nw-six">
@@ -334,11 +295,13 @@ function Article({ a }: { a: NewsArticle }) {
                       ？ 聞き取れなかった
                     </button>
                   )}
+                  {zh && s.zh && <div className="nw-zh">{s.zh}</div>}
                 </div>
               );
             })}
           </div>
         ))}
+        {hide && <div className="nw-hidden">耳だけで聞いてみよう</div>}
       </div>
       <a className="nw-src" href={a.url} target="_blank" rel="noreferrer">出典：NHK NEWS WEB EASY ›</a>
 
@@ -348,7 +311,6 @@ function Article({ a }: { a: NewsArticle }) {
           <div className="rowlist">
             {a.words.map((w) => (
               <div key={w.ja} className="rowlist-row nw-word" data-line={w.ja}>
-                <WordPic src={w.image_url} />
                 <button
                   className="nw-word-say"
                   onClick={() => {
@@ -364,7 +326,7 @@ function Article({ a }: { a: NewsArticle }) {
                   <i>🔈</i>
                 </button>
                 <span>{w.zh}</span>
-                <Star p={p} ja={w.ja} reading={w.kana} zh={w.zh} voice={voice} scenarioId={`news:${a.id}`} img={w.image_url} />
+                <Star p={p} ja={w.ja} reading={w.kana} zh={w.zh} voice={voice} scenarioId={`news:${a.id}`} />
               </div>
             ))}
           </div>
@@ -372,7 +334,6 @@ function Article({ a }: { a: NewsArticle }) {
       )}
 
       <div className="nw-end" ref={end}>
-        <PicQuiz a={a} others={all} voice={voice} />
         <Note text="听完了，用自己的话讲三遍。" />
         <Link href={`/retell?news=${a.id}`} className="pil-go on">讲三遍</Link>
       </div>
@@ -385,6 +346,7 @@ function Article({ a }: { a: NewsArticle }) {
           j={j}
           loop
           voice={{ voice, set: (v) => markNews(a.id, { voice: v }) }}
+          text={{ hide, set: setHide }}
         />
         {j.error && <p className="error">{j.error}</p>}
       </div>
@@ -396,8 +358,6 @@ function Article({ a }: { a: NewsArticle }) {
 // ---- The articles not heard yet, back to back ----
 
 const paceLabel = (pace: number) => (pace < 1 ? " · ゆっくり" : pace > 1.2 ? " · 速め" : pace > 1 ? " · 少し速め" : "");
-
-const CAP_KEY = "nihongo-speak:caption2";
 
 export function NewsPlay() {
   const p = useProgress();
@@ -432,26 +392,12 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
   const rounds = useMemo(
     () => [
       ...(back.length ? [backClips(p, back, "ear"), backClips(p, back, "text")] : []),
-      ...today.flatMap((a) => [articleClips(a, voiceOf(p, a), "ear", true), articleClips(a, voiceOf(p, a), "text")]),
+      ...today.flatMap((a) => [articleClips(a, voiceOf(p, a), "ear"), articleClips(a, voiceOf(p, a), "text")]),
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [today, back, voices],
   );
   const [showZh, setShowZh] = useState(false);
-  // 2回目's 字幕 (kana unless the learner picked another), kept on the phone.
-  const [cap, setCapState] = useState<CaptionMode>("kana");
-  useEffect(() => {
-    try {
-      const c = localStorage.getItem(CAP_KEY) as CaptionMode | null;
-      if (c && c !== "none" && ["kana", "kanji", "zh"].includes(c)) setCapState(c);
-    } catch {}
-  }, []);
-  const setCap = (c: CaptionMode) => {
-    setCapState(c);
-    try {
-      localStorage.setItem(CAP_KEY, c);
-    } catch {}
-  };
   const j = useJoined(rounds, {
     album: newsDay(set.day),
     // The pass without the text goes at the article's own pace (slower or faster), the pass with it at 1.
@@ -531,18 +477,11 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
             ))}
           </div>
         ) : second && s ? (
-          <div onClick={() => cap !== "zh" && cap !== "none" && setShowZh(!showZh)}>
-            <div className="cap-row" onClick={(e) => e.stopPropagation()}>
-              <CaptionSwitch mode={cap} set={setCap} />
-            </div>
-            {cap === "none" ? (
-              <div className="nw-hidden">耳だけで聞いてみよう</div>
-            ) : (
-              <p className={`nw-now${cap === "zh" ? " zh-only" : ""}`} data-line={s.ja}>
-                {cap === "zh" ? s.zh : cap === "kana" ? <Kana segs={s.segs} fill={j.frac * lenOf(s.segs)} /> : <Ruby segs={s.segs} fill={j.frac * lenOf(s.segs)} />}
-              </p>
-            )}
-            {cap === "zh" || cap === "none" ? null : showZh ? <div className="nw-zh">{s.zh}</div> : <small className="muted nw-tap">点一下看中文</small>}
+          <div onClick={() => setShowZh(!showZh)}>
+            <p className="nw-now" data-line={s.ja}>
+              <Ruby segs={s.segs} fill={j.frac * lenOf(s.segs)} />
+            </p>
+            {showZh ? <div className="nw-zh">{s.zh}</div> : <small className="muted nw-tap">点一下看中文</small>}
             {!inBack && (
               <button
                 className={`nw-chip nw-q${missOf(p, a).includes(sentence) ? " on" : ""}`}
@@ -568,7 +507,8 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
           </>
         ) : (
           <>
-            <SceneStage a={a} at={sentence} big />
+            <NewsImage a={a} className="nw-img" />
+            <div className="nw-hidden">耳だけで聞いてみよう</div>
             <div className="nw-sdots" aria-label={`${Math.max(0, sentence + 1)} / ${a.sentences.length}`}>
               {a.sentences.map((_, i) => (
                 <span key={i} className={i < sentence ? "on" : i === sentence ? "now" : ""} />

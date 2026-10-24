@@ -120,15 +120,9 @@ export function newsSeconds(as: NewsArticle[], passes = 2) {
 }
 export const newsMinutes = (as: NewsArticle[], passes = 2) => Math.max(1, Math.round(newsSeconds(as, passes) / 60));
 
-// Before a sentence that has a picture, when it is heard without the text: the picture alone for a moment, so
-// the situation is in mind when the voice starts.
-export const LEAD_MS = 1200;
-const lead = (on: boolean, s: NewsArticle["sentences"][number], voice: string): Clip["parts"] => (on && s.scene_image ? [{ voice, pauseMs: LEAD_MS }] : []);
-
 // The title, then every sentence (a little pause between paragraphs). ear: the pass without the text, whose
-// lock screen shows only the title and how far it has got, not the sentence. pics: each sentence's picture
-// first (above).
-export function articleClips(a: NewsArticle, voice: string, mode: "read" | "ear" | "text" = "read", pics = false): Clip[] {
+// lock screen shows only the title and how far it has got, not the sentence.
+export function articleClips(a: NewsArticle, voice: string, mode: "read" | "ear" | "text" = "read"): Clip[] {
   const n = a.sentences.length;
   return [
     { block: "news", show: a.title_ja, sub: mode === "text" ? "2回目" : undefined, parts: [{ voice, text: titleSay(a), pauseMs: 900 }] },
@@ -137,7 +131,7 @@ export function articleClips(a: NewsArticle, voice: string, mode: "read" | "ear"
         block: "news",
         show: mode === "ear" ? `${a.title_ja}（${i + 1}/${n}）` : s.ja,
         sub: s.zh,
-        parts: [...lead(pics, s, voice), { voice, text: s.say, pauseMs: a.sentences[i + 1]?.p ? 700 : 350 }],
+        parts: [{ voice, text: s.say, pauseMs: a.sentences[i + 1]?.p ? 700 : 350 }],
       }),
     ),
   ];
@@ -147,7 +141,7 @@ export function articleClips(a: NewsArticle, voice: string, mode: "read" | "ear"
 // it starts at once and the next sentence is made while this one plays). Round r + 1 is sentence r.
 // talk: after each voice a beep and 3-5 s (by the sentence's length) to say it.
 export const talkGap = (say: string) => Math.min(5000, Math.max(3000, say.length * 120));
-export function sixRounds(a: NewsArticle, voice: string, talk = false, pics = false): Clip[][] {
+export function sixRounds(a: NewsArticle, voice: string, talk = false): Clip[][] {
   return [
     [{ block: "news", show: a.title_ja, parts: [{ voice, text: titleSay(a), pauseMs: 900 }] }],
     ...a.sentences.map((s, i) =>
@@ -156,9 +150,9 @@ export function sixRounds(a: NewsArticle, voice: string, talk = false, pics = fa
           block: "news",
           show: s.ja,
           sub: `${VOICE_LABEL[k]} · ${s.zh}`,
-          parts: [...lead(pics && k === 0, s, v), ...(talk
+          parts: talk
             ? [{ voice: v, text: s.say, pauseMs: 250 }, { voice: v, sound: "/beep2.mp3", pauseMs: talkGap(s.say) }]
-            : [{ voice: v, text: s.say, pauseMs: k === NEWS_VOICES.length - 1 ? (a.sentences[i + 1]?.p ? 1000 : 800) : 450 }])],
+            : [{ voice: v, text: s.say, pauseMs: k === NEWS_VOICES.length - 1 ? (a.sentences[i + 1]?.p ? 1000 : 800) : 450 }],
         }),
       ),
     ),
