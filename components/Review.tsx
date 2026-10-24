@@ -12,8 +12,6 @@ import { useCoach } from "@/lib/client/coach";
 import { stepDone, useOnRoute } from "@/lib/client/route";
 import type { Variant } from "@/lib/claude";
 import { variantOk } from "@/lib/variant";
-import { useNews } from "@/lib/client/news";
-import PictureCue from "./PictureCue";
 
 export default function Review() {
   const p = useProgress();
@@ -29,14 +27,10 @@ export default function Review() {
   const due = todaysCards(p);
   const list = queue ?? due;
   const card = list[index];
-  // A word saved from the news with its picture: asked as 絵→日本語 / 日本語→意味 (PictureCue). Saved before
-  // the pictures came, it finds its picture in the kept articles.
-  const news = useNews();
-  const img = card ? (card.img ?? (card.scenarioId.startsWith("news:") ? news.flatMap((a) => a.words).find((w) => w.ja === card.ja)?.image_url : undefined)) : undefined;
   // A card seen before comes back as a new sentence on the same pattern, so it isn't memorised as one string.
   // Until the AI answers (or if it fails), the original card is asked.
   const [plain, setPlain] = useState(false);
-  const wantVariant = !!queue && !!card && card.step > 0 && !plain && !img;
+  const wantVariant = !!queue && !!card && card.step > 0 && !plain;
   const { data: variantData, error: variantError } = useCoach<Variant>(
     wantVariant ? { kind: "variant", ja: card.ja, zh: card.zh } : null,
   );
@@ -229,20 +223,6 @@ export default function Review() {
       </main>
     );
   }
-
-  if (img)
-    return (
-      <main>
-        <div className="row spread">
-          <Link href="/review" className="muted" onClick={() => setQueue(null)}>✕</Link>
-          <div className="progressbar" style={{ flex: 1, margin: "0 12px" }}>
-            <div style={{ width: `${(index / list.length) * 100}%` }} />
-          </div>
-          <StreakPill />
-        </div>
-        <PictureCue key={card.id + index} card={{ ...card, img }} onDone={answer} />
-      </main>
-    );
 
   const fromRadio = card.scenarioId.startsWith("radio:") ? findEpisode(p, card.scenarioId.slice(6)) : undefined;
   const ja = ask?.ja ?? card.ja;

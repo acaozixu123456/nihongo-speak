@@ -27,8 +27,6 @@ export function useJoined(rounds: Clip[][], o: { album: string; loopable?: boole
   const [round, setRound] = useState(0);
   const [idx, setIdx] = useState(-1);
   const [frac, setFrac] = useState(0);
-  // How far into the clip now playing, and how long it is, in seconds of audio.
-  const [pos, setPos] = useState({ at: 0, span: 0 });
   const [rate, setRateState] = useState(1);
   const [loop, setLoopState] = useState<Loop>("off");
   const [error, setError] = useState("");
@@ -172,7 +170,6 @@ export function useJoined(rounds: Clip[][], o: { album: string; loopable?: boole
     }
     const end = cur.starts[i + 1] ?? cur.total;
     setFrac(Math.min(1, (t - cur.starts[i]) / Math.max(0.1, end - cur.starts[i] - 0.4)));
-    setPos({ at: t - cur.starts[i], span: end - cur.starts[i] });
     setIdx((was) => {
       if (was !== i && navigator.mediaSession && typeof MediaMetadata !== "undefined") {
         navigator.mediaSession.metadata = new MediaMetadata({ title: cur.clips[i].show, artist: BLOCK_LABEL[cur.clips[i].block], album: s.o.album });
@@ -255,5 +252,5 @@ export function useJoined(rounds: Clip[][], o: { album: string; loopable?: boole
   // The clip now playing, as the round passed in (prepare may have dropped one that failed).
   const clip = s.cur && idx >= 0 ? s.cur.clips[idx] : null;
   const total = s.cur?.total ?? 0;
-  return { audioProps, phase, round, idx: origOf(idx), clip, frac, pos, rate, setRate, loop, setLoop, error, start, toggle, seek, again, skip, total, time: () => audio.current?.currentTime ?? 0 };
+  return { audioProps, phase, round, idx: origOf(idx), clip, frac, rate, setRate, loop, setLoop, error, start, toggle, seek, again, skip, total, time: () => audio.current?.currentTime ?? 0 };
 }

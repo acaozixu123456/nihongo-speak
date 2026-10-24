@@ -11,8 +11,7 @@ export const maxDuration = 300;
 // kept articles of the last days again (after the notes changed). ?warm=N asks again for the voice of the
 // articles of the last N days NHK put out (after the voices changed). Then the pictures for the newest day's
 // articles, in the time left (lib/pictures.ts); ?pics=only draws them without fetching NHK, ?ids=a,b just
-// those articles, ?days=N the newest N days. Google allows only a few pictures a minute, so a few pics-only
-// runs follow the evening one (vercel.json).
+// those articles, ?days=N the newest N days.
 export async function GET(request: Request) {
   const t0 = Date.now();
   const secret = process.env.CRON_SECRET;

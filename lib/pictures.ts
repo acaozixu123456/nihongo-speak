@@ -169,7 +169,7 @@ export async function drawNewsPictures(o: { until: number; days?: number; ids?: 
   const log: string[] = [];
   const file = await readNews();
   const days = [...new Set(file.items.map((a) => a.day))].sort().reverse().slice(0, o.days ?? 1);
-  const todo = file.items.filter((a) => (o.ids ? o.ids.includes(a.id) : days.includes(a.day) && (a.pics ?? 0) < 10));
+  const todo = file.items.filter((a) => (o.ids ? o.ids.includes(a.id) : days.includes(a.day) && (a.pics ?? 0) < 3));
   const made = new Map<string, NewsArticle>();
   for (const a of todo) {
     if (Date.now() > o.until) break;
