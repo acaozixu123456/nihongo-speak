@@ -6,7 +6,7 @@ import { piece } from "@/lib/gemini-hear";
 export const maxDuration = 60;
 
 // 一文ずつ三回話す: one NHK sentence said back. Gemini writes down what was said (alone, without the sentence,
-// so it doesn't "hear" what should have been said; Azure when it fails), then Opus marks which parts of the
+// so it doesn't "hear" what should have been said; Azure when it is slow or fails), then Opus marks which parts of the
 // sentence were said.
 export async function POST(request: Request) {
   const b = (await request.json().catch(() => ({}))) as { audio?: unknown; ja?: unknown };
@@ -15,15 +15,22 @@ export async function POST(request: Request) {
   if (!ja || ja.length > 300 || audio.length < 2000 || audio.length > 3_000_000) return NextResponse.json({ error: "录音不对" }, { status: 400 });
   let said = "";
   const t0 = Date.now();
+  // Now and then Gemini takes over half a minute on a clip (seen live: the same recording every time). If it
+  // hasn't answered in 6 s, Azure writes it down too and the first non-empty answer is used.
+  const buf = Buffer.from(audio, "base64");
+  const wav = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+  const nonEmpty = (p: Promise<string>) => p.then((t) => t.trim() || Promise.reject(new Error("nothing heard")));
   try {
-    said = (await piece(audio, "audio/wav")).text.trim();
+    said = await Promise.any([
+      nonEmpty(piece(audio, "audio/wav").then((r) => r.text)),
+      nonEmpty(new Promise((ok) => setTimeout(ok, 6000)).then(() => recognize(wav)).then((r) => r.text)),
+    ]);
   } catch (e) {
-    console.warn("say: Gemini failed, Azure instead", e);
-    try {
-      const buf = Buffer.from(audio, "base64");
-      said = (await recognize(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer)).text.trim();
-    } catch (e2) {
-      console.error(e2);
+    // Neither wrote anything down: silence when at least one heard nothing, else a failure.
+    const errs: unknown[] = e instanceof AggregateError ? e.errors : [e];
+    const silent = errs.some((x) => x instanceof Error && x.message === "nothing heard");
+    if (!silent) {
+      console.error("say:", errs.map(String).join(" / "));
       return NextResponse.json({ error: "没听清，再说一次" }, { status: 502 });
     }
   }
