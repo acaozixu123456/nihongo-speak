@@ -5,13 +5,13 @@ import type { Feedback } from "@/lib/claude";
 import { useEffect, useRef } from "react";
 import { hasCard, recordNote, toggleCard, type Progress } from "@/lib/client/progress";
 
-export function Star({ p, ja, zh, reading, voice, scenarioId }: { p: Progress; ja: string; zh: string; reading?: string; voice: string; scenarioId: string }) {
+export function Star({ p, ja, zh, reading, voice, scenarioId, img }: { p: Progress; ja: string; zh: string; reading?: string; voice: string; scenarioId: string; img?: string }) {
   const saved = hasCard(p, ja);
   return (
     <button
       className={`small star ${saved ? "on" : ""}`}
       aria-label={saved ? "取消收藏" : "收藏到复习"}
-      onClick={() => toggleCard({ ja, zh, reading, voice, scenarioId })}
+      onClick={() => toggleCard({ ja, zh, reading, voice, scenarioId, ...(img && { img }) })}
     >
       {saved ? "已收藏" : "收藏"}
     </button>
