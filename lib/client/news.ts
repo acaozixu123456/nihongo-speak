@@ -208,3 +208,7 @@ export function clearBack(p: Progress, back: Back[]) {
     markNews(a.id, { miss: missOf(p, a).filter((i) => !done.includes(i)) });
   }
 }
+
+// 全文モード opens once every sentence of the article was said right in 一文ずつ三回話す.
+export const saidCount = (p: Progress, a: NewsArticle) => a.sentences.filter((_, i) => p.news?.[a.id]?.said?.[i] === 1).length;
+export const fullOpen = (p: Progress, a: NewsArticle) => saidCount(p, a) === a.sentences.length;

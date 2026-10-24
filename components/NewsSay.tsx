@@ -185,7 +185,14 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
           ))}
         </div>
         <div className="sticky-cta">
-          <Link href={`/retell?news=${a.id}`} className="pil-go on">記事全体を三回話す</Link>
+          {good === n ? (
+            <>
+              <Link href={`/news/${a.id}/full`} className="pil-go on">全文モード</Link>
+              <Link href={`/retell?news=${a.id}`} className="say-sub">記事全体を三回話す</Link>
+            </>
+          ) : (
+            <Link href={`/retell?news=${a.id}`} className="pil-go on">記事全体を三回話す</Link>
+          )}
           {bad && <div className="say-sub">! の文は 復習 に入れました</div>}
         </div>
       </main>

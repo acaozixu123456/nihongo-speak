@@ -1091,3 +1091,46 @@ export async function sayCheck(a: { ja: string; said: string }): Promise<SayChec
   if (!res.parsed_output) throw new Error(`AI 返回格式不对（${res.stop_reason}）`);
   return res.parsed_output;
 }
+
+// 全文モード: the whole NHK article said from its Chinese, once every sentence was passed one by one. Scored by
+// meaning, not word for word; each sentence that wasn't right gets the learner's own words made right, and a
+// few expressions worth using next time.
+const FullCheckSchema = z.object({
+  score: z.number().describe("0〜100 の整数。記事の内容がどれだけ正しく伝わったか（意味で判断。言い方の違いでは減らさない。抜けた文・意味の違う文・文法の大きな誤りで減らす）"),
+  good_zh: z.string().describe("具体的にうまく言えた点を中国語で一言（25字以内）。例：「“〜によると”开头用得很自然」"),
+  items: z
+    .array(
+      z.object({
+        n: z.number().describe("文番号（入力の番号）"),
+        verdict: z.enum(["good", "close", "off"]).describe("good：その文の内容が伝わった。close：大筋は伝わったが一部抜け・誤り。off：言っていない・違う内容"),
+        said: z.string().describe("学習者の発話のうち、この文にあたる部分（そのまま抜き出す）。言っていなければ空文字"),
+        better: z.string().describe("good 以外のとき：学習者の言い方を土台に、できるだけその語と形を残して、この文と同じ意味になるよう最小限直した日本語（言っていなければ、N4〜N3 で言える短い言い方）。good なら空文字"),
+        fix_zh: z.string().describe("good 以外のとき：何を直した・足したかを中国語で一言（20字以内）。good なら空文字"),
+      }),
+    )
+    .describe("全部の文について、番号順に"),
+  tips: z
+    .array(z.object({ ja: z.string().describe("次に使うとよい日本語の表現（短く。記事の語や自然な言い回し）"), zh: z.string().describe("中国語の意味と使いどころ（20字以内）") }))
+    .describe("学習者がまだ使えていない、覚えると役に立つ表現を2〜3個"),
+});
+export type FullCheck = z.infer<typeof FullCheckSchema>;
+
+export async function fullCheck(a: { title: string; sentences: { ja: string; zh: string }[]; said: string }): Promise<FullCheck> {
+  const res = await parse({
+    ...smart(5000),
+    system: `${COACH}
+学習者は、一文ずつの練習を終えたニュース記事を、中国語訳だけを見て、日本語で通して話しました。一字一句同じである必要はありません。意味が伝われば正解です。
+学習者が今言えたところを土台に、次に少し上手に言えるようにするのが目的です。直すときは学習者の言い方を活かし、元の文に置き換えない。
+学習者の発話は音声認識の結果です。同音の漢字違い・ひらがなと漢字の違い・句読点・数字の書き方は間違いとして扱わない。`,
+    messages: [
+      {
+        role: "user",
+        content: `記事：${a.title}\n${a.sentences.map((s, i) => `${i + 1}. ${s.ja}（${s.zh}）`).join("\n")}\n\n学習者が話したこと：${a.said}`,
+      },
+    ],
+    output_config: { effort: "low", format: zodOutputFormat(FullCheckSchema) },
+  });
+  checkStop(res.stop_reason);
+  if (!res.parsed_output) throw new Error(`AI 返回格式不对（${res.stop_reason}）`);
+  return res.parsed_output;
+}

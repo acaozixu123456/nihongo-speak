@@ -2090,3 +2090,28 @@ body:has(.on-air) .ask-acts, body:has(.on-air) .ask-bar:not(.ask-acts .ask-bar) 
 .say-orig p { margin: 2px 0 0; font-family: var(--ja); font-size: 15px; line-height: 1.8; color: var(--muted); }
 .say-orig p .m { color: var(--text); text-decoration: underline 2px var(--faint); text-underline-offset: 4px; }
 .say-orig .say-play { background: var(--soft); }
+/* 全文モード (components/NewsFull.tsx). */
+.nw-lock { margin-top: 10px; text-align: center; font-size: 13px; color: var(--muted); }
+.full-title { font-size: 18px; font-weight: 700; margin: 6px 2px 0; line-height: 1.5; }
+.full-zh p { margin: 0; font-size: 16px; line-height: 1.9; color: var(--text); }
+.full-zh p + p { margin-top: 12px; }
+.say-card.full-zh { min-height: 0; }
+.full-zh + .say-bigzh { text-align: center; margin-top: 12px; }
+.full-score { display: flex; align-items: baseline; gap: 8px; margin-top: 22px; font-family: var(--ja); }
+.full-score b { font-size: 56px; font-weight: 900; line-height: 1; }
+.full-score b.ok { color: var(--ok-ink); } .full-score b.mid { color: var(--mid-ink); } .full-score b.no { color: var(--no-ink); }
+.full-score span { font-size: 16px; color: var(--muted); }
+.full-score em { font-style: normal; font-size: 13px; font-weight: 700; color: var(--ok-ink); background: var(--ok-bg); border-radius: 99px; padding: 3px 10px; }
+.full-score small { font-size: 13px; color: var(--muted); }
+.full-good { font-size: 15px; color: var(--ok-ink); margin-top: 6px; }
+.full-item .say-bh { font-family: var(--sans); font-weight: 400; letter-spacing: 0; line-height: 1.5; }
+.full-item .say-res { font-size: 16px; }
+.full-better b { color: var(--ok-ink); font-size: 18px; }
+.full-h { font-family: var(--ja); font-size: 13px; color: var(--muted); letter-spacing: 0.04em; margin: 22px 4px 8px; }
+.full-tip { width: 100%; border: none; border-bottom: 1px solid var(--line); background: none; text-align: left; cursor: pointer; }
+.full-tip:last-child { border-bottom: none; }
+.full-tip span { flex: 1; min-width: 0; }
+.full-tip b { display: block; font-family: var(--ja); font-size: 17px; font-weight: 700; color: var(--text); }
+.full-tip small { display: block; font-size: 13px; color: var(--muted); }
+.full-tip i { font-style: normal; font-size: 12px; width: 32px; height: 32px; border-radius: 50%; background: var(--soft); display: flex; align-items: center; justify-content: center; flex: none; }
+.say-sub { text-decoration: none; }

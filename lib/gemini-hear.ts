@@ -122,6 +122,30 @@ const styleOf = (id: string) => {
   return p ? `${p.name}。${p.persona.split("話し方：")[1] ?? ""}` : "友達。くだけた話し方";
 };
 
+// Pieces of one recording written down, in order: a piece with no answer after 35s (or failed twice) is
+// left out ("") unless more than a quarter are missing, then it throws.
+export async function hearClips(clips: string[]): Promise<string[]> {
+  const pieces: ({ text: string; kana: string } | null)[] = new Array(clips.length).fill(null);
+  let next = 0;
+  const all = Promise.all(
+    Array.from({ length: Math.min(PARALLEL, clips.length) }, async () => {
+      while (next < clips.length) {
+        const i = next++;
+        pieces[i] = await piece(clips[i]).catch((e) => {
+          console.warn(`hear piece ${i + 1} left out:`, e);
+          return null;
+        });
+      }
+    }),
+  );
+  await Promise.race([all, new Promise((r) => setTimeout(r, 35000))]);
+  const missing = pieces.filter((p) => !p).length;
+  if (missing > Math.max(1, Math.floor(clips.length / 4)) || missing === clips.length) {
+    throw new Error(`hear: ${missing} of ${clips.length} pieces not written down`);
+  }
+  return pieces.map((p) => p?.text.trim() ?? "");
+}
+
 export async function hearRuns(a: { clips: string[]; listener: string; topic: string; avoid?: string[] }): Promise<Heard> {
   const t0 = Date.now();
   // A piece that still has no answer after 35s (or failed twice) is left out rather than losing the
