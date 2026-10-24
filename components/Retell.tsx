@@ -765,7 +765,7 @@ export default function Retell() {
       <h1 className="ep-head">讲三遍</h1>
       <div className="today retell">
         <span className="kicker">
-          {warming ? `先把上次的故事再讲一遍 · 讲给${nameOf(listener)}` : `第 ${round + 1} 遍 · 讲给${nameOf(listener)}`}
+          {warming ? `先把上次的故事再讲一遍 · 讲给 ${nameOf(listener)}` : `第 ${round + 1} 遍 · 讲给 ${nameOf(listener)}`}
         </span>
         <span className="today-title">
           <span className="retell-topic">
@@ -821,7 +821,7 @@ export default function Retell() {
           </button>
         ) : (
           <button className="today-go retell-go" onClick={begin} disabled={phase === "starting" || !!busy}>
-            {phase === "starting" ? "准备麦克风…" : busy ? (BUSY[busy] ?? "…") : round === 0 ? "说" : `讲给${nameOf(listener)}`}
+            {phase === "starting" ? "准备麦克风…" : busy ? (BUSY[busy] ?? "…") : round === 0 ? "说" : `讲给 ${nameOf(listener)}`}
           </button>
         )}
       </div>

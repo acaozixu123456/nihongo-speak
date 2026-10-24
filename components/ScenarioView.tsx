@@ -34,7 +34,7 @@ export default function ScenarioView({ scenario, step }: { scenario: Scenario; s
       <Link href={`/scenes?tab=${b}`} className="back">← 场景对话</Link>
       <header className="scene-head">
         <div className="scene-where">
-          {BUILDINGS[b].label} · 和{npc(scenario).name}
+          {BUILDINGS[b].label} · 和 {npc(scenario).name}
         </div>
         <h1>{scenario.title}</h1>
         <div className="scene-ja">{scenario.titleZh}</div>
