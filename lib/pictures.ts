@@ -8,15 +8,14 @@ import { vertexAccess } from "@/lib/vertex-tts";
 
 // Pictures for the NHK articles: one whole situation per sentence (scene_image) and one per word (image_url),
 // for dual coding: hearing the sentence while seeing what it is about, a word card with a picture and the
-// Chinese. Imagen 4 Fast draws them on Vertex AI (2 cents each, the Google Cloud credit), Opus plans what to
+// Chinese. Gemini's picture models draw them on Vertex AI (the Google Cloud credit), Opus plans what to
 // draw and looks at every picture before it is kept: one that doesn't plainly show the meaning is drawn once
 // more, then left out (no picture is better than a wrong one).
 // Words are kept for good under their own name (pic/w/<hash>.jpg), so a word met again costs nothing and a
 // saved card keeps its picture; a sentence's picture goes with its article.
 
-const REGION = "us-central1";
-const IMAGEN = "imagen-4.0-fast-generate-001";
-const PAINTER = "gemini-3.1-flash-image";
+// Imagen is gone from Vertex for this project (2026-10, every version 404); Gemini's picture models, cheapest first.
+const PAINTERS = ["gemini-3.1-flash-lite-image", "gemini-2.5-flash-image", "gemini-3.1-flash-image"];
 
 const STYLE =
   "Realistic photograph, natural light, clean simple composition, the main subject large and in clear focus in the center. Absolutely no text, letters, numbers, captions, signs or logos anywhere in the image.";
@@ -34,94 +33,55 @@ export async function readPicture(kind: "w" | "s", id: string, i?: number): Prom
   return res?.statusCode === 200 ? new Response(res.stream).arrayBuffer() : null;
 }
 
-async function drawImagen(prompt: string, aspectRatio: string): Promise<Buffer | null> {
+async function drawGemini(model: string, prompt: string, aspectRatio: string): Promise<Buffer | null> {
   const { project, token } = await vertexAccess();
-  const res = await fetch(`https://${REGION}-aiplatform.googleapis.com/v1/projects/${project}/locations/${REGION}/publishers/google/models/${IMAGEN}:predict`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({
-      instances: [{ prompt }],
-      parameters: { sampleCount: 1, aspectRatio, personGeneration: "allow_adult", outputOptions: { mimeType: "image/jpeg", compressionQuality: 78 } },
-    }),
-    signal: AbortSignal.timeout(45000),
-  });
-  if (!res.ok) throw new Error(`imagen ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const j = (await res.json()) as { predictions?: { bytesBase64Encoded?: string }[] };
-  const b = j.predictions?.[0]?.bytesBase64Encoded;
-  return b ? Buffer.from(b, "base64") : null;
-}
-
-// Behind Imagen: the picture model the 洗脑歌 uses (dearer, and only a few a minute).
-async function drawGemini(prompt: string, aspectRatio: string): Promise<Buffer | null> {
-  const { project, token } = await vertexAccess();
-  const res = await fetch(`https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/${PAINTER}:generateContent`, {
+  const res = await fetch(`https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/${model}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio, imageSize: "1K" } },
+      generationConfig: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio } },
     }),
     signal: AbortSignal.timeout(50000),
   });
-  if (!res.ok) throw new Error(`${PAINTER} ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  if (!res.ok) throw new Error(`${model} ${res.status}: ${(await res.text()).slice(0, 200)}`);
   type Part = { inlineData?: { mimeType: string; data: string } };
   const j = (await res.json()) as { candidates?: { content?: { parts?: Part[] } }[] };
   const img = j.candidates?.[0]?.content?.parts?.find((p) => p.inlineData)?.inlineData;
   return img ? Buffer.from(img.data, "base64") : null;
 }
 
-// Which picture models this project can use (for ?pics=models).
+// Which picture models this project has (for ?pics=models).
 export async function pictureModels() {
   const { project, token } = await vertexAccess();
-  const out: Record<string, unknown> = {};
-  for (const m of ["imagen-4.0-fast-generate-001", "imagen-4.0-generate-001", "imagen-4.0-ultra-generate-001", "imagen-3.0-fast-generate-001", "imagen-3.0-generate-002", "imagen-4.0-fast-generate-preview-06-06"]) {
-    for (const region of ["us-central1", "asia-northeast1", "global"]) {
-      const host = region === "global" ? "aiplatform.googleapis.com" : `${region}-aiplatform.googleapis.com`;
-      const r = await fetch(`https://${host}/v1/projects/${project}/locations/${region}/publishers/google/models/${m}:predict`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ instances: [{ prompt: "a red apple on a white table" }], parameters: { sampleCount: 1 } }),
-      }).catch((e) => ({ status: 0, text: async () => String(e) }));
-      out[`${m}@${region}`] = r.status === 200 ? 200 : `${r.status} ${(await r.text()).slice(0, 120)}`;
-      if (r.status === 200) break;
-    }
-  }
   const list = await fetch(`https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models?pageSize=300`, { headers: { Authorization: `Bearer ${token}`, "x-goog-user-project": project } });
-  const names = list.ok ? ((await list.json()) as { publisherModels?: { name: string }[] }).publisherModels?.map((x) => x.name).filter((n) => /imag|flash-image|veo/.test(n)) : `${list.status} ${(await list.text()).slice(0, 200)}`;
-  return { out, names };
+  return list.ok ? ((await list.json()) as { publisherModels?: { name: string }[] }).publisherModels?.map((x) => x.name).filter((n) => /imag|veo/.test(n)) : `${list.status}`;
 }
 
 export type Drawn = { ok: boolean; why: string; engine?: string; drawn?: false };
 
-// Imagen once refused (not on this project): the other model from then on, one at a time.
-let imagenDown = false;
+// Models that stopped answering (not on this project) are skipped from then on.
+const down = new Set<string>();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Whatever the model gives, kept as a JPEG of phone size (~100 KB rather than 2 MB).
 const toJpeg = async (img: Buffer) => (await import("sharp")).default(img).resize({ width: 960, withoutEnlargement: true }).jpeg({ quality: 78, mozjpeg: true }).toBuffer();
 
+// The cheapest model first; each allows only a few pictures a minute, so a refusal moves on to the next, and
+// when all refuse it waits and asks again.
 async function drawOne(prompt: string, aspect: string, log: string[]): Promise<{ img: Buffer; engine: string } | null> {
-  if (!imagenDown) {
-    try {
-      const img = await drawImagen(prompt, aspect);
-      if (img) return { img, engine: IMAGEN };
-    } catch (e) {
-      const m = e instanceof Error ? e.message : String(e);
-      if (/ 40[34]/.test(m)) imagenDown = true;
-      log.push(`imagen: ${m.slice(0, 120)}`);
-    }
-  }
-  // The other model allows only a few pictures a minute: a refusal waits and asks again.
   for (let t = 0; t < 3; t++) {
-    try {
-      const img = await drawGemini(prompt, aspect);
-      if (img) return { img, engine: PAINTER };
-    } catch (e) {
-      const m = e instanceof Error ? e.message : String(e);
-      log.push(`gemini: ${m.slice(0, 80)}`);
-      if (!/ 429/.test(m)) return null;
-      await sleep(15000 * (t + 1));
+    for (const m of PAINTERS.filter((m) => !down.has(m))) {
+      try {
+        const img = await drawGemini(m, prompt, aspect);
+        if (img) return { img, engine: m };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/ 40[034]/.test(msg)) down.add(m);
+        log.push(msg.slice(0, 90));
+      }
     }
+    await sleep(12000 * (t + 1));
   }
   return null;
 }
@@ -199,7 +159,7 @@ async function picturesFor(a: NewsArticle, until: number, log: string[], redraw 
   const worker = async () => {
     while (k < jobs.length) await jobs[k++]();
   };
-  await Promise.all(imagenDown ? [worker()] : [worker(), worker(), worker(), worker()]);
+  await Promise.all([worker(), worker()]);
   return { a: { ...a, sentences, words, pics: left ? (a.pics ?? 0) + 1 : PICS_DONE }, done: !left };
 }
 
