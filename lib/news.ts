@@ -1,5 +1,5 @@
 import "server-only";
-import { BlobNotFoundError, del, get, list as listBlobs, put } from "@vercel/blob";
+import { BlobNotFoundError, del, get, put } from "@vercel/blob";
 import { newsNotes } from "@/lib/claude";
 import { addDays } from "@/lib/progress-model";
 import { NEWS_DAYS, newsVoice, type NewsArticle } from "@/lib/news-model";
@@ -29,7 +29,7 @@ export async function readNewsImage(id: string): Promise<ArrayBuffer | null> {
   return res?.statusCode === 200 ? new Response(res.stream).arrayBuffer() : null;
 }
 
-export async function writeNews(f: NewsFile) {
+async function writeNews(f: NewsFile) {
   await put(PATH, JSON.stringify(f), { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: "application/json" });
 }
 
@@ -69,7 +69,6 @@ export async function refreshNews(today: string, opts: { days?: number; redo?: b
           url: a.url,
           ...(read.items.find((o) => o.id === n.id)?.image ? { image: true as const } : {}),
         };
-        keepPictures(article, read.items.find((o) => o.id === n.id));
         added.push(n.id);
         return article;
       } catch (e) {
@@ -105,28 +104,8 @@ export async function refreshNews(today: string, opts: { days?: number; redo?: b
   );
   const gone = read.items.filter((a) => a.image && !items.some((b) => b.id === a.id)).map((a) => imgPath(a.id));
   if (gone.length) await del(gone).catch(() => {});
-  // The sentences' pictures go with their article (the words' stay: lib/pictures.ts).
-  for (const a of read.items.filter((a) => a.pics && !items.some((b) => b.id === a.id))) {
-    const { blobs } = await listBlobs({ prefix: `news/pic/${a.id}/` }).catch(() => ({ blobs: [] }));
-    if (blobs.length) await del(blobs.map((b) => b.url)).catch(() => {});
-  }
   if (added.length || pics || items.length !== read.items.length) await writeNews(next);
   return { added, failed, file: next };
-}
-
-// An article made again keeps the pictures drawn for it, where the sentence or word is still the same.
-function keepPictures(a: NewsArticle, old?: NewsArticle) {
-  if (!old?.pics) return;
-  a.sentences.forEach((s, i) => {
-    const o = old.sentences[i];
-    if (o?.scene_image && o.ja === s.ja) s.scene_image = o.scene_image;
-  });
-  a.words = a.words.map((w) => {
-    const o = old.words.find((x) => x.ja === w.ja && x.kana === w.kana);
-    return o?.image_url ? { ...w, image_url: o.image_url, look: o.look } : w;
-  });
-  // New words or sentences: drawn on the next run.
-  if (a.sentences.length === old.sentences.length && a.words.every((w) => old.words.some((x) => x.ja === w.ja))) a.pics = old.pics;
 }
 
 // The voice of every sentence of these articles, asked for once through the public address (the same one
