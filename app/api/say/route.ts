@@ -35,20 +35,36 @@ export async function POST(request: Request) {
     }
   }
   const t1 = Date.now();
-  if (!said) return NextResponse.json({ said, parts: [{ t: ja, ok: false }], miss_zh: "" } satisfies SayCheck & { said: string });
+  if (!said) return NextResponse.json({ said, ...plainCheck(ja, said) });
   // Said exactly (punctuation aside): nothing to ask.
-  const plain = byChars(ja, said);
-  if (plain.every((p) => p.ok)) return NextResponse.json({ said, parts: plain, miss_zh: "", ms: [t1 - t0, 0] });
+  const plain = plainCheck(ja, said);
+  if (plain.verdict === "good") return NextResponse.json({ said, ...plain, ms: [t1 - t0, 0] });
   let check: SayCheck;
   try {
     check = await sayCheck({ ja, said });
-    if (check.parts.map((p) => p.t).join("") !== ja) check = { parts: byChars(ja, said), miss_zh: check.miss_zh };
+    if (check.parts.map((p) => p.t).join("") !== ja) check.parts = plain.parts;
+    if (check.mine.map((p) => p.t).join("") !== said) check.mine = [{ t: said, ok: true }];
   } catch (e) {
     console.error(e);
-    check = { parts: byChars(ja, said), miss_zh: "" };
+    check = plain;
   }
   // ms: how long writing down and checking took, to watch the wait.
   return NextResponse.json({ said, ...check, ms: [t1 - t0, Date.now() - t1] });
+}
+
+// Without the AI: how much of the sentence was said character for character.
+function plainCheck(ja: string, said: string): SayCheck {
+  const parts = byChars(ja, said);
+  const n = parts.reduce((s, p) => s + p.t.length, 0);
+  const got = parts.reduce((s, p) => s + (p.ok ? p.t.length : 0), 0) / Math.max(1, n);
+  return {
+    verdict: !said ? "off" : got === 1 ? "good" : got >= 0.7 ? "close" : "off",
+    mine: said ? [{ t: said, ok: true }] : [],
+    stuck_zh: "",
+    better: said,
+    better_zh: "",
+    parts,
+  };
 }
 
 // When the AI's parts don't put the sentence back together: the characters said in order (longest common
