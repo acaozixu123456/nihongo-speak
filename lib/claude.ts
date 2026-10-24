@@ -1059,3 +1059,83 @@ export function newsNotes(title: string, sentences: string[]): Promise<NewsNotes
     "low",
   );
 }
+
+// Pictures for an NHK article (lib/pictures.ts): one whole situation per sentence, and for each word either a
+// clear photo of the thing or one moment that shows its meaning. A wrong picture teaches the wrong meaning, so
+// anything a picture can't show plainly gets none.
+const PicturePlanSchema = z.object({
+  scenes: z
+    .array(
+      z.object({
+        n: z.number().describe("文番号"),
+        prompt: z.string().describe("その文の場面1枚の英語プロンプト。空なら描かない"),
+      }),
+    )
+    .describe("全部の文。n は入力の文番号"),
+  words: z
+    .array(
+      z.object({
+        ja: z.string().describe("入力の語そのまま"),
+        look: z.enum(["thing", "scene", "none"]),
+        prompt: z.string().describe("英語プロンプト。none なら空"),
+      }),
+    )
+    .describe("入力の全部の語"),
+});
+export type PicturePlan = z.infer<typeof PicturePlanSchema>;
+
+export function picturePlan(title: string, sentences: { ja: string; zh: string }[], words: { ja: string; kana: string; zh: string }[]): Promise<PicturePlan> {
+  return haikuFirst(
+    PicturePlanSchema,
+    `日本語学習者（中国人、N4〜N3）がNHKのやさしい日本語ニュースを聞くとき、文の意味を絵で思い浮かべられるように、画像生成AI（写実的な写真風）への英語プロンプトを書く。絵は耳で聞いた文を理解したかの確認にも使う（文を聞いて正しい絵を選ぶ）。
+
+文（scenes）：
+- 1文に1枚、その文の場面全体を1コマで：誰が誰に何をしているか、どこで。逐語的に単語を並べず、文の意味が一目で分かる場面にする。
+- 同じ記事の他の文の絵と見分けがつくように、その文にしかない要素（人物・場所・動作・物）を中心に置く。
+- 実在の人物（政治家、選手など）の顔や名前は使わない。役割で描く（"a Japanese government minister at a press conference"）。ロゴ、国旗の細部、文字、数字、看板、字幕は一切描かせない（"no text, no letters, no numbers" を必ず入れる）。
+- 日本の場面なら日本らしい背景（日本の街、日本人）。
+- 数字や日付だけの文、あいさつだけの文（「〜のニュースです」）など、絵にすると誤解を生む文は prompt を空にする。
+
+語（words）：
+- look=thing：形のある具体的な物・場所・人の役割（台風、監督、川）。それ1つだけをはっきり写した写実写真。背景はシンプル。
+- look=scene：抽象語・動詞・形容詞（危険、続く、増える、守る）。その意味が使われている日常の1場面（"a road closed with barrier because of danger of landslide"）。記号やアイコンで代用しない。
+- look=none：絵にすると意味がずれる語（制度、関係、〜について など）。prompt は空。迷ったら none。
+- 写真に文字・数字・記号は描かせない。`,
+    `見出し：${title}
+
+文：
+${sentences.map((s, i) => `${i + 1}. ${s.ja}（${s.zh}）`).join("\n")}
+
+語：
+${words.map((w) => `- ${w.ja}（${w.kana}）：${w.zh}`).join("\n")}`,
+    8000,
+    "low",
+  );
+}
+
+// Checks one drawn picture before it is kept: does it show what it was drawn for, plainly, with no writing?
+const PictureCheckSchema = z.object({
+  ok: z.boolean().describe("この絵を見た学習者が、この意味を正しく思い浮かべられる。文字・数字が目立たず、意味と矛盾する物がない"),
+  why: z.string().describe("理由（英語、短く）"),
+});
+
+export async function pictureCheck(jpeg: Buffer, ja: string, zh: string, intent: string): Promise<{ ok: boolean; why: string }> {
+  const res = await client.messages.parse({
+    ...smart(600),
+    system: "You check pictures for a Japanese vocabulary and listening app. A picture that shows the wrong meaning teaches the wrong meaning, so be strict: when in doubt, ok=false.",
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64", media_type: "image/jpeg", data: jpeg.toString("base64") } },
+          {
+            type: "text",
+            text: `This picture is meant to show: ${ja} (Chinese: ${zh}).\nIt was drawn from this prompt: ${intent}\n\nWould a learner looking at it think of exactly this meaning? Reject it if it shows something else, is confusing, shows readable text or numbers prominently, or has obvious errors (deformed people, wrong country).`,
+          },
+        ],
+      },
+    ],
+    output_config: { effort: "low", format: zodOutputFormat(PictureCheckSchema) },
+  });
+  return res.parsed_output ?? { ok: false, why: `no answer (${res.stop_reason})` };
+}
