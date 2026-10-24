@@ -12,6 +12,7 @@ export type Card = {
   zh: string;
   voice: string;
   scenarioId: string;
+  img?: string; // a word's picture (lib/pictures.ts): reviewed as 絵→日本語 then 日本語→意味
   due: string; // YYYY-MM-DD
   step: number; // index into INTERVALS
 };
