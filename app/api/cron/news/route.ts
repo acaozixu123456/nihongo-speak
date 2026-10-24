@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { jstDay } from "@/lib/push";
 import { refreshNews, warmVoices } from "@/lib/news";
-import { drawNewsPictures } from "@/lib/pictures";
+import { drawNewsPictures, pictureModels } from "@/lib/pictures";
 import { storageReady } from "@/lib/store";
 
 export const maxDuration = 300;
@@ -21,7 +21,8 @@ export async function GET(request: Request) {
   if (!storageReady()) return NextResponse.json({ storage: false });
   const q = new URL(request.url).searchParams;
   const drawPics = (from: number) =>
-    drawNewsPictures({ until: from + 250_000, days: Number(q.get("days")) || 1, ids: q.get("ids")?.split(",").filter(Boolean) }).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    drawNewsPictures({ until: from + 250_000, days: Number(q.get("days")) || 1, ids: q.get("ids")?.split(",").filter(Boolean), redraw: q.get("redraw") === "1" }).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+  if (q.get("pics") === "models") return NextResponse.json(await pictureModels().catch((e) => ({ error: String(e) })));
   if (q.get("pics") === "only") return NextResponse.json({ pics: await drawPics(t0) });
   try {
     const { added, failed, file } = await refreshNews(jstDay(), { redo: new URL(request.url).searchParams.get("redo") === "1" });
