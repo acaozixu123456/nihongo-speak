@@ -1060,23 +1060,30 @@ export function newsNotes(title: string, sentences: string[]): Promise<NewsNotes
   );
 }
 
-// 一文ずつ三回話す: one NHK sentence said back from memory. The sentence is cut into its parts in order, each
-// marked said or not, so the screen can paint what was said green and what was left out red.
+// 一文ずつ三回話す: one NHK sentence said back from memory. Judged by meaning, from what the learner managed to
+// say: where they got stuck, and their own sentence made right (their words, their level) rather than NHK's.
+// parts: the NHK sentence cut in order, each part said or not, for the original shown small underneath.
 const SayCheckSchema = z.object({
+  verdict: z.enum(["good", "close", "off"]).describe("good：元の文と同じ内容が伝わる（言い方が違ってもよい）。close：大筋は伝わるが、一部が抜けた・間違えた。off：大事な内容が伝わらない"),
+  mine: z
+    .array(z.object({ t: z.string().describe("学習者の発話の一部分（そのまま抜き出す）"), ok: z.boolean().describe("文法・語の使い方が正しく自然なら true。間違い・不自然なら false") }))
+    .describe("学習者の発話を、頭から順に文節程度に切ったもの。全部つなげると学習者の発話と一字一句同じになること"),
+  stuck_zh: z.string().describe("どこで詰まったか・何が言えなかったかを中国語で一言（25字以内）。例：「“…かどうか测试”这部分没说出来」。問題なければ空文字"),
+  better: z.string().describe("学習者の言い方を土台に、できるだけ学習者の語と文の形を残して、元の文と同じ意味になるよう最小限直した日本語。元の文に戻さない。N4〜N3 で言える形。学習者の発話がそのまま正しく十分なら、学習者の発話をそのまま"),
+  better_zh: z.string().describe("better で何を直した・足したかを中国語で一言（25字以内）。直していなければ空文字"),
   parts: z
-    .array(z.object({ t: z.string().describe("元の文の一部分（そのまま抜き出す）"), ok: z.boolean().describe("学習者がこの部分を言えたら true") }))
+    .array(z.object({ t: z.string().describe("元の文の一部分（そのまま抜き出す）"), ok: z.boolean().describe("その内容を学習者が（言い方は違っても）言えたら true") }))
     .describe("元の文を、頭から順に意味のまとまり（文節程度）に切ったもの。全部つなげると元の文と一字一句同じになること"),
-  miss_zh: z.string().describe("言えなかった部分の意味と、言うときのコツを中国語で一言（20字以内）。全部言えたら空文字"),
 });
 export type SayCheck = z.infer<typeof SayCheckSchema>;
 
 export async function sayCheck(a: { ja: string; said: string }): Promise<SayCheck> {
   const res = await parse({
-    ...smart(1500),
+    ...smart(2500),
     system: `${COACH}
-学習者はニュースの一文を聞いて、それを覚えて口で言い直す練習をしています。元の文と、学習者が言ったこと（音声認識の結果）を比べてください。
-音声認識の結果なので、同音の漢字違い・ひらがなと漢字の違い・句読点・数字の書き方は違いとして扱わない。
-意味が同じでも、語が抜けた・別の語に変わった・活用や助詞が違う部分は ok を false にする。`,
+学習者はニュースの一文を聞いて、覚えて、自分の口で言い直す練習をしています。一字一句同じに言う必要はありません。目的は、学習者が今言えるところから少しずつ言えるようにすること。
+学習者が言ったこと（音声認識の結果）を元の文と比べて、意味が伝わったか、どこで詰まったかを見て、学習者の言い方を活かした直し方を示してください。
+音声認識の結果なので、同音の漢字違い・ひらがなと漢字の違い・句読点・数字の書き方は間違いとして扱わない。`,
     messages: [{ role: "user", content: `元の文：${a.ja}\n学習者が言ったこと：${a.said}` }],
     output_config: { effort: "low", format: zodOutputFormat(SayCheckSchema) },
   });

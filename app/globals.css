@@ -2078,3 +2078,15 @@ body:has(.on-air) .ask-acts, body:has(.on-air) .ask-bar:not(.ask-acts .ask-bar) 
 .say-voices { display: flex; gap: 6px; margin-top: 10px; }
 .say-voices button { flex: 1; border: none; border-radius: 10px; background: var(--soft); color: var(--text); padding: 7px 0; font-family: var(--ja); font-size: 13px; cursor: pointer; }
 .say-voices button.on { background: var(--text); color: var(--card); }
+/* Result built from what the learner said (their words, where they got stuck, their sentence made right). */
+.say-blk.n { background: var(--card); box-shadow: var(--shadow); }
+.say-blk.n .say-bh { color: var(--muted); font-size: 13px; letter-spacing: 0.04em; }
+.say-mine { color: var(--text); }
+.say-mine .m { color: var(--no-ink); text-decoration: underline 2px var(--no); text-underline-offset: 5px; }
+.say-blk.g .say-miss b { color: var(--ok-ink); }
+.say-orig { display: flex; align-items: center; gap: 12px; margin-top: 16px; padding: 0 4px; }
+.say-orig > div { flex: 1; min-width: 0; }
+.say-orig small { font-family: var(--ja); font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
+.say-orig p { margin: 2px 0 0; font-family: var(--ja); font-size: 15px; line-height: 1.8; color: var(--muted); }
+.say-orig p .m { color: var(--text); text-decoration: underline 2px var(--faint); text-underline-offset: 4px; }
+.say-orig .say-play { background: var(--soft); }

@@ -13,22 +13,20 @@ import HoldButton from "./HoldButton";
 import { Ruby } from "./News";
 
 // 一文ずつ三回話す: one sentence of an NHK article, said back three times with less on screen each time —
-// the whole sentence, then only its kanji words, then nothing but the Chinese. After the third, what was said
-// is green and what was left out red; then on to the next sentence. Opened from the button beside each
+// the whole sentence, then only its kanji words, then nothing but the Chinese. Judged by meaning, from what the
+// learner said: after the third, their own words (slips underlined), where they got stuck, and their sentence
+// made right in their own words; NHK's sentence only small underneath. Then on to the next sentence. Opened from the button beside each
 // sentence on the article page (/news/[id]/say?i=n).
 
-type Check = { said: string; parts: { t: string; ok: boolean }[]; miss_zh: string };
+type Part = { t: string; ok: boolean };
+type Check = { said: string; verdict: "good" | "close" | "off"; mine: Part[]; stuck_zh: string; better: string; better_zh: string; parts: Part[] };
 type Got = Check | "wait" | "fail";
 
 const SAYS = ["見ながら", "ヒントだけ", "何も見ないで"] as const;
-const MARK = /^[、。，．・「」『』（）！？\s]+$/;
 
-const whole = (c: Check) => c.parts.every((p) => p.ok || MARK.test(p.t));
-const share = (c: Check) => {
-  const n = c.parts.reduce((s, p) => s + p.t.length, 0);
-  return n ? c.parts.reduce((s, p) => s + (p.ok ? p.t.length : 0), 0) / n : 0;
-};
-const grade = (g: Got | undefined) => (!g || g === "wait" ? "…" : g === "fail" ? "?" : whole(g) ? "✓" : share(g) >= 0.7 ? "ほぼ" : "!");
+const whole = (c: Check) => c.verdict === "good";
+const bare = (t: string) => t.replace(/[、。，．・「」『』（）！？\s]/g, "");
+const grade = (g: Got | undefined) => (!g || g === "wait" ? "…" : g === "fail" ? "?" : g.verdict === "good" ? "✓" : g.verdict === "close" ? "ほぼ" : "!");
 
 export function NewsSayPage({ id, from }: { id: string; from: number }) {
   const items = useNews();
@@ -134,7 +132,7 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
       setGot((g) => Object.assign([...g], { [at]: c }));
       if (at === 2) {
         void stopPause(1);
-        verdict(whole(c) ? "right" : share(c) >= 0.7 ? "close" : "wrong");
+        verdict(c.verdict === "good" ? "right" : c.verdict === "close" ? "close" : "wrong");
         markNews(a.id, { said: { ...p.news?.[a.id]?.said, [i]: whole(c) ? 1 : 0 } });
         if (!whole(c) && !hasCard(p, s.ja)) toggleCard({ ja: s.ja, zh: s.zh, voice, scenarioId: `news:${a.id}` });
       }
@@ -174,9 +172,9 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
         <Bar n={n} i={n} />
         <h1 className="say-big">
           {tried}文のうち、<br />
-          <em>{good}文</em>そのまま言えた
+          <em>{good}文</em>言えた
         </h1>
-        <div className="say-bigzh">练过的{tried}句里，{good}句第3遍完整说出</div>
+        <div className="say-bigzh">练过的{tried}句里，{good}句第3遍把意思说对了</div>
         <div className="pl-grid say-list">
           {a.sentences.map((x, j) => (
             <button key={j} className="pl say-row" onClick={() => (again(), setI(j), setEnd(false))}>
@@ -276,24 +274,32 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
             <div className="say-wait">没听清，再说一次</div>
           ) : (
             <>
-              <div className="say-blk g">
-                <div className="say-bh"><i>✓</i>{whole(last) ? "全部言えた" : "言えた"}</div>
-                <p className="say-res" data-line={s.ja}>
-                  {last.parts.map((x, j) => (
-                    <span key={j} className={x.ok || MARK.test(x.t) ? "y" : "m"}>{x.t}</span>
-                  ))}
+              <div className={`say-blk ${whole(last) ? "g" : "n"}`}>
+                <div className="say-bh">{whole(last) ? <><i>✓</i>言えた</> : "言ったこと"}</div>
+                <p className="say-res say-mine">
+                  {last.mine.length ? last.mine.map((x, j) => <span key={j} className={x.ok ? undefined : "m"}>{x.t}</span>) : "（聞こえなかった）"}
                 </p>
+                {last.stuck_zh && <div className="say-zh">{last.stuck_zh}</div>}
               </div>
-              {!whole(last) && (
-                <div className="say-blk r">
-                  <div className="say-bh"><i>!</i>ここが抜けた</div>
+              {last.better && bare(last.better) !== bare(last.said) && (
+                <div className="say-blk g">
+                  <div className="say-bh"><i>✓</i>あなたの言い方で</div>
                   <div className="say-miss">
-                    <b>{last.parts.filter((x) => !x.ok && !MARK.test(x.t)).map((x) => x.t).join(" … ")}</b>
-                    <button className="say-play" onClick={() => listen()} aria-label="原文を聞く">▶</button>
+                    <b data-line={last.better}>{last.better}</b>
+                    <button className="say-play" onClick={() => (unlock(), play(ttsUrl(last.better, voice)).catch(() => {}))} aria-label="聞く">▶</button>
                   </div>
-                  {last.miss_zh && <div className="say-zh">{last.miss_zh}</div>}
+                  {last.better_zh && <div className="say-zh">{last.better_zh}</div>}
                 </div>
               )}
+              <div className="say-orig">
+                <div>
+                  <small>元の文</small>
+                  <p data-line={s.ja}>
+                    {last.parts.map((x, j) => <span key={j} className={x.ok ? undefined : "m"}>{x.t}</span>)}
+                  </p>
+                </div>
+                <button className="say-play" onClick={() => listen()} aria-label="元の文を聞く">▶</button>
+              </div>
             </>
           )}
           <div className="sticky-cta">
