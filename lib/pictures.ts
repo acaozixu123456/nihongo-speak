@@ -70,31 +70,74 @@ async function drawGemini(prompt: string, aspectRatio: string): Promise<Buffer |
   return img ? Buffer.from(img.data, "base64") : null;
 }
 
-export type Drawn = { ok: boolean; why: string; engine?: string };
+// Which picture models this project can use (for ?pics=models).
+export async function pictureModels() {
+  const { project, token } = await vertexAccess();
+  const out: Record<string, unknown> = {};
+  for (const m of ["imagen-4.0-fast-generate-001", "imagen-4.0-generate-001", "imagen-4.0-ultra-generate-001", "imagen-3.0-fast-generate-001", "imagen-3.0-generate-002", "imagen-4.0-fast-generate-preview-06-06"]) {
+    for (const region of ["us-central1", "asia-northeast1", "global"]) {
+      const host = region === "global" ? "aiplatform.googleapis.com" : `${region}-aiplatform.googleapis.com`;
+      const r = await fetch(`https://${host}/v1/projects/${project}/locations/${region}/publishers/google/models/${m}:predict`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ instances: [{ prompt: "a red apple on a white table" }], parameters: { sampleCount: 1 } }),
+      }).catch((e) => ({ status: 0, text: async () => String(e) }));
+      out[`${m}@${region}`] = r.status === 200 ? 200 : `${r.status} ${(await r.text()).slice(0, 120)}`;
+      if (r.status === 200) break;
+    }
+  }
+  const list = await fetch(`https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models?pageSize=300`, { headers: { Authorization: `Bearer ${token}`, "x-goog-user-project": project } });
+  const names = list.ok ? ((await list.json()) as { publisherModels?: { name: string }[] }).publisherModels?.map((x) => x.name).filter((n) => /imag|flash-image|veo/.test(n)) : `${list.status} ${(await list.text()).slice(0, 200)}`;
+  return { out, names };
+}
 
-// Draws one picture and has it looked at; a second go when the first isn't right.
+export type Drawn = { ok: boolean; why: string; engine?: string; drawn?: false };
+
+// Imagen once refused (not on this project): the other model from then on, one at a time.
+let imagenDown = false;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Whatever the model gives, kept as a JPEG of phone size (~100 KB rather than 2 MB).
+const toJpeg = async (img: Buffer) => (await import("sharp")).default(img).resize({ width: 960, withoutEnlargement: true }).jpeg({ quality: 78, mozjpeg: true }).toBuffer();
+
+async function drawOne(prompt: string, aspect: string, log: string[]): Promise<{ img: Buffer; engine: string } | null> {
+  if (!imagenDown) {
+    try {
+      const img = await drawImagen(prompt, aspect);
+      if (img) return { img, engine: IMAGEN };
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e);
+      if (/ 40[34]/.test(m)) imagenDown = true;
+      log.push(`imagen: ${m.slice(0, 120)}`);
+    }
+  }
+  // The other model allows only a few pictures a minute: a refusal waits and asks again.
+  for (let t = 0; t < 3; t++) {
+    try {
+      const img = await drawGemini(prompt, aspect);
+      if (img) return { img, engine: PAINTER };
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e);
+      log.push(`gemini: ${m.slice(0, 80)}`);
+      if (!/ 429/.test(m)) return null;
+      await sleep(15000 * (t + 1));
+    }
+  }
+  return null;
+}
+
+// Draws one picture and has it looked at; a second go when the first isn't right. drawn: false when no picture
+// came at all (tried again on a later run), as against one that was looked at and turned down.
 async function drawChecked(path: string, prompt: string, aspect: string, ja: string, zh: string, log: string[]): Promise<Drawn> {
   let why = "";
   for (let attempt = 0; attempt < 2; attempt++) {
-    const full = `${prompt}\n\n${STYLE}`;
-    let img: Buffer | null = null;
-    let engine = IMAGEN;
-    try {
-      img = await drawImagen(full, aspect);
-    } catch (e) {
-      log.push(`imagen failed: ${e instanceof Error ? e.message : e}`);
-    }
-    if (!img) {
-      engine = PAINTER;
-      img = await drawGemini(full, aspect).catch((e) => (log.push(`gemini failed: ${e instanceof Error ? e.message : e}`), null));
-    }
-    if (!img) return { ok: false, why: "not drawn" };
-    // Imagen gives JPEG; the other model may give PNG, which the check wants named as such.
-    const jpeg = img[0] === 0xff;
-    const check = jpeg ? await pictureCheck(img, ja, zh, prompt).catch((e) => ({ ok: false, why: `check failed: ${e instanceof Error ? e.message : e}` })) : { ok: true, why: "png, not checked" };
+    const got = await drawOne(`${prompt}\n\n${STYLE}`, aspect, log);
+    if (!got) return { ok: false, why: "not drawn", drawn: false };
+    const jpeg = await toJpeg(got.img);
+    const check = await pictureCheck(jpeg, ja, zh, prompt).catch((e) => ({ ok: false, why: `check failed: ${e instanceof Error ? e.message : e}` }));
     if (check.ok) {
-      await put(path, img, { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: jpeg ? "image/jpeg" : "image/png" });
-      return { ok: true, why: check.why, engine };
+      await put(path, jpeg, { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: "image/jpeg" });
+      return { ok: true, why: check.why, engine: got.engine };
     }
     why = check.why;
     log.push(`rejected ${ja}: ${why}`);
@@ -121,11 +164,11 @@ async function planFor(a: NewsArticle): Promise<PicturePlan> {
 const exists = (path: string) => head(path).then(() => true, () => false);
 
 // One article's pictures, the ones still missing, a few at a time; returns the article with their addresses.
-async function picturesFor(a: NewsArticle, until: number, log: string[]): Promise<{ a: NewsArticle; done: boolean }> {
+async function picturesFor(a: NewsArticle, until: number, log: string[], redraw = false): Promise<{ a: NewsArticle; done: boolean }> {
   const plan = await planFor(a);
   type Job = () => Promise<void>;
-  const sentences = a.sentences.map((s) => ({ ...s }));
-  const words = a.words.map((w) => ({ ...w }));
+  const sentences = a.sentences.map((s) => (redraw ? { ...s, scene_image: undefined } : { ...s }));
+  const words = a.words.map((w) => (redraw ? { ...w, image_url: undefined, look: undefined } : { ...w }));
   const jobs: Job[] = [];
   let left = false;
   sentences.forEach((s, i) => {
@@ -134,8 +177,9 @@ async function picturesFor(a: NewsArticle, until: number, log: string[]): Promis
     jobs.push(async () => {
       if (Date.now() > until) return void (left = true);
       const path = scenePath(a.id, i);
-      const r = (await exists(path)) ? { ok: true, why: "kept" } : await drawChecked(path, p, "4:3", s.ja, s.zh, log);
+      const r = !redraw && (await exists(path)) ? { ok: true, why: "kept" } : await drawChecked(path, p, "4:3", s.ja, s.zh, log);
       if (r.ok) s.scene_image = sceneUrl(a.id, i);
+      if ("drawn" in r && r.drawn === false) left = true;
       log.push(`${a.id} s${i} ${r.ok ? "ok" : "none"} ${r.why}`);
     });
   });
@@ -145,8 +189,9 @@ async function picturesFor(a: NewsArticle, until: number, log: string[]): Promis
     jobs.push(async () => {
       if (Date.now() > until) return void (left = true);
       const key = wordKey(w);
-      const r = (await exists(wordPath(key))) ? { ok: true, why: "kept" } : await drawChecked(wordPath(key), p.prompt, "1:1", w.ja, w.zh, log);
+      const r = !redraw && (await exists(wordPath(key))) ? { ok: true, why: "kept" } : await drawChecked(wordPath(key), p.prompt, "1:1", w.ja, w.zh, log);
       if (r.ok) Object.assign(w, { image_url: wordUrl(key), look: p.look });
+      if ("drawn" in r && r.drawn === false) left = true;
       log.push(`${a.id} ${w.ja} ${r.ok ? "ok" : "none"} ${r.why}`);
     });
   });
@@ -154,13 +199,13 @@ async function picturesFor(a: NewsArticle, until: number, log: string[]): Promis
   const worker = async () => {
     while (k < jobs.length) await jobs[k++]();
   };
-  await Promise.all([worker(), worker(), worker(), worker()]);
+  await Promise.all(imagenDown ? [worker()] : [worker(), worker(), worker(), worker()]);
   return { a: { ...a, sentences, words, pics: left ? (a.pics ?? 0) + 1 : PICS_DONE }, done: !left };
 }
 
 // Draws what is missing for the newest articles (only: older ones were heard already), until the time is up.
 // ids: just these articles (a sample run).
-export async function drawNewsPictures(o: { until: number; days?: number; ids?: string[] }) {
+export async function drawNewsPictures(o: { until: number; days?: number; ids?: string[]; redraw?: boolean }) {
   const log: string[] = [];
   const file = await readNews();
   const days = [...new Set(file.items.map((a) => a.day))].sort().reverse().slice(0, o.days ?? 1);
@@ -169,7 +214,7 @@ export async function drawNewsPictures(o: { until: number; days?: number; ids?: 
   for (const a of todo) {
     if (Date.now() > o.until) break;
     try {
-      const r = await picturesFor(a, o.until, log);
+      const r = await picturesFor(a, o.until, log, o.redraw);
       made.set(a.id, r.a);
     } catch (e) {
       log.push(`${a.id} failed: ${e instanceof Error ? e.message : e}`);
