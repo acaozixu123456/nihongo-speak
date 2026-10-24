@@ -11,6 +11,7 @@ import { verdict } from "@/lib/client/fx";
 import { loadPause, startPause, stopPause } from "@/lib/client/bgm";
 import { renewAudio } from "@/lib/client/audio";
 import { flowOf, runClips } from "@/lib/client/fluency";
+import { transcribeLong } from "@/lib/client/recorder";
 import HoldButton from "./HoldButton";
 
 // 全文モード: once every sentence of an article was said right one by one, the whole article from its Chinese,
@@ -81,11 +82,12 @@ function Full({ a }: { a: NewsArticle }) {
     try {
       const flow = await flowOf(wav);
       if (!flow.runs.length) throw new Error("没听到声音，再说一次");
-      const clips = await runClips(wav, flow.runs);
+      // Azure's transcript goes along, for when Gemini is slow (see /api/say-full).
+      const [clips, azure] = await Promise.all([runClips(wav, flow.runs), transcribeLong(wav).catch(() => "")]);
       const r = await fetch("/api/say-full", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: a.title_ja, sentences: a.sentences.map((s) => ({ ja: s.ja, zh: s.zh })), clips }),
+        body: JSON.stringify({ title: a.title_ja, sentences: a.sentences.map((s) => ({ ja: s.ja, zh: s.zh })), clips, azure }),
       });
       const data = (await r.json()) as Result & { error?: string };
       if (!r.ok) throw new Error(data.error ?? "出错了，再说一次");
