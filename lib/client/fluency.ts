@@ -1,7 +1,9 @@
+import { wordCount } from "@/lib/variant";
+
 // How a telling flowed, from the recording itself (no speech service needed): where the voice is,
 // how long the stretch from first to last word was, and how many silences of a second or more there
 // were inside it. Long pauses are the measure that keeps moving as fluency develops; speed is counted
-// in morae over the spoken stretch, so silence before the first word and after the last doesn't count.
+// in words over the spoken stretch, so silence before the first word and after the last doesn't count.
 
 const FRAME_S = 0.02;
 const LONG_PAUSE_S = 1;
@@ -103,17 +105,10 @@ export async function wavSlice(wav: Blob, from: number, to: number): Promise<Blo
   return new Blob([head.buffer, part.buffer as ArrayBuffer], { type: "audio/wav" });
 }
 
-// Morae in a kana reading: every kana is one, except the small ゃゅょ-type ones that join the kana
-// before them (っ and ー each count as one).
-export function morae(kana: string) {
-  return [...kana.replace(/[^぀-ヿ]/g, "")].filter((c) => !"ゃゅょぁぃぅぇぉゎャュョァィゥェォヮ・".includes(c)).length;
-}
-
-// Readings only count when they look like readings: kana, and about as long as the text they read.
-export function moraRate(text: string, kana: string | undefined, span: number): number | undefined {
-  if (!kana || span < 5) return undefined;
-  const m = morae(kana);
-  const plain = text.replace(/[\s、。，,.!！?？「」…]/g, "").length;
-  if (m < plain * 0.8 || m > plain * 3) return undefined;
-  return Math.round((m / span) * 10) / 10;
+// Words per minute over the stretch actually spoken (silence before the first word and after the last
+// doesn't count). Too short a stretch says nothing.
+export function wordRate(text: string, span: number): number | undefined {
+  if (span < 5) return undefined;
+  const words = wordCount(text);
+  return words ? Math.round((words / span) * 60) : undefined;
 }

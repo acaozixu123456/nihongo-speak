@@ -16,9 +16,9 @@
   --bad: #b5452e;
   --glass: rgba(251, 249, 244, 0.82);
   --shadow: 0 1px 1px rgba(60, 45, 25, 0.03), 0 8px 24px -12px rgba(60, 45, 25, 0.12);
-  --sans: "Noto Sans SC", "PingFang SC", "Hiragino Sans", "Noto Sans JP", "Microsoft YaHei", sans-serif;
-  --ja: "Noto Sans JP", "Hiragino Sans", "PingFang SC", sans-serif;
-  --serif: "Shippori Mincho", "Noto Serif SC", "Hiragino Mincho ProN", "Songti SC", serif;
+  --sans: "Inter", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --ja: "Inter", -apple-system, "Segoe UI", "PingFang SC", sans-serif;
+  --serif: "Source Serif 4", "Noto Serif SC", Georgia, "Songti SC", serif;
   --radius: 22px;
   --ok: #3d8b4f; --ok-bg: #e2f0dc; --ok-ink: #24632f;
   --mid: #c48a12; --mid-bg: #fbefcf; --mid-ink: #8a5d00;
@@ -729,6 +729,8 @@ button.entry { width: 100%; background: none; border: 0; border-bottom: 1px soli
 .script { margin-top: 4px; }
 .sline { display: flex; gap: 14px; padding: 12px 10px; margin: 0 -10px; border-radius: 14px; cursor: pointer; transition: background 0.2s; }
 .sline.now { background: var(--accent-soft); }
+.sline { position: relative; padding-right: 44px; }
+.sline .nw-say { right: 8px; top: 12px; }
 .sline .ja { font-size: 16px; line-height: 1.75; }
 .sline .zh { font-size: 13px; margin-top: 2px; }
 .who { flex: none; width: 30px; font-family: var(--serif); font-size: 12px; padding-top: 4px; color: var(--muted); }

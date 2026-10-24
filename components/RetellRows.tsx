@@ -21,7 +21,7 @@ export function RetellRow({ r, bare, sub }: { r: TopicRow; bare?: boolean; sub?:
           {r.up !== null && r.up > 0 && <small>↑{r.up}</small>}
         </span>
       ) : r.times ? null : (
-        <span className="rt-mada">まだ</span>
+        <span className="rt-mada">还没</span>
       )}
       <i className="rt-chev">›</i>
     </Link>

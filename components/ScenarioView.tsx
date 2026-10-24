@@ -12,9 +12,9 @@ import Shadow from "./Shadow";
 import Talk from "./Talk";
 
 const TABS = [
-  { key: "listen", label: "① 聞く" },
-  { key: "shadow", label: "② まねる" },
-  { key: "talk", label: "③ 会話" },
+  { key: "listen", label: "① 听" },
+  { key: "shadow", label: "② 跟读" },
+  { key: "talk", label: "③ 对话" },
 ] as const;
 
 export default function ScenarioView({ scenario, step }: { scenario: Scenario; step?: Step }) {

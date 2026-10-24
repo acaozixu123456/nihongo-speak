@@ -17,7 +17,7 @@ const RANGES = [
 ] as const;
 type Range = (typeof RANGES)[number]["key"];
 
-const SONG_KEY = "nihongo-speak:recap-song";
+const SONG_KEY = "english-speak:recap-song";
 type SongRef = { id: string; range: Range; day: string; n: number };
 
 function readSong(): SongRef | null {
@@ -141,7 +141,7 @@ export default function Recap() {
         <Link href="/" className="today">
           <span className="kicker">{label}</span>
           <span className="today-title">
-            <span className="ja-serif">まだ空っぽ</span>
+            <span className="ja-serif">还是空的</span>
           </span>
           <span className="today-zh">听一期电台、练一组，学过、练过的都会收到这里</span>
           <span className="today-go">开始</span>
@@ -170,14 +170,14 @@ export default function Recap() {
       {items.length > 0 && (
         <div className="rows">
           <button className="entry" onClick={() => open("wild")}>
-            <span className="entry-text ja-serif">激しく</span>
+            <span className="entry-text ja-serif">劲爆版</span>
             <span className="chev" aria-hidden>
               ›
             </span>
           </button>
           {songEp ? null : (
             <button className="entry" onClick={makeSong}>
-              <span className="entry-text ja-serif">歌にする</span>
+              <span className="entry-text ja-serif">编成歌</span>
               <span className="chev" aria-hidden>
                 ›
               </span>
@@ -216,7 +216,7 @@ function ItemList({ title, items }: { title: string; items: RecapItem[] }) {
             className="entry rc-item"
             onClick={() => {
               unlock();
-              play(ttsUrl(it.say, it.voice ?? "ja-JP-AoiNeural")).catch(() => {});
+              play(ttsUrl(it.say, it.voice ?? "en-US-JennyNeural")).catch(() => {});
             }}
           >
             <span className="entry-text">

@@ -5,7 +5,7 @@ import { addDays, type Progress } from "@/lib/progress-model";
 import type { NewsArticle } from "@/lib/news-model";
 import { readNews } from "@/lib/news";
 
-// 先生: once a night Opus reads the whole record and orders the weak points for the next day. The
+// 老师: once a night Opus reads the whole record and orders the weak points for the next day. The
 // app's own ranking (misses minus half the hits) can't tell a duplicate tag or a speech-recognition
 // slip from a real mistake; this can. Kept beside state.json and handed out with every sync.
 
@@ -14,7 +14,7 @@ export type Fix = { tag: string; said: string; better: string; mark: string; zh:
 export type Memo = { day: string; good: Good | null; fix: Fix | null };
 // good/fix are what 記録 and 今日 show; past is the teacher's own last notes, read back the next night
 // so it can follow up instead of starting over.
-// news: the NHK article she wants told in 三回話す next (its id).
+// news: the article she wants told in 讲三遍 next (its id).
 export type Teacher = { day: string; made: number; order: string[]; hide: string[]; why_zh: string; note_zh: string; letter_ja?: string; good?: Good | null; fix?: Fix | null; past?: Memo[]; news?: string };
 
 const PATH = "teacher.json";
@@ -37,27 +37,27 @@ function record(p: Progress, day: string, past: Memo[], news: NewsArticle[]) {
     .slice(0, 40)
     .map(
       (w) =>
-        `- tag：${w.tag}（${w.zh}）正しく ${w.hit} 回・間違い ${w.miss} 回・最後 ${w.lastMiss ?? w.last}\n${w.examples
+        `- tag: ${w.tag} (${w.zh}) right ${w.hit} times · wrong ${w.miss} times · last ${w.lastMiss ?? w.last}\n${w.examples
           .slice(0, 4)
-          .map((e) => `    言った：${e.said} → 正しくは：${e.better}`)
+          .map((e) => `    said: ${e.said} → better: ${e.better}`)
           .join("\n")}`,
     );
   const tellings = (p.retells ?? [])
     .filter((r) => r.date >= week && r.texts?.length)
     .slice(-6)
-    .map((r) => `- ${r.date}「${r.topic}」\n    1回目：${r.texts![0]}\n    3回目：${r.texts![r.texts!.length - 1]}${r.next?.tag ? `\n    その日の注意：${r.next.tag}` : ""}`);
-  return `今日：${day}
-弱点の記録（新しい順）：
-${weak.join("\n") || "（なし）"}
+    .map((r) => `- ${r.date} "${r.topic}"\n    1st telling: ${r.texts![0]}\n    3rd telling: ${r.texts![r.texts!.length - 1]}${r.next?.tag ? `\n    point that day: ${r.next.tag}` : ""}`);
+  return `Today: ${day}
+Weak-point record (newest first):
+${weak.join("\n") || "(none)"}
 
-この1週間の「三回話す」（ラジオやニュースで聞いた話を自分の言葉で話した文字起こし）：
-${tellings.join("\n") || "（なし）"}
+This week's "tell it three times" (transcripts of her telling, in her own words, stories she heard on the radio or the news):
+${tellings.join("\n") || "(none)"}
 
-明日のニュース（NHKやさしいことばニュース。id：見出し / 内容）：
-${news.map((a) => `- ${a.id}：${a.title_ja} / ${a.summary.join("")}`).join("\n") || "（なし）"}
+Tomorrow's news (id: headline / content):
+${news.map((a) => `- ${a.id}: ${a.title_ja} / ${a.summary.join(" ")}`).join("\n") || "(none)"}
 
-これまでのメモ（あなたが前に書いたもの、新しい順）：
-${past.map((m) => `- ${m.day}${m.good ? `\n    伸びた：${m.good.before} → ${m.good.after}` : ""}${m.fix ? `\n    直そう：${m.fix.said} → ${m.fix.better}（${m.fix.tag}）` : ""}`).join("\n") || "（なし）"}`;
+Earlier notes (what you wrote before, newest first):
+${past.map((m) => `- ${m.day}${m.good ? `\n    improved: ${m.good.before} → ${m.good.after}` : ""}${m.fix ? `\n    to fix: ${m.fix.said} → ${m.fix.better} (${m.fix.tag})` : ""}`).join("\n") || "(none)"}`;
 }
 
 // A highlight the screen can find: the marked part must be inside the sentence, or nothing is marked.

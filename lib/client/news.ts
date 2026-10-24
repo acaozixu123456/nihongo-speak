@@ -9,7 +9,7 @@ import { dayKey, markNews, teacherPlan, type Progress } from "./progress";
 // NHKやさしいことばニュース on the phone: the kept articles (/api/news), saved here too so the train
 // without signal still has them.
 
-const KEY = "nihongo-speak:news";
+const KEY = "english-speak:news";
 const STALE_MS = 20 * 60_000;
 type Saved = { fetched: number; items: NewsArticle[] };
 const NONE: Saved = { fetched: 0, items: [] };
@@ -91,7 +91,7 @@ export function listenSet(p: Progress, items: NewsArticle[] = newsItems()): { da
 }
 
 // "10/19のニュース"
-export const newsDay = (day: string) => (day ? `${Number(day.slice(5, 7))}/${Number(day.slice(8))}のニュース` : "ニュース");
+export const newsDay = (day: string) => (day ? `${Number(day.slice(5, 7))}/${Number(day.slice(8))} 的新闻` : "新闻");
 
 // The article for today's 三回話す: one heard today and not told yet (森先生's pick first), else the one told today.
 export function newsToday(p: Progress, items: NewsArticle[] = newsItems()): NewsArticle | null {
@@ -194,7 +194,7 @@ export function backClips(p: Progress, back: Back[], mode: "ear" | "text"): Clip
     const s = a.sentences[i];
     return {
       block: "news",
-      show: mode === "ear" ? `聞き直す（${k + 1}/${back.length}）` : s.ja,
+      show: mode === "ear" ? `重听（${k + 1}/${back.length}）` : s.ja,
       sub: s.zh,
       parts: [{ voice: mode === "ear" ? otherVoice(voiceOf(p, a)) : voiceOf(p, a), text: s.say, pauseMs: 1200 }],
     };

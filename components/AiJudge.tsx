@@ -19,7 +19,7 @@ export type Judge = {
 const cache = new Map<string, Judge>();
 
 // Asks the AI coach about one spoken answer. Nothing is shown by itself: the page turns the verdict into its
-// 判定, and the details wait behind なぜ？ (JudgeWhy). Weak points are recorded either way.
+// 判定, and the details wait behind 为什么？ (JudgeWhy). Weak points are recorded either way.
 export function useJudge(args: { zh: string; ja: string; where?: string; said: string } | null) {
   const [data, setData] = useState<Judge | null>(null);
   const [failed, setFailed] = useState(false);
@@ -68,7 +68,7 @@ export function useJudge(args: { zh: string; ja: string; where?: string; said: s
   return { data, failed };
 }
 
-// The なぜ？ sheet: Japanese large, the Chinese reason small and grey.
+// The 为什么？ sheet: Japanese large, the Chinese reason small and grey.
 export function JudgeWhy({ data, voice }: { data: Judge; voice: string }) {
   const hear = (text: string) => {
     unlock();
@@ -76,7 +76,7 @@ export function JudgeWhy({ data, voice }: { data: Judge; voice: string }) {
   };
   return (
     <>
-      <div className="why-h">なぜ？</div>
+      <div className="why-h">为什么？</div>
       {data.fixes.length === 0 && <p className="why-zh">{data.summary_zh}</p>}
       {data.fixes.map((f, i) => (
         <button key={i} className="why-fix" onClick={() => hear(f.better)}>
@@ -86,7 +86,7 @@ export function JudgeWhy({ data, voice }: { data: Judge; voice: string }) {
       ))}
       {data.others.length > 0 && (
         <>
-          <div className="why-h">ほかの言い方</div>
+          <div className="why-h">其他说法</div>
           {data.others.map((o, i) => (
             <button key={i} className="why-alt" onClick={() => hear(o.ja)}>
               <span>▶ {o.ja}</span>

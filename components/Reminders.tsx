@@ -54,7 +54,7 @@ export default function Reminders() {
         return;
       }
       if ((await Notification.requestPermission()) !== "granted") {
-        setMsg("没有通知权限。到 iPhone 设置 → 通知 → 日语练习 里打开。");
+        setMsg("没有通知权限。到 iPhone 设置 → 通知 → 英语练习 里打开。");
         return;
       }
       await navigator.serviceWorker.ready;

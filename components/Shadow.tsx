@@ -48,7 +48,7 @@ function Score({ value, best }: { value: number; best?: number }) {
     <div className="sscore">
       <b className={tone(value)}>{shown}</b>
       {done && value >= 80 && <span className="vstamp right sstamp">合格</span>}
-      {done && best !== undefined && value > best && <span className="sbest">+{value - best} 自己ベスト</span>}
+      {done && best !== undefined && value > best && <span className="sbest">+{value - best} 新纪录</span>}
     </div>
   );
 }
@@ -131,7 +131,7 @@ export default function Shadow({ scenario, active, onNext }: Props) {
           </p>
         )}
         {scored.length >= target && (
-          <button className="primary next-cta" onClick={onNext}>会話へ →</button>
+          <button className="primary next-cta" onClick={onNext}>去对话 →</button>
         )}
       </div>
 
@@ -169,7 +169,7 @@ export default function Shadow({ scenario, active, onNext }: Props) {
         <div className="kana">{line.kana}</div>
         {showZh && <div className="zh">{line.zh}</div>}
         <div className="row" style={{ marginTop: 10 }}>
-          <button className="primary" onClick={listen}>お手本を聞く</button>
+          <button className="primary" onClick={listen}>听示范</button>
           {attempt && (
             <button
               onClick={() => {
@@ -190,7 +190,7 @@ export default function Shadow({ scenario, active, onNext }: Props) {
             <>
               <Score key={attempt.wavUrl} value={scores.pron} best={prevBest} />
               {passed && index < scenario.lines.length - 1 && (
-                <button className="primary next-cta" onClick={() => go(1)}>次へ →</button>
+                <button className="primary next-cta" onClick={() => go(1)}>下一句 →</button>
               )}
             </>
           )}

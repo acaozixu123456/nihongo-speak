@@ -14,14 +14,14 @@ export type RecapItem = Learned & { say: string; point?: { pattern: string; zh: 
 export type Example = { ja: string; zh: string };
 
 export const SRC_JA: Record<LearnedSrc, string> = {
-  radio: "ラジオ",
-  game: "練習",
-  review: "復習",
-  quick: "瞬間",
-  scene: "場面",
-  weak: "弱点",
-  diary: "日記",
-  stuck: "流す",
+  radio: "电台",
+  game: "练习",
+  review: "复习",
+  quick: "马上说",
+  scene: "场景",
+  weak: "弱项",
+  diary: "日记",
+  stuck: "默念",
 };
 
 export function recapDays(n: number, today = dayKey()) {
@@ -89,7 +89,7 @@ export function reelOrder(items: RecapItem[]) {
 // A grammar point is shown and said as one short sentence: the learner's own corrected sentence (with
 // a translation from the AI), else one the AI writes. Kept on this device, keyed by the point.
 
-const EX_KEY = "nihongo-speak:point-examples:v2";
+const EX_KEY = "english-speak:point-examples:v2";
 const exKey = (pt: NonNullable<RecapItem["point"]>) => `${pt.pattern}|${pt.seed ?? ""}`;
 
 function readEx(): Record<string, Example> {

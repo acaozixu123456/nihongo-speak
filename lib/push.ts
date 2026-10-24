@@ -8,7 +8,7 @@ import type { Slot, State } from "@/lib/store";
 // is nothing extra to configure. Changing ANTHROPIC_API_KEY means re-enabling reminders.
 function vapid() {
   const seed = process.env.VAPID_SEED ?? process.env.ANTHROPIC_API_KEY ?? "";
-  const priv = createHash("sha256").update(`nihongo-speak:vapid:${seed}`).digest();
+  const priv = createHash("sha256").update(`english-speak:vapid:${seed}`).digest();
   const ecdh = createECDH("prime256v1");
   ecdh.setPrivateKey(priv);
   return { publicKey: ecdh.getPublicKey().toString("base64url"), privateKey: priv.toString("base64url") };
@@ -19,7 +19,7 @@ export const publicKey = () => vapid().publicKey;
 export async function send(subscription: webpush.PushSubscription, payload: { title: string; body: string }) {
   const { publicKey, privateKey } = vapid();
   await webpush.sendNotification(subscription, JSON.stringify(payload), {
-    vapidDetails: { subject: "https://nihongo-speak.vercel.app", publicKey, privateKey },
+    vapidDetails: { subject: "https://english-speak.vercel.app", publicKey, privateKey },
     TTL: 60 * 60 * 4,
   });
 }
@@ -41,7 +41,7 @@ export function reminder(p: Progress, slot: Slot): { title: string; body: string
       body: slot === "evening" ? `今天还没练。说一段一分钟日记就能保住连续记录。${extra}` : `午休花 5 分钟练一下？${extra}`,
     };
   }
-  return { title: "今天练一下日语吧", body: `一个场景、一段日记，5 分钟就够。${extra}` };
+  return { title: "今天练一下英语吧", body: `一个场景、一段日记，5 分钟就够。${extra}` };
 }
 
 export function shouldSend(state: State, slot: Slot) {

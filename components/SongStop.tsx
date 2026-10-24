@@ -22,7 +22,7 @@ export default function SongStop({ id }: { id: string }) {
     <main className="page">
       <Link href="/" className="back">← 听</Link>
       <h1 className="display">歇一下</h1>
-      {ep && <Earworm ep={ep} kicker="一休み · 洗脑歌" onEnd={stepDone} />}
+      {ep && <Earworm ep={ep} kicker="歇一下 · 洗脑歌" onEnd={stepDone} />}
       {/* Always a way on, while the song is still being made. */}
       {ep && onRoute && (
         <button className="link-quiet" onClick={stepDone}>

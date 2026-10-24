@@ -14,7 +14,7 @@ import { flowOf, runClips } from "@/lib/client/fluency";
 import { transcribeLong } from "@/lib/client/recorder";
 import HoldButton from "./HoldButton";
 
-// 全文モード: once every sentence of an article was said right one by one, the whole article from its Chinese,
+// 全文模式: once every sentence of an article was said right one by one, the whole article from its Chinese,
 // said in one go. Scored by meaning (not word for word); each sentence not quite right comes back in the
 // learner's own words made right, plus a few expressions worth using next time.
 
@@ -42,11 +42,11 @@ export function NewsFullPage({ id }: { id: string }) {
     return (
       <main className="page say-page">
         <Link href={`/news/${a.id}`} className="back">‹ 記事</Link>
-        <h1 className="say-big">全文モード</h1>
+        <h1 className="say-big">全文模式</h1>
         <div className="say-bigzh">每句都 ✓ 之后解锁（现在 {saidCount(p, a)} / {a.sentences.length}）</div>
         <div className="sticky-cta">
           <Link href={`/news/${a.id}/say?i=${Math.max(0, a.sentences.findIndex((_, i) => p.news?.[a.id]?.said?.[i] !== 1))}`} className="pil-go on">
-            一文ずつ話す
+            一句一句说
           </Link>
         </div>
       </main>
@@ -121,18 +121,18 @@ function Full({ a }: { a: NewsArticle }) {
       <main className="page say-page">
         <div className="say-top">
           <Link href={`/news/${a.id}`} className="back">‹ 記事</Link>
-          <span className="muted">全文モード</span>
+          <span className="muted">全文模式</span>
         </div>
         <div className="full-score">
           <b className={res.score >= 80 ? "ok" : res.score >= 60 ? "mid" : "no"}>{res.score}</b>
           <span>/ 100</span>
-          {prev !== undefined && res.score > prev && <em>+{res.score - prev} 自己ベスト</em>}
-          {prev !== undefined && res.score <= prev && <small>前回ベスト {prev}</small>}
+          {prev !== undefined && res.score > prev && <em>+{res.score - prev} 新纪录</em>}
+          {prev !== undefined && res.score <= prev && <small>上次最好 {prev}</small>}
         </div>
-        <div className="say-bigzh">{a.sentences.length}文のうち {good}文 言えた</div>
+        <div className="say-bigzh">{a.sentences.length} 句里说对了 {good} 句</div>
         {res.good_zh && (
           <div className="say-blk g">
-            <div className="say-bh"><i>✓</i>よかった</div>
+            <div className="say-bh"><i>✓</i>说得好</div>
             <div className="say-zh full-good">{res.good_zh}</div>
           </div>
         )}
@@ -141,11 +141,11 @@ function Full({ a }: { a: NewsArticle }) {
           return (
             <div key={x.n} className="say-blk n full-item">
               <div className="say-bh">{x.n}文目 · {s.zh}</div>
-              <p className="say-res say-mine">{x.said || "（言っていない）"}</p>
+              <p className="say-res say-mine">{x.said || "（没说）"}</p>
               {x.better && (
                 <div className="say-miss full-better">
                   <b>{x.better}</b>
-                  <button className="say-play" onClick={() => say(x.better)} aria-label="聞く">▶</button>
+                  <button className="say-play" onClick={() => say(x.better)} aria-label="听">▶</button>
                 </div>
               )}
               {x.fix_zh && <div className="say-zh">{x.fix_zh}</div>}
@@ -154,7 +154,7 @@ function Full({ a }: { a: NewsArticle }) {
         })}
         {res.tips.length > 0 && (
           <>
-            <div className="full-h">使ってみよう</div>
+            <div className="full-h">用用看</div>
             <div className="pl-grid">
               {res.tips.map((t) => (
                 <button key={t.ja} className="pl full-tip" onClick={() => say(t.ja)}>
@@ -169,8 +169,8 @@ function Full({ a }: { a: NewsArticle }) {
           </>
         )}
         <div className="sticky-cta">
-          <button className="pil-go on" onClick={again}>もう一回</button>
-          <Link href={`/news/${a.id}`} className="say-sub">記事に戻る</Link>
+          <button className="pil-go on" onClick={again}>再来一次</button>
+          <Link href={`/news/${a.id}`} className="say-sub">回到文章</Link>
         </div>
       </main>
     );
@@ -180,26 +180,26 @@ function Full({ a }: { a: NewsArticle }) {
     <main className="page say-page">
       <div className="say-top">
         <Link href={`/news/${a.id}`} className="back">‹ 記事</Link>
-        <span className="muted">{best !== undefined ? `ベスト ${best}` : ""}</span>
+        <span className="muted">{best !== undefined ? `最好 ${best}` : ""}</span>
       </div>
-      <div className="say-kind">全文モード</div>
+      <div className="say-kind">全文模式</div>
       <h1 className="full-title">{a.title_zh}</h1>
       <div className="say-card full-zh">
         {paras(a).map((para) => (
           <p key={para[0]}>{para.map((i) => a.sentences[i].zh).join("")}</p>
         ))}
       </div>
-      <div className="say-bigzh">看着中文，用日语把整篇说一遍</div>
+      <div className="say-bigzh">看着中文，用英语把整篇说一遍</div>
       <div className="say-mic">
         {phase === "wait" ? (
-          <div className="say-miclab">聞いています…</div>
+          <div className="say-miclab">在听…</div>
         ) : (
           <>
             <HoldButton
               compact
               limit={150}
               label={
-                <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" aria-label="話す">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" aria-label="说">
                   <rect x="9" y="3" width="6" height="11" rx="3" />
                   <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
                 </svg>
@@ -215,7 +215,7 @@ function Full({ a }: { a: NewsArticle }) {
                 setError(e);
               }}
             />
-            <div className="say-miclab">{phase === "rec" ? "話しています" : "話す"}<small>{phase === "rec" ? "说完点一下" : ""}</small></div>
+            <div className="say-miclab">{phase === "rec" ? "正在说" : "说"}<small>{phase === "rec" ? "说完点一下" : ""}</small></div>
           </>
         )}
         {error && <p className="error">{error}</p>}

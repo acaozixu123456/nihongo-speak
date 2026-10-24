@@ -37,7 +37,7 @@ type Result = {
 };
 
 const SIZES = [5, 10, 20];
-const SIZE_KEY = "nihongo-speak:quick-size";
+const SIZE_KEY = "english-speak:quick-size";
 const HINT_CHARS = 3;
 const ROUTE_SIZE = 5;
 const ROUTE_DRILL = 3;
@@ -441,13 +441,13 @@ export default function Quick({ drill }: { drill?: string }) {
         </div>
         {drill ? (
           <>
-            <button className="primary next-cta" onClick={() => begin()}>もう一組</button>
+            <button className="primary next-cta" onClick={() => begin()}>再来一组</button>
             <p style={{ textAlign: "center" }}>
               <Link href="/weak">回薄弱点 →</Link>
             </p>
           </>
         ) : (
-          <button className="primary next-cta" onClick={() => begin()}>もう一組</button>
+          <button className="primary next-cta" onClick={() => begin()}>再来一组</button>
         )}
         <p style={{ textAlign: "center" }}>
           <Link href="/speak" className="muted">返回</Link>
@@ -511,10 +511,10 @@ export default function Quick({ drill }: { drill?: string }) {
         <div className="dock" style={{ bottom: 0, zIndex: 20 }}>
           <div className="dock-inner">
             <div className="row" style={{ flexWrap: "nowrap" }}>
-              <button onClick={giveUp} disabled={busy}>答え</button>
+              <button onClick={giveUp} disabled={busy}>看答案</button>
               <div style={{ flex: 1 }}>
                 <HoldButton
-                  label={busy ? "聞き取り中…" : "🎙 日本語で"}
+                  label={busy ? "正在听…" : "🎙 用英语说"}
                   disabled={busy}
                   onStart={onStart}
                   onRecorded={onRecorded}

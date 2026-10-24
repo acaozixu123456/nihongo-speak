@@ -185,7 +185,7 @@ export default function Review() {
             <>
               <div className="score-big">{due.length}</div>
               <p>句今天该复习了</p>
-              <p className="muted">看中文，用日语说出来，再对照答案。</p>
+              <p className="muted">看中文，用英语说出来，再对照答案。</p>
               <button className="primary next-cta" onClick={begin}>开始</button>
             </>
           ) : (
@@ -284,9 +284,9 @@ export default function Review() {
         <div className="dock" style={{ bottom: 0, zIndex: 20 }}>
           <div className="dock-inner">
             <div className="row" style={{ flexWrap: "nowrap" }}>
-              <button onClick={() => setRevealed(true)} disabled={busy}>答え</button>
+              <button onClick={() => setRevealed(true)} disabled={busy}>看答案</button>
               <div style={{ flex: 1 }}>
-                <HoldButton label={busy ? "聞き取り中…" : "🎙 日本語で"} disabled={busy} onRecorded={onRecorded} onError={setError} />
+                <HoldButton label={busy ? "正在听…" : "🎙 用英语说"} disabled={busy} onRecorded={onRecorded} onError={setError} />
               </div>
             </div>
           </div>

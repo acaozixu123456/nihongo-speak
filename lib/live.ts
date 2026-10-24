@@ -19,10 +19,10 @@ export type LiveEvent =
 
 const PHONE_RULES = `
 
-音声通話のルール：
-- 必ず日本語だけで話す。
-- 学習者はN4〜N3なので、やさしい言葉、短い文で、ふつうの速さより少しゆっくり話す。です・ます中心にして、ございます・かしこまりました・承知いたしました のような硬い敬語は多用しない。
-- 1回の発話は1〜2文。`;
+Rules for the voice call:
+- Speak only English.
+- The learner is around A2-B1: use easy words and short sentences, and speak a little slower than usual. Clear, friendly English; don't pile on formal phrases.
+- 1-2 sentences per turn.`;
 
 // The learner's line as 16 kHz mono 16-bit PCM.
 export async function liveTurn(
@@ -45,7 +45,8 @@ export async function liveTurn(
   );
   ws.binaryType = "arraybuffer";
   const send = (o: unknown) => ws.send(JSON.stringify(o));
-  const text = (s: string) => s.replace(/\s+/g, "");
+  // Transcripts come in pieces with their own spaces; the whole is tidied each time it is shown.
+  const text = (s: string) => s.replace(/\s+/g, " ").trim();
 
   await new Promise<void>((resolve, reject) => {
     let timer = setTimeout(() => finish(new Error("Gemini Live timed out")), timeoutMs);
@@ -67,7 +68,7 @@ export async function liveTurn(
           model: `projects/${project}/locations/${LOCATION}/publishers/google/models/${MODEL}`,
           generationConfig: {
             responseModalities: ["AUDIO"],
-            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
+            speechConfig: { languageCode: "en-US", voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
           },
           realtimeInputConfig: { automaticActivityDetection: { disabled: true } },
           systemInstruction: { parts: [{ text: roleplaySystem(talk) + PHONE_RULES }] },
@@ -100,8 +101,8 @@ export async function liveTurn(
       }
       const sc = m.serverContent;
       if (!sc) return;
-      if (sc.inputTranscription?.text) emit({ heard: (heard += text(sc.inputTranscription.text)) });
-      if (sc.outputTranscription?.text) emit({ said: (said += text(sc.outputTranscription.text)) });
+      if (sc.inputTranscription?.text) emit({ heard: text((heard += sc.inputTranscription.text)) });
+      if (sc.outputTranscription?.text) emit({ said: text((said += sc.outputTranscription.text)) });
       for (const p of sc.modelTurn?.parts ?? []) {
         if (!p.inlineData?.data) continue;
         emit({ audio: p.inlineData.data });

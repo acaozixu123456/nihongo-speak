@@ -13,7 +13,7 @@ import { stepDone, useOnRoute } from "@/lib/client/route";
 import { Star } from "./FeedbackCard";
 import Note from "./Note";
 
-// NHKやさしいことばニュース in our own voice: one article to read along (/news/[id]), or the ones not heard
+// BBC news rewritten in easy English, in our own voice: one article to read along (/news/[id]), or the ones not heard
 // yet back to back for the train (/news), each article first without the text, then with it.
 
 // NHK's text with its readings. fill: how many characters of it have been said (they turn vermilion,
@@ -68,7 +68,7 @@ const paras = (a: NewsArticle) =>
   a.sentences.reduce<number[][]>((out, s, i) => (s.p || !out.length ? out.push([i]) : out[out.length - 1].push(i), out), []);
 const lenOf = (segs: Seg[]) => segs.reduce((n, s) => n + s.t.length, 0);
 
-const LOOP_LABEL = { off: "なし", one: "1文", all: "記事", voices: "声替え", six: "6声", talk: "6声+話" } as const;
+const LOOP_LABEL = { off: "不循环", one: "单句", all: "全文", voices: "换声音", six: "6种声音", talk: "6声+说" } as const;
 
 // The article's voice: picked here, kept with the article (Progress.news[id].voice).
 type VoicePick = { voice: string; set: (v: string) => void };
@@ -98,10 +98,10 @@ function PlaySheet({ j, loop, voice, text, onClose }: { j: ReturnType<typeof use
     <div className="nw-sheet-bg" onClick={onClose}>
       <div className="nw-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="nw-grab" />
-        <Seg label="速さ" value={j.rate} options={RATES} show={(r) => r.toFixed(1)} onPick={j.setRate} />
+        <Seg label="语速" value={j.rate} options={RATES} show={(r) => r.toFixed(1)} onPick={j.setRate} />
         {voice && <Seg label="声" value={voice.voice} options={NEWS_VOICES} show={(v) => VOICE_LABEL[NEWS_VOICES.indexOf(v)]} onPick={voice.set} />}
-        {loop && <Seg label="ループ" value={j.loop} options={LOOPS} show={(l) => LOOP_LABEL[l]} onPick={j.setLoop} />}
-        {text && <Seg label="文字" value={text.hide ? "hide" : "show"} options={["show", "hide"] as const} show={(t) => (t === "show" ? "表示" : "隠す")} onPick={(t) => text.set(t === "hide")} />}
+        {loop && <Seg label="循环" value={j.loop} options={LOOPS} show={(l) => LOOP_LABEL[l]} onPick={j.setLoop} />}
+        {text && <Seg label="文字" value={text.hide ? "hide" : "show"} options={["show", "hide"] as const} show={(t) => (t === "show" ? "显示" : "隐藏")} onPick={(t) => text.set(t === "hide")} />}
       </div>
     </div>,
     document.body,
@@ -150,16 +150,16 @@ function Controls({ j, next, loop = false, voice, text }: { j: ReturnType<typeof
   const looping = loop && j.loop !== "off";
   return (
     <div className="nw-ctl">
-      <button className="nw-ic nw-rate" onClick={() => setSheet(true)} aria-label="速さ">
+      <button className="nw-ic nw-rate" onClick={() => setSheet(true)} aria-label="语速">
         {j.rate.toFixed(1)}×
       </button>
-      <button className="nw-ic" onClick={j.again} disabled={j.idx < 0} aria-label="前の文">
+      <button className="nw-ic" onClick={j.again} disabled={j.idx < 0} aria-label="上一句">
         <Svg d={Icon.prev} />
       </button>
       <button className="nw-play" onClick={j.toggle} disabled={j.phase === "loading"} aria-label={playing ? "一時停止" : "再生"}>
         {j.phase === "loading" ? <span className="nw-spin" /> : <Svg d={playing ? Icon.pause : Icon.play} />}
       </button>
-      <button className="nw-ic" onClick={next?.go ?? j.skip} disabled={j.idx < 0} aria-label={next?.label ?? "次の文"}>
+      <button className="nw-ic" onClick={next?.go ?? j.skip} disabled={j.idx < 0} aria-label={next?.label ?? "下一句"}>
         <Svg d={Icon.next} />
       </button>
       <button className={`nw-ic${looping ? " on" : ""}`} onClick={() => setSheet(true)} aria-label="設定">
@@ -211,7 +211,7 @@ function Article({ a }: { a: NewsArticle }) {
   // ループ 声を変えて: at the end, the next voice (women, then men), and the article again in it.
   const cycling = useRef(false);
   const j = useJoined(rounds, {
-    album: "NHKやさしいことばニュース",
+    album: "BBC 简单英语新闻",
     loopable: true,
     onDone: () => {
       markNews(a.id, { heard: dayKey() });
@@ -280,7 +280,7 @@ function Article({ a }: { a: NewsArticle }) {
         <Ruby segs={a.title} fill={at === -1 ? j.frac * lenOf(a.title) : 0} />
       </h1>
       {zh && <div className="nw-zh">{a.title_zh}</div>}
-      <div className="nw-date">{md(a.day)} · NHKやさしいことばニュース</div>
+      <div className="nw-date">{md(a.day)} · BBC 简单英语新闻</div>
       <div className={`nw-body${hide ? " hidden" : ""}`}>
         {paras(a).map((para) => (
           <div key={para[0]} className="nw-para">
@@ -300,11 +300,11 @@ function Article({ a }: { a: NewsArticle }) {
                   )}
                   {i === at && (
                     <button className={`nw-qi${miss.includes(i) ? " on" : ""}`} onClick={() => toggleMiss(p, a, i)}>
-                      ？ 聞き取れなかった
+                      ？ 没听懂
                     </button>
                   )}
                   {zh && s.zh && <div className="nw-zh">{s.zh}</div>}
-                  <Link href={`/news/${a.id}/say?i=${i}`} className={`nw-say${saidAt[i] === 1 ? " g" : saidAt[i] === 0 ? " r" : ""}`} aria-label="この文を三回話す">
+                  <Link href={`/news/${a.id}/say?i=${i}`} className={`nw-say${saidAt[i] === 1 ? " g" : saidAt[i] === 0 ? " r" : ""}`} aria-label="练说这一句">
                     {saidAt[i] === 1 ? "✓" : saidAt[i] === 0 ? "!" : <MicIcon />}
                   </Link>
                 </div>
@@ -312,13 +312,13 @@ function Article({ a }: { a: NewsArticle }) {
             })}
           </div>
         ))}
-        {hide && <div className="nw-hidden">耳だけで聞いてみよう</div>}
+        {hide && <div className="nw-hidden">只用耳朵听一遍</div>}
       </div>
       <a className="nw-src" href={a.url} target="_blank" rel="noreferrer">出典：NHK NEWS WEB EASY ›</a>
 
       {a.words.length > 0 && (
         <>
-          <div className="tab-label" id="words">単語</div>
+          <div className="tab-label" id="words">单词</div>
           <div className="rowlist">
             {a.words.map((w) => (
               <div key={w.ja} className="rowlist-row nw-word" data-line={w.ja}>
@@ -328,7 +328,7 @@ function Article({ a }: { a: NewsArticle }) {
                     unlock();
                     play(ttsUrl(w.ja, voice)).catch(() => {});
                   }}
-                  aria-label="読み方を聞く"
+                  aria-label="听发音"
                 >
                   <ruby>
                     {w.ja}
@@ -348,7 +348,7 @@ function Article({ a }: { a: NewsArticle }) {
         <Note text="听完了，用自己的话讲三遍。" />
         <Link href={`/retell?news=${a.id}`} className={`pil-go${fullOpen(p, a) ? "" : " on"}`}>讲三遍</Link>
         {fullOpen(p, a) ? (
-          <Link href={`/news/${a.id}/full`} className="pil-go on">全文モード{p.news?.[a.id]?.full !== undefined ? `（ベスト ${p.news[a.id].full}）` : ""}</Link>
+          <Link href={`/news/${a.id}/full`} className="pil-go on">全文模式{p.news?.[a.id]?.full !== undefined ? `（最好 ${p.news[a.id].full}）` : ""}</Link>
         ) : (
           <div className="nw-lock">每句都 ✓ 后解锁全文模式（{saidCount(p, a)} / {a.sentences.length}）</div>
         )}
@@ -373,7 +373,7 @@ function Article({ a }: { a: NewsArticle }) {
 
 // ---- The articles not heard yet, back to back ----
 
-const paceLabel = (pace: number) => (pace < 1 ? " · ゆっくり" : pace > 1.2 ? " · 速め" : pace > 1 ? " · 少し速め" : "");
+const paceLabel = (pace: number) => (pace < 1 ? " · 慢速" : pace > 1.2 ? " · 偏快" : pace > 1 ? " · 稍快" : "");
 
 export function NewsPlay() {
   const p = useProgress();
@@ -477,8 +477,8 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
         <Link href="/" className="back">‹ 听</Link>
         <span className="muted">{newsDay(set.day)} {idle ? today.length : inBack ? "" : `${n + 1} / ${today.length}`}</span>
       </div>
-      <div className="kicker">{idle ? "2回ずつ · 1回目は文字なし" : inBack ? (second ? "聞き直す · 文字あり" : "聞き直す · 別の声で") : second ? "2回目 · 文字あり" : `1回目 · 文字なし${paceLabel(newsPace(a))}`}</div>
-      <h1 className="nw-title">{idle ? "新闻" : inBack ? "前に聞き取れなかった文" : <Ruby segs={a.title} />}</h1>
+      <div className="kicker">{idle ? "每篇两遍 · 第一遍不看字" : inBack ? (second ? "重听 · 看字" : "重听 · 换个声音") : second ? "第二遍 · 看字" : `第一遍 · 不看字${paceLabel(newsPace(a))}`}</div>
+      <h1 className="nw-title">{idle ? "新闻" : inBack ? "之前没听懂的句子" : <Ruby segs={a.title} />}</h1>
       <div className="nw-dots">
         {today.map((x, i) => (
           <span key={x.id} className={(!inBack && (i < n || (i === n && !idle))) || (idle && p.news?.[x.id]?.heard === dayKey()) ? "on" : ""} />
@@ -487,7 +487,7 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
       <div className="nw-stage">
         {idle ? (
           <div className="nw-list">
-            {back.length > 0 && <div className="nw-back">？ 聞き直す {back.length}文</div>}
+            {back.length > 0 && <div className="nw-back">？ 重听 {back.length} 句</div>}
             {today.map((x) => (
               <div key={x.id}>{x.title_ja}</div>
             ))}
@@ -506,7 +506,7 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
                   toggleMiss(p, a, sentence);
                 }}
               >
-                ？ 聞き取れなかった
+                ？ 没听懂
               </button>
             )}
           </div>
@@ -514,7 +514,7 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
           <div className="nw-hidden">{a.title_ja}</div>
         ) : inBack ? (
           <>
-            <div className="nw-hidden">耳だけで聞いてみよう</div>
+            <div className="nw-hidden">只用耳朵听一遍</div>
             <div className="nw-sdots" aria-label={`${Math.max(0, j.idx + 1)} / ${back.length}`}>
               {back.map((_, i) => (
                 <span key={i} className={i < j.idx ? "on" : i === j.idx ? "now" : ""} />
@@ -524,7 +524,7 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
         ) : (
           <>
             <NewsImage a={a} className="nw-img" />
-            <div className="nw-hidden">耳だけで聞いてみよう</div>
+            <div className="nw-hidden">只用耳朵听一遍</div>
             <div className="nw-sdots" aria-label={`${Math.max(0, sentence + 1)} / ${a.sentences.length}`}>
               {a.sentences.map((_, i) => (
                 <span key={i} className={i < sentence ? "on" : i === sentence ? "now" : ""} />
@@ -536,14 +536,14 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
       <div className="nw-dock">
         {idle ? (
           <button className="pil-go on" onClick={() => j.start(from > 0 ? off + from * 2 : 0)}>
-            {from > 0 ? `▶ 続きから（${from + 1}本目）` : "▶ 全部听"}
+            {from > 0 ? `▶ 接着听（第 ${from + 1} 篇）` : "▶ 全部听"}
           </button>
         ) : (
           <Controls
             j={j}
             voice={inBack || !a ? undefined : { voice: voiceOf(p, a), set: (v) => markNews(a.id, { voice: v }) }}
             // 1回目: on to the pass with the text; 2回目: the next article.
-            next={{ go: () => j.seek(999), label: second ? "次へ" : "文字ありへ" }}
+            next={{ go: () => j.seek(999), label: second ? "下一篇" : "看字听" }}
           />
         )}
         {j.error && <p className="error">{j.error}</p>}

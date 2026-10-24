@@ -187,5 +187,5 @@ export async function transcribeLong(wav: Blob): Promise<string> {
     return encodeWav(out, RATE);
   });
   const texts = await Promise.all(pieces.map((p) => transcribe(p).then((r) => r.text)));
-  return texts.filter(Boolean).join("");
+  return texts.filter(Boolean).join(" ");
 }

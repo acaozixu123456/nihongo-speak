@@ -59,18 +59,13 @@ export function ttsUrl(text: string, voice: string) {
   const key = voiceKey(text, voice);
   if (VOICE_LIBRARY.has(key)) return `/voice/${key}.mp3`;
   // v=2 skips anything the browser kept from before fallback voices were marked no-store.
-  // yomi=1: text with no kana used to be read in Chinese (the server now says its reading instead),
-  // so it gets a new address instead of the copy the phone and the CDN kept. yomi=2: that reading
-  // often didn't come back, so many such words were still kept read in Chinese. yomi=3: a wrong
-  // reading (木炭 as たんざん) could be kept too.
-  const kanjiOnly = voice.startsWith("ja-JP") && !/[\u3040-\u30f5\u30f7-\u30fa\u30fd-\u30ff]/.test(text);
-  return `/api/tts?${new URLSearchParams({ text, voice, v: "2", ...(kanjiOnly ? { yomi: "3" } : {}) })}`;
+  return `/api/tts?${new URLSearchParams({ text, voice, v: "2" })}`;
 }
 
 // Every recording played here (made on demand, or pre-recorded under /voice) is also kept: in memory as a ready blob for instant replays, and in the
 // same Cache Storage 趣味电台 fills while it makes an episode, so a sentence heard there (or tapped
 // once) plays straight away next time, even after the app was closed.
-export const AUDIO_CACHE = "nihongo-speak-moyu-v2";
+export const AUDIO_CACHE = "english-speak-moyu-v2";
 const ready = new Map<string, Promise<string>>();
 
 const cacheable = (src: string) => src.startsWith("/api/tts") || src.startsWith("/voice/");

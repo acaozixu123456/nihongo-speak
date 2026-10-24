@@ -49,7 +49,7 @@ export function confetti(count = 60) {
 type Note = { f: number; at: number; len: number; type?: OscillatorType; vol?: number; to?: number };
 const SOUNDS: Record<string, Note[]> = {
   tap: [{ f: 520, at: 0, len: 0.06, type: "triangle", vol: 0.08 }],
-  // ピンポーン and ブッブー, as on Japanese quiz shows.
+  // A ding and a buzz, as on quiz shows.
   right: [
     { f: 1319, at: 0, len: 0.16, type: "triangle", vol: 0.14 },
     { f: 1047, at: 0.15, len: 0.45, type: "triangle", vol: 0.14 },
@@ -98,10 +98,10 @@ export function sfx(name: keyof typeof SOUNDS) {
 
 // ---- One verdict for every practice page ----
 // right / close (meaning right, wording off) / wrong. Plays the sound, gives a tap of haptics, and counts
-// today's run of right answers across all pages; the ピンポン climbs a semitone with each one in a row.
+// today's run of right answers across all pages; the ding climbs a semitone with each one in a row.
 export type Kind = "right" | "close" | "wrong";
 
-const STREAK_KEY = "nihongo-speak:streak";
+const STREAK_KEY = "english-speak:streak";
 type Streak = { day: string; n: number; best: number };
 const MILESTONES = [3, 5, 10, 20, 30];
 
@@ -121,7 +121,7 @@ function saveStreak(s: Streak) {
   try {
     localStorage.setItem(STREAK_KEY, JSON.stringify(s));
   } catch {}
-  window.dispatchEvent(new Event("nihongo-streak"));
+  window.dispatchEvent(new Event("english-streak"));
 }
 
 function note(f: number, at: number, len: number, type: OscillatorType, vol: number) {
@@ -197,14 +197,17 @@ export function verdict(kind: Kind, quiet = false, celebrate = true): { streak: 
   return { streak: n, milestone };
 }
 
-// Punctuation and spaces don't count when comparing what was said or built.
-export const bare = (s: string) => s.replace(/[\s、。，,.!！?？「」『』・〜~…]/g, "");
+// Punctuation, spaces and capitals don't count when comparing what was said or built.
+export const bare = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-// How much of the answer the learner said, by longest common subsequence (speech recognition writes
-// kanji or kana as it likes, so a near miss still counts).
+// The words of a line, for comparing by word: lower case, apostrophes kept inside (don't, it's).
+const words = (s: string) => s.toLowerCase().replace(/’/g, "'").match(/[a-z0-9]+(?:'[a-z]+)?/g) ?? [];
+
+// How much of the answer the learner said, by longest common subsequence of words (speech recognition
+// spells numbers and contractions as it likes, so a near miss still counts).
 export function closeness(said: string, want: string) {
-  const a = [...bare(said)];
-  const b = [...bare(want)];
+  const a = words(said);
+  const b = words(want);
   if (!b.length) return 0;
   let prev = new Array(b.length + 1).fill(0);
   for (const ca of a) {

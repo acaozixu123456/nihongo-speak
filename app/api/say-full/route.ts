@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   }
   const t0 = Date.now();
   const azure = typeof b.azure === "string" ? b.azure.trim().slice(0, 4000) : "";
-  const gemini = hearClips(clips).then((t) => t.filter(Boolean).join("、"));
+  const gemini = hearClips(clips).then((t) => t.filter(Boolean).join(" "));
   let said: string | null = await Promise.race([gemini.catch(() => null), new Promise<null>((ok) => setTimeout(() => ok(null), 8000))]);
   if (said === null) said = azure || (await gemini.catch((e) => (console.error(e), null)));
   if (said === null) return NextResponse.json({ error: "没听清，再说一次" }, { status: 502 });

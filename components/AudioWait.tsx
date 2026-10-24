@@ -9,7 +9,7 @@ export default function AudioWait() {
   if (!waiting) return null;
   return (
     <div className="audio-wait" role="status">
-      <span className="ew-spin" /> 音声を準備中
+      <span className="ew-spin" /> 正在准备声音
     </div>
   );
 }

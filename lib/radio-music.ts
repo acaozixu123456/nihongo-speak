@@ -7,7 +7,7 @@ import { vertexAccess } from "@/lib/vertex-tts";
 
 export const MUSIC = {
   jingle:
-    "A short bright instrumental radio station jingle for a cheerful Japanese morning talk show. Japanese city pop, bouncy slap bass, clean electric piano, tight drums, brass stab, a catchy 4-note melodic hook, ends after about 6 seconds on a clear final chord and then silence. No vocals.",
+    "A short bright instrumental radio station jingle for a cheerful morning talk show. City pop, bouncy slap bass, clean electric piano, tight drums, brass stab, a catchy 4-note melodic hook, ends after about 6 seconds on a clear final chord and then silence. No vocals.",
   bed:
     "A calm, warm instrumental lo-fi city pop loop to play quietly under two people talking on a radio show. Soft Rhodes electric piano chords, mellow round bass, light brushed drums, 84 BPM, steady from start to end, no lead melody, no build-ups, no breaks, no vocals.",
   // Under the ~18s wait between two tellings of 三回話す (lib/client/bgm.ts). Made for a resting

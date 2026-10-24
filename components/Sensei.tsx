@@ -5,10 +5,10 @@ import { play, ttsUrl, unlock } from "@/lib/client/player";
 
 // 森先生: the teacher behind every correction, a kind older teacher. Her lines are read in an older
 // woman's voice (Gemini's Gacrux; Azure's Mayu if Gemini is down).
-export const SENSEI_VOICE = "ja-JP-MoriNeural|ja-JP-MayuNeural";
+export const SENSEI_VOICE = "en-US-MooreNeural|en-US-AvaNeural";
 
 // While her voice plays, every face on the page moves its mouth.
-const TALK = "nihongo-speak:sensei-talk";
+const TALK = "english-speak:sensei-talk";
 let talking = false;
 function setTalking(v: boolean) {
   talking = v;
@@ -53,7 +53,7 @@ export function SenseiFace({ size = 54, nod = false }: { size?: number; nod?: bo
       height={size}
       viewBox="0 0 120 120"
       role="img"
-      aria-label="森先生"
+      aria-label="Moore 老师"
       onClick={doNod}
     >
       <clipPath id="sensei-clip">
@@ -115,7 +115,7 @@ export function SenseiSays({ ja, zh, mute = false }: { ja: string; zh?: string; 
         <span>{ja}</span>
         {!mute && <button
           className="bag-play"
-          aria-label="聞く"
+          aria-label="听"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();

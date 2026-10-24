@@ -2,32 +2,33 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { NEWS_VOICES, VOICE_LABEL, type NewsArticle, type Seg } from "@/lib/news-model";
+import { NEWS_VOICES, VOICE_LABEL, type NewsArticle } from "@/lib/news-model";
 import { useHydrated } from "@/lib/client/hydrated";
 import { useNews, voiceOf } from "@/lib/client/news";
 import { play, stop, ttsUrl, unlock } from "@/lib/client/player";
-import { hasCard, markNews, toggleCard, useProgress } from "@/lib/client/progress";
+import { findEpisode, hasCard, markNews, RADIO_VOICE, toggleCard, useProgress } from "@/lib/client/progress";
 import { verdict } from "@/lib/client/fx";
 import { loadPause, startPause, stopPause } from "@/lib/client/bgm";
 import { renewAudio } from "@/lib/client/audio";
 import HoldButton from "./HoldButton";
 import { Ruby } from "./News";
 
-// 一文ずつ三回話す: one sentence of an NHK article, said back three times with less on screen each time —
-// the whole sentence, then only its kanji words, then nothing but the Chinese. Judged by meaning, from what the
-// learner said: after the third, their own words (slips underlined), where they got stuck, and their sentence
-// made right in their own words; NHK's sentence only small underneath. Then on to the next sentence. Opened from the button beside each
-// sentence on the article page (/news/[id]/say?i=n).
+// 一句一句讲三遍: one sentence of a news article, said back three times with less on screen each time —
+// the whole sentence, then only the first letter of each word, then nothing but the Chinese. Judged by meaning,
+// from what the learner said: after the third, their own words (slips underlined), where they got stuck, and
+// their sentence made right in their own words; the article's sentence only small underneath. Then on to the next sentence. Opened from the button beside each
+// sentence on the article page (/news/[id]/say?i=n), and the same for every line of a radio episode
+// (/ep/[id]/say?i=n), each line in its own host's voice.
 
 type Part = { t: string; ok: boolean };
 type Check = { said: string; verdict: "good" | "close" | "off"; mine: Part[]; stuck_zh: string; better: string; better_zh: string; parts: Part[] };
 type Got = Check | "wait" | "fail";
 
-const SAYS = ["見ながら", "ヒントだけ", "何も見ないで"] as const;
+const SAYS = ["看着说", "只看首字母", "什么都不看"] as const;
 
 const whole = (c: Check) => c.verdict === "good";
-const bare = (t: string) => t.replace(/[、。，．・「」『』（）！？\s]/g, "");
-const grade = (g: Got | undefined) => (!g || g === "wait" ? "…" : g === "fail" ? "?" : g.verdict === "good" ? "✓" : g.verdict === "close" ? "ほぼ" : "!");
+const bare = (t: string) => t.toLowerCase().replace(/[^a-z0-9]/g, "");
+const grade = (g: Got | undefined) => (!g || g === "wait" ? "…" : g === "fail" ? "?" : g.verdict === "good" ? "✓" : g.verdict === "close" ? "≈" : "!");
 
 export function NewsSayPage({ id, from }: { id: string; from: number }) {
   const items = useNews();
@@ -41,7 +42,38 @@ export function NewsSayPage({ id, from }: { id: string; from: number }) {
         <p className="muted">{items.length ? "这条新闻已经不在了（只保留 14 天）" : "正在读取…"}</p>
       </main>
     );
-  return <Say a={a} from={Math.min(Math.max(0, from), a.sentences.length - 1)} />;
+  return <Say a={a} from={Math.min(Math.max(0, from), a.sentences.length - 1)} home={`/news/${a.id}`} />;
+}
+
+// A radio episode's lines, as an article to say back line by line. Kept under "radio:<id>" in the news marks.
+export function RadioSayPage({ id, from }: { id: string; from: number }) {
+  const p = useProgress();
+  const hydrated = useHydrated();
+  const ep = hydrated ? findEpisode(p, id) : undefined;
+  if (!hydrated) return <main className="page" />;
+  if (!ep?.lines.length)
+    return (
+      <main className="page">
+        <Link href="/" className="back">‹ 听</Link>
+        <p className="muted">找不到这一期了（只保留最近 50 期）。</p>
+      </main>
+    );
+  const title = ep.title_ja ?? ep.title_zh;
+  const a: NewsArticle = {
+    id: `radio:${ep.id}`,
+    day: ep.date,
+    at: "",
+    rank: 0,
+    title: [{ t: title }],
+    title_ja: title,
+    title_zh: ep.title_zh,
+    sentences: ep.lines.map((l) => ({ segs: [{ t: l.ja }], ja: l.ja, say: l.ja, zh: l.zh, voice: RADIO_VOICE[l.who] })),
+    words: [],
+    keys: [],
+    summary: [],
+    url: "",
+  };
+  return <Say a={a} from={Math.min(Math.max(0, from), a.sentences.length - 1)} home={`/ep/${ep.id}`} radio />;
 }
 
 function toBase64(b: Blob): Promise<string> {
@@ -53,40 +85,31 @@ function toBase64(b: Blob): Promise<string> {
   });
 }
 
-// The 2回目 hint: the kanji words (with their readings) and numbers stay, the rest of each stretch is a blank.
-function Hint({ segs }: { segs: Seg[] }) {
-  const out: React.ReactNode[] = [];
-  let chip: Seg[] = [];
-  let gap = false;
-  const flush = () => {
-    if (chip.length) out.push(<b key={out.length} className="say-chip"><Ruby segs={chip} /></b>);
-    chip = [];
-  };
-  for (const s of segs) {
-    if (s.r || /^[0-9０-９]+$/.test(s.t)) {
-      if (gap) out.push(<u key={out.length} />);
-      gap = false;
-      chip.push(s);
-      continue;
-    }
-    flush();
-    // Kana: a blank, except the punctuation at its end, which shows where the sentence breaks.
-    const end = s.t.match(/[、。「」]+$/)?.[0] ?? "";
-    if (s.t.length > end.length) gap = true;
-    if (end) {
-      if (gap) out.push(<u key={out.length} />);
-      gap = false;
-      out.push(<span key={out.length}>{end}</span>);
-    }
-  }
-  flush();
-  if (gap) out.push(<u key={out.length} />);
+// The 2nd telling's hint: each word as its first letter and a blank as long as the rest; numbers and
+// punctuation stay, so the shape of the sentence is there but the words must come from memory.
+function Hint({ text }: { text: string }) {
+  const out = text.split(/(\s+)/).map((w, k) => {
+    if (/^\s+$/.test(w)) return " ";
+    if (/^[0-9.,:%$¥€£-]+$/.test(w)) return <b key={k} className="say-chip">{w}</b>;
+    const m = /^([^A-Za-z]*)([A-Za-z])([A-Za-z'’-]*)(.*)$/.exec(w);
+    if (!m) return w;
+    return (
+      <span key={k}>
+        {m[1]}
+        <b className="say-chip">{m[2]}</b>
+        {"_".repeat(m[3].length)}
+        {m[4]}
+      </span>
+    );
+  });
   return <p className="say-hint">{out}</p>;
 }
 
-function Say({ a, from }: { a: NewsArticle; from: number }) {
+// Pieces of a sentence shown in a row, spaced as words.
+const spaced = (parts: Part[]) => parts.flatMap((x, j) => [j ? " " : "", <span key={j} className={x.ok ? undefined : "m"}>{x.t}</span>]);
+
+function Say({ a, from, home, radio }: { a: NewsArticle; from: number; home: string; radio?: boolean }) {
   const p = useProgress();
-  const voice = voiceOf(p, a);
   const n = a.sentences.length;
   const [i, setI] = useState(from);
   const [k, setK] = useState(0); // 0-2: the telling, 3: this sentence's result
@@ -95,6 +118,8 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
   const [error, setError] = useState("");
   const [end, setEnd] = useState(false);
   const s = a.sentences[i];
+  // A radio line is always heard in its host's voice; a news sentence in the article's.
+  const voice = s.voice ?? voiceOf(p, a);
   const turn = useRef(0);
 
   const listen = (v = voice) => {
@@ -106,7 +131,7 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
     markNews(a.id, { voice: v });
     listen(v);
   };
-  // The quiet music of 三回話す fills the wait after the third telling, ready before it is needed.
+  // The quiet music of 讲三遍 fills the wait after the third telling, ready before it is needed.
   useEffect(() => {
     void loadPause();
     return () => void stopPause(0);
@@ -167,13 +192,13 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
     return (
       <main className="page say-page">
         <div className="say-top">
-          <Link href={`/news/${a.id}`} className="back">‹ 記事</Link>
+          <Link href={home} className="back">‹ {radio ? "电台" : "文章"}</Link>
           <span className="muted">{n} / {n}</span>
         </div>
         <Bar n={n} i={n} />
         <h1 className="say-big">
-          {tried}文のうち、<br />
-          <em>{good}文</em>言えた
+          练了 {tried} 句，<br />
+          <em>{good} 句</em>说对了
         </h1>
         <div className="say-bigzh">练过的{tried}句里，{good}句第3遍把意思说对了</div>
         <div className="pl-grid say-list">
@@ -185,15 +210,17 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
           ))}
         </div>
         <div className="sticky-cta">
-          {good === n ? (
+          {radio ? (
+            <Link href={home} className="pil-go on">回到电台</Link>
+          ) : good === n ? (
             <>
-              <Link href={`/news/${a.id}/full`} className="pil-go on">全文モード</Link>
-              <Link href={`/retell?news=${a.id}`} className="say-sub">記事全体を三回話す</Link>
+              <Link href={`/news/${a.id}/full`} className="pil-go on">全文模式</Link>
+              <Link href={`/retell?news=${a.id}`} className="say-sub">整篇讲三遍</Link>
             </>
           ) : (
-            <Link href={`/retell?news=${a.id}`} className="pil-go on">記事全体を三回話す</Link>
+            <Link href={`/retell?news=${a.id}`} className="pil-go on">整篇讲三遍</Link>
           )}
-          {bad && <div className="say-sub">! の文は 復習 に入れました</div>}
+          {bad && <div className="say-sub">标 ! 的句子已放进复习</div>}
         </div>
       </main>
     );
@@ -203,7 +230,7 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
   return (
     <main className="page say-page">
       <div className="say-top">
-        <Link href={`/news/${a.id}`} className="back">‹ 記事</Link>
+        <Link href={home} className="back">‹ {radio ? "电台" : "文章"}</Link>
         <span className="muted">{i + 1} / {n}</span>
       </div>
       <Bar n={n} i={i} />
@@ -214,7 +241,7 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
           <div className="say-steps">
             {SAYS.map((l, x) => (
               <span key={l} className={x === k ? "on" : x < k ? (grade(got[x]) === "✓" ? "ok" : "past") : ""}>
-                {x + 1}回目{x < k ? ` ${grade(got[x])}` : ""}
+                第 {x + 1} 遍{x < k ? ` ${grade(got[x])}` : ""}
               </span>
             ))}
           </div>
@@ -223,16 +250,23 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
             {k === 0 ? (
               <p className="say-s"><Ruby segs={s.segs} /></p>
             ) : k === 1 ? (
-              <Hint segs={s.segs} />
+              <Hint text={s.ja} />
             ) : (
               <div className="say-q">？</div>
             )}
             {k !== 1 && s.zh && <div className="say-zh">{s.zh}</div>}
           </div>
-          {k === 0 && !rec && (
+          {k === 0 && !rec && s.voice && (
             <div className="say-listen-row">
               <button className="say-listen" onClick={() => listen()}>
-                <i>▶</i>もう一度聞く
+                <i>▶</i>再听一遍
+              </button>
+            </div>
+          )}
+          {k === 0 && !rec && !s.voice && (
+            <div className="say-listen-row">
+              <button className="say-listen" onClick={() => listen()}>
+                <i>▶</i>再听一遍
               </button>
               <div className="say-voices">
                 {NEWS_VOICES.map((v, x) => (
@@ -247,7 +281,7 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
             <HoldButton
               compact
               label={
-                <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" aria-label="話す">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" aria-label="说">
                   <rect x="9" y="3" width="6" height="11" rx="3" />
                   <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
                 </svg>
@@ -264,7 +298,7 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
                 setError(e);
               }}
             />
-            <div className="say-miclab">{rec ? "話しています" : "話す"}<small>{rec ? "说完点一下" : ""}</small></div>
+            <div className="say-miclab">{rec ? "正在说" : "说"}<small>{rec ? "说完点一下" : ""}</small></div>
             {error && <p className="error">{error}</p>}
           </div>
         </>
@@ -274,52 +308,52 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
             {SAYS.map((l, x) => {
               const g = grade(got[x]);
               return (
-                <div key={l} className={g === "✓" ? "ok" : g === "ほぼ" ? "mid" : g === "!" ? "no" : ""}>
+                <div key={l} className={g === "✓" ? "ok" : g === "≈" ? "mid" : g === "!" ? "no" : ""}>
                   <b>{g}</b>
-                  <span>{x + 1}回目</span>
+                  <span>第 {x + 1} 遍</span>
                 </div>
               );
             })}
           </div>
           {!last || last === "wait" ? (
-            <div className="say-wait">聞いています…</div>
+            <div className="say-wait">正在听…</div>
           ) : last === "fail" ? (
             <div className="say-wait">没听清，再说一次</div>
           ) : (
             <>
               <div className={`say-blk ${whole(last) ? "g" : "n"}`}>
-                <div className="say-bh">{whole(last) ? <><i>✓</i>言えた</> : "言ったこと"}</div>
+                <div className="say-bh">{whole(last) ? <><i>✓</i>说对了</> : "你说的"}</div>
                 <p className="say-res say-mine">
-                  {last.mine.length ? last.mine.map((x, j) => <span key={j} className={x.ok ? undefined : "m"}>{x.t}</span>) : "（聞こえなかった）"}
+                  {last.mine.length ? spaced(last.mine) : "（没听到）"}
                 </p>
                 {last.stuck_zh && <div className="say-zh">{last.stuck_zh}</div>}
               </div>
               {last.better && bare(last.better) !== bare(last.said) && (
                 <div className="say-blk g">
-                  <div className="say-bh"><i>✓</i>あなたの言い方で</div>
+                  <div className="say-bh"><i>✓</i>用你的说法改一改</div>
                   <div className="say-miss">
                     <b data-line={last.better}>{last.better}</b>
-                    <button className="say-play" onClick={() => (unlock(), play(ttsUrl(last.better, voice)).catch(() => {}))} aria-label="聞く">▶</button>
+                    <button className="say-play" onClick={() => (unlock(), play(ttsUrl(last.better, voice)).catch(() => {}))} aria-label="听">▶</button>
                   </div>
                   {last.better_zh && <div className="say-zh">{last.better_zh}</div>}
                 </div>
               )}
               <div className="say-orig">
                 <div>
-                  <small>元の文</small>
+                  <small>原文</small>
                   <p data-line={s.ja}>
-                    {last.parts.map((x, j) => <span key={j} className={x.ok ? undefined : "m"}>{x.t}</span>)}
+                    {spaced(last.parts)}
                   </p>
                 </div>
-                <button className="say-play" onClick={() => listen()} aria-label="元の文を聞く">▶</button>
+                <button className="say-play" onClick={() => listen()} aria-label="听原文">▶</button>
               </div>
             </>
           )}
           <div className="sticky-cta">
             <button className="pil-go on" onClick={next} disabled={!last || last === "wait"}>
-              {i + 1 >= n ? "終わり" : "次の文"}
+              {i + 1 >= n ? "完成" : "下一句"}
             </button>
-            <button className="say-sub" onClick={again}>もう一回</button>
+            <button className="say-sub" onClick={again}>再来一次</button>
           </div>
         </>
       )}

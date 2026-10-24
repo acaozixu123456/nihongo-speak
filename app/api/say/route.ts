@@ -5,7 +5,7 @@ import { piece } from "@/lib/gemini-hear";
 
 export const maxDuration = 60;
 
-// 一文ずつ三回話す: one NHK sentence said back. Gemini writes down what was said (alone, without the sentence,
+// 一句一句讲三遍: one news (or radio) sentence said back. Gemini writes down what was said (alone, without the sentence,
 // so it doesn't "hear" what should have been said; Azure when it is slow or fails), then Opus marks which parts of the
 // sentence were said.
 export async function POST(request: Request) {
@@ -42,8 +42,8 @@ export async function POST(request: Request) {
   let check: SayCheck;
   try {
     check = await sayCheck({ ja, said });
-    if (check.parts.map((p) => p.t).join("") !== ja) check.parts = plain.parts;
-    if (check.mine.map((p) => p.t).join("") !== said) check.mine = [{ t: said, ok: true }];
+    if (squash(check.parts.map((p) => p.t).join(" ")) !== squash(ja)) check.parts = plain.parts;
+    if (squash(check.mine.map((p) => p.t).join(" ")) !== squash(said)) check.mine = [{ t: said, ok: true }];
   } catch (e) {
     console.error(e);
     check = plain;
@@ -52,11 +52,15 @@ export async function POST(request: Request) {
   return NextResponse.json({ said, ...check, ms: [t1 - t0, Date.now() - t1] });
 }
 
-// Without the AI: how much of the sentence was said character for character.
+const squash = (t: string) => t.replace(/\s+/g, " ").trim();
+// A word as compared: lower case, letters and digits only ("Don't," and "dont" are the same word).
+const bare = (w: string) => w.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+// Without the AI: how much of the sentence was said word for word.
 function plainCheck(ja: string, said: string): SayCheck {
-  const parts = byChars(ja, said);
-  const n = parts.reduce((s, p) => s + p.t.length, 0);
-  const got = parts.reduce((s, p) => s + (p.ok ? p.t.length : 0), 0) / Math.max(1, n);
+  const parts = byWords(ja, said);
+  const words = parts.flatMap((p) => p.t.split(" ").filter((w) => bare(w)).map(() => p.ok));
+  const got = words.filter(Boolean).length / Math.max(1, words.length);
   return {
     verdict: !said ? "off" : got === 1 ? "good" : got >= 0.7 ? "close" : "off",
     mine: said ? [{ t: said, ok: true }] : [],
@@ -67,23 +71,22 @@ function plainCheck(ja: string, said: string): SayCheck {
   };
 }
 
-// When the AI's parts don't put the sentence back together: the characters said in order (longest common
-// subsequence), in runs. Punctuation goes with the run before it.
-const MARK = /[、。，．・「」『』（）！？\s]/;
-function byChars(ja: string, said: string): SayCheck["parts"] {
-  const a = [...ja];
-  const b = [...said].filter((c) => !MARK.test(c));
+// When the AI's parts don't put the sentence back together: the words said in order (longest common
+// subsequence), in runs. A word with no letters or digits goes with the run before it.
+function byWords(ja: string, said: string): SayCheck["parts"] {
+  const a = squash(ja).split(" ");
+  const b = said.split(/\s+/).map(bare).filter(Boolean);
   const L = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
   for (let i = a.length - 1; i >= 0; i--)
-    for (let j = b.length - 1; j >= 0; j--) L[i][j] = a[i] === b[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+    for (let j = b.length - 1; j >= 0; j--) L[i][j] = bare(a[i]) === b[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
   const ok: boolean[] = [];
   for (let i = 0, j = 0; i < a.length; ) {
-    if (MARK.test(a[i])) ok.push(ok[ok.length - 1] ?? true), i++;
-    else if (j < b.length && a[i] === b[j]) ok.push(true), i++, j++;
+    if (!bare(a[i])) ok.push(ok[ok.length - 1] ?? true), i++;
+    else if (j < b.length && bare(a[i]) === b[j]) ok.push(true), i++, j++;
     else if (j < b.length && L[i][j + 1] >= L[i + 1][j]) j++;
     else ok.push(false), i++;
   }
   const parts: SayCheck["parts"] = [];
-  a.forEach((c, i) => (parts.length && parts[parts.length - 1].ok === ok[i] ? (parts[parts.length - 1].t += c) : parts.push({ t: c, ok: ok[i] })));
+  a.forEach((w, i) => (parts.length && parts[parts.length - 1].ok === ok[i] ? (parts[parts.length - 1].t += " " + w) : parts.push({ t: w, ok: ok[i] })));
   return parts;
 }

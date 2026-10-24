@@ -15,7 +15,7 @@ const SKIP = "input, textarea, [contenteditable], .sheet, .ask-bar";
 
 // Answers already given, kept on the phone: asking about the same words in the same line again
 // (another day, after a reload) shows the saved answer instead of asking the AI again.
-const ASKED_KEY = "nihongo-speak:explain";
+const ASKED_KEY = "english-speak:explain";
 const askedKey = (p: Pick) => `${p.text}\n${p.line}`;
 function readAsked(): Record<string, Explain> {
   try {
@@ -116,7 +116,7 @@ export default function AskAi() {
       {pick?.easy && !ask && (
         <div className="ask-acts">
           <button className="ask-easy" onClick={() => easier(pick.easy!)}>
-            やさしく
+            简单说
           </button>
           <button className="ask-bar" onClick={() => askAi(pick)}>
             <b>问 AI</b>

@@ -17,7 +17,7 @@ export const kindByText = (said: string, ja: string): Kind => {
   return c >= 0.85 ? "right" : c >= 0.6 ? "close" : "wrong";
 };
 
-const WORD: Record<Kind, string> = { right: "正解！", close: "惜しい！", wrong: "もう一回！" };
+const WORD: Record<Kind, string> = { right: "Correct!", close: "Almost!", wrong: "Try again!" };
 const MARK: Record<Kind, string> = { right: "◯", close: "△", wrong: "✕" };
 
 // Today's run of right answers, shared by every practice page.
@@ -26,8 +26,8 @@ export function StreakPill() {
   useEffect(() => {
     const read = () => setN(readStreak().n);
     read();
-    window.addEventListener("nihongo-streak", read);
-    return () => window.removeEventListener("nihongo-streak", read);
+    window.addEventListener("english-streak", read);
+    return () => window.removeEventListener("english-streak", read);
   }, []);
   if (n < 2) return null;
   return (
@@ -113,7 +113,7 @@ export function VerdictSheet({
       <div className={`vsheet ${kind}`}>
         <div className="vsheet-inner">
           <div className="vword">
-            {quiet ? "答え" : WORD[kind]}
+            {quiet ? "答案" : WORD[kind]}
             {note && <span className="vnote">{note}</span>}
           </div>
           {kind !== "right" && (
@@ -122,22 +122,22 @@ export function VerdictSheet({
               <span>{ja}</span>
             </button>
           )}
-          {along && <div className="valong">{along === "ok" ? "◯ 言えた！" : "✕ もう一回"}</div>}
+          {along && <div className="valong">{along === "ok" ? "◯ 说对了！" : "✕ 再来一次"}</div>}
           {error && <div className="valong">{error}</div>}
           <div className="vbtns">
             {kind !== "right" && why && (
-              <button className="vwhy" onClick={() => setWhyOpen(true)}>なぜ？</button>
+              <button className="vwhy" onClick={() => setWhyOpen(true)}>为什么？</button>
             )}
             {kind === "wrong" && along !== "ok" ? (
               <div style={{ flex: 1 }}>
-                <HoldButton label={busy ? "聞き取り中…" : along ? "再来一次" : "跟着说"} disabled={busy} onRecorded={onAlong} onError={setError} />
+                <HoldButton label={busy ? "正在听…" : along ? "再来一次" : "跟着说"} disabled={busy} onRecorded={onAlong} onError={setError} />
               </div>
             ) : (
-              <button className="vnext" onClick={onNext}>次へ</button>
+              <button className="vnext" onClick={onNext}>下一题</button>
             )}
           </div>
           {kind === "wrong" && along !== "ok" && (
-            <button className="vskip" onClick={onNext}>次へ</button>
+            <button className="vskip" onClick={onNext}>下一题</button>
           )}
         </div>
       </div>
@@ -153,7 +153,7 @@ export function VerdictSheet({
         <div className="vmilestone" aria-hidden>
           <div>
             <b>{milestone}</b>
-            <span>連続正解</span>
+            <span>连续答对</span>
           </div>
         </div>
       )}

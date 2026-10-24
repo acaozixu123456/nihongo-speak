@@ -11,7 +11,7 @@ function escapeXml(s: string) {
   return s.replace(/[<>&'"]/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
-// HD voices aren't offered in Japan East, so they go through an optional second
+// HD voices aren't offered in every region (not in Japan East), so they go through an optional second
 // Speech resource (AZURE_TTS_KEY / AZURE_TTS_REGION, e.g. southeastasia, tier S0).
 function hdConfig() {
   const key = process.env.AZURE_TTS_KEY;
@@ -27,7 +27,7 @@ function ssml(text: string, voice: string) {
   const body = style
     ? `<mstts:express-as style="${escapeXml(style)}">${escapeXml(text)}</mstts:express-as>`
     : escapeXml(text);
-  return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="ja-JP"><voice name="${escapeXml(name)}">${body}</voice></speak>`;
+  return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="${escapeXml(name.slice(0, 5))}"><voice name="${escapeXml(name)}">${body}</voice></speak>`;
 }
 
 async function synthesizeWith(text: string, voice: string, { key, region }: { key: string; region: string }) {
@@ -37,7 +37,7 @@ async function synthesizeWith(text: string, voice: string, { key, region }: { ke
       "Ocp-Apim-Subscription-Key": key,
       "Content-Type": "application/ssml+xml",
       "X-Microsoft-OutputFormat": "audio-24khz-48kbitrate-mono-mp3",
-      "User-Agent": "nihongo-speak",
+      "User-Agent": "english-speak",
     },
     body: ssml(text, voice),
   });
@@ -134,7 +134,7 @@ async function stt(wav: ArrayBuffer, { key, region }: { key: string; region: str
     };
     headers["Pronunciation-Assessment"] = Buffer.from(JSON.stringify(params)).toString("base64");
   }
-  const url = `https://${region}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=ja-JP&format=detailed`;
+  const url = `https://${region}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=en-US&format=detailed`;
   const res = await fetch(url, { method: "POST", headers, body: wav });
   if (!res.ok) throw new Error(`Azure STT ${res.status}: ${await res.text()}`);
   return (await res.json()) as AzureResult;

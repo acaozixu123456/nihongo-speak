@@ -9,7 +9,6 @@ import { play, stop as stopAudio, ttsUrl, unlock } from "@/lib/client/player";
 import { loadPause, startPause, stopPause } from "@/lib/client/bgm";
 import {
   dayKey,
-  ensureReadings,
   hasCard,
   knownTags,
   markNews,
@@ -29,7 +28,8 @@ import {
   type Retell,
   type RetellPoint,
 } from "@/lib/client/progress";
-import { flowOf, moraRate, runClips, wavSlice, type Flow } from "@/lib/client/fluency";
+import { flowOf, runClips, wavSlice, wordRate, type Flow } from "@/lib/client/fluency";
+import { wordCount } from "@/lib/variant";
 import { Recorder, transcribeLong } from "@/lib/client/recorder";
 import SayAlong from "@/components/SayAlong";
 import { heardToday, stepDone, useOnRoute } from "@/lib/client/route";
@@ -39,7 +39,7 @@ import { useHydrated } from "@/lib/client/hydrated";
 import { LIFE_TOPICS, latest, retellList, retellScore, topicLogs } from "@/lib/client/retell-history";
 import Note from "./Note";
 
-// 三回話す: tell today's radio story three times, each time to a different person (so there is nothing
+// 讲三遍: tell today's radio story three times, each time to a different person (so there is nothing
 // new to add, only saying it better), with the one thing to fix shown between the first and second time.
 // Built on the 4/3/2 research: the same content repeated is what lasts (de Jong & Perfetti 2011); time
 // pressure itself matters little, so the times only shrink a bit; one delayed correction lets accuracy
@@ -48,31 +48,31 @@ import Note from "./Note";
 // listener who reacts. The first telling of each day is always a new story, so its speed across days
 // is the honest measure of progress. A point still not said right at the end of a day comes back before
 // the next day's first telling, on a new story, until it is said right there.
-// The radio's ハル retells the story in three sentences before this (a model to notice against, Hanaoka
+// The radio's Amy retells the story in three sentences before this (a model to notice against, Hanaoka
 // & Izumi), and the keywords are the story's skeleton; they stay up every time, and before each retelling
 // the ones already used well give their place to new ones. The fix is first a prompt to find the better way
 // yourself (Lyster & Saito), then the answer. The end pairs what you said with the natural version
-// (Lynch's reformulation). Speed is morae per second with long pauses counted, and a day after a
+// (Lynch's reformulation). Speed is words per minute with long pauses counted, and a day after a
 // telling the old story is told once more before the new one (spaced repetition, Bui et al. 2019).
 // Each telling is written down word for word by Gemini, piece by piece between the long silences, so
 // a silence in the middle of a sentence (stuck, not planning) is known: the longest one becomes the one
-// thing between the first and second telling, the words go to フレーズ帳 and 瞬間, and stalls per minute
+// thing between the first and second telling, the words go to 短语本 and 马上说, and stalls per minute
 // are the progress measure. The listener answers what was actually told (Bavelas et al. 2000); the next
 // day's retelling is checked for yesterday's natural sentences (Loewen 2005); the end can be said along
 // with the natural version (shadowing, 王 2018).
 
 const SECONDS = [90, 75, 60];
-// Yesterday's story, once, before today's: to ゆい, 60 seconds. Only within a week of telling it.
+// Yesterday's story, once, before today's: to Emily, 60 seconds. Only within a week of telling it.
 const AGAIN_SECONDS = 60;
 const AGAIN_DAYS = 7;
 const LISTENERS = ["yamada", "yui", "sato"];
 // Said at once when a telling ends, while it is being written down; the real reaction follows.
-const AIZUCHI: Record<string, string> = { yamada: "うん、うん。", yui: "うんうん！", sato: "へえー。" };
+const AIZUCHI: Record<string, string> = { yamada: "Mm-hmm.", yui: "Uh-huh!", sato: "Oh, wow." };
 // Only when the reaction about the story itself couldn't be made.
 const REACTIONS: Record<string, string[]> = {
-  yamada: ["へえ、そうなんだ。面白いね。", "なるほどね、知らなかったよ。"],
-  yui: ["えー、うそ！知らなかった！", "まじで？めっちゃ面白いじゃん！"],
-  sato: ["マジですか、それ初めて聞きました。", "へえー、なんか得した気分です。"],
+  yamada: ["Oh, really? That's interesting.", "I see. I didn't know that."],
+  yui: ["No way! I had no idea!", "Seriously? That's so cool!"],
+  sato: ["Wow, that's the first time I've heard that.", "Huh, I learned something new today."],
 };
 
 type Key = { ja: string; kana?: string };
@@ -90,26 +90,26 @@ function epTopic(ep: Progress["episodes"][number]): Topic {
     title: ep.title_zh,
     ja: ep.title_ja ?? ep.title_zh,
     zh: ep.title_ja ? ep.title_zh : "",
-    about: `${ep.title_zh}\n${(main.length ? main : ep.lines.map((l) => l.ja)).join("").slice(0, 600)}`,
+    about: `${ep.title_zh}\n${(main.length ? main : ep.lines.map((l) => l.ja)).join(" ").slice(0, 600)}`,
     keys: epKeys(ep),
     pool: [...(ep.story?.keys ?? []), ...(ep.words ?? [])].map((w) => ({ ja: w.ja, kana: w.kana })),
     ep: ep.id,
-    starters: ["今日ラジオで、〜って話を聞いたんですけど。", "びっくりしたのは、〜ってことです。", "だから、〜らしいですよ。"],
+    starters: ["So today on the radio, I heard that...", "What surprised me was that...", "So apparently..."],
   };
 }
 
-// An NHK news article heard this morning: its skeleton words, NHK's text as what it is about.
+// A news article heard this morning: its skeleton words, its text as what it is about.
 function newsTopic(a: NewsArticle): Topic {
   return {
     title: a.title_ja,
     ja: a.title_ja,
     zh: a.title_zh,
-    about: `${a.title_ja}\n${a.sentences.map((s) => s.ja).join("").slice(0, 700)}`,
+    about: `${a.title_ja}\n${a.sentences.map((s) => s.ja).join(" ").slice(0, 700)}`,
     keys: a.keys.slice(0, 3).map((k) => ({ ja: k.ja, kana: k.kana })),
     pool: [...a.keys, ...a.words].map((w) => ({ ja: w.ja, kana: w.kana })),
     news: a.id,
-    starters: ["ニュースで、〜と言っていました。", "〜そうです。"],
-    opinion: "わたしは〜と思います。",
+    starters: ["I saw on the news that...", "According to the news,..."],
+    opinion: "Personally, I think...",
     model: a.summary,
   };
 }
@@ -121,7 +121,7 @@ const lifeTopic = (t: string): Topic => ({
   about: t,
   keys: [],
   pool: [],
-  starters: ["実は、〜んですよ。", "それで、〜。", "結局、〜って感じでした。"],
+  starters: ["Actually,...", "And then,...", "In the end,..."],
 });
 
 // What there is to tell, first one first: today's episode once it has been heard, else something from
@@ -163,7 +163,8 @@ function againFor(p: Progress): Again | null {
 const voiceOf = (person: string) => calls.find((c) => c.person === person)?.talk.aiVoice ?? RADIO_VOICE.B;
 const nameOf = (person: string) => people.find((x) => x.id === person)?.name ?? person;
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.max(0, Math.floor(s % 60))).padStart(2, "0")}`;
-const chars = (s: string) => s.replace(/[\s、。，,.!！?？「」…]/g, "").length;
+// Speed and length are counted in words.
+const chars = wordCount;
 
 // perMin: long silences per minute; stalls: those in the middle of a sentence, per minute (only when
 // Gemini wrote the telling down).
@@ -176,8 +177,8 @@ const perMinute = (n: number, span: number) => (span > 0 ? Math.round((n / (span
 // The transcript with its silences marked, the way the coach reads it.
 function marked(h: Heard, f: Flow) {
   return h.runs
-    .map((r, i) => (i < f.gaps.length ? `${r.text}（…${r.cut ? "詰まった " : ""}${f.gaps[i].toFixed(1)}秒…）` : r.text))
-    .join("");
+    .map((r, i) => (i < f.gaps.length ? `${r.text} (…${r.cut ? "stuck " : ""}${f.gaps[i].toFixed(1)}s…)` : r.text))
+    .join(" ");
 }
 
 function stallOf(h: Heard, f: Flow): Stall | null {
@@ -192,10 +193,10 @@ function stallOf(h: Heard, f: Flow): Stall | null {
 type Phase = "ready" | "starting" | "talk" | "between" | "end";
 
 // The fix as a point to remember. Points the coach can't name by grammar are named by the fixed words,
-// so they still reach 苦手.
+// so they still reach the weak points.
 function pointOf(f: RetellFix): RetellPoint | null {
   if (!f.fix.better) return null;
-  return { tag: f.point.tag || f.fix.better.slice(0, 16), zh: f.point.zh || f.focus_zh, focus_zh: f.focus_zh, you_said: f.fix.you_said, better: f.fix.better };
+  return { tag: f.point.tag || f.fix.better.slice(0, 40), zh: f.point.zh || f.focus_zh, focus_zh: f.focus_zh, you_said: f.fix.you_said, better: f.fix.better };
 }
 
 async function post<T>(body: unknown): Promise<T> {
@@ -206,11 +207,11 @@ async function post<T>(body: unknown): Promise<T> {
 }
 
 // What the button says while the learner waits (writing down a telling takes ~15s).
-const BUSY: Record<string, string> = { listen: "聞き取り中…", fix: "直すところを探し中…", end: "まとめ中…" };
+const BUSY: Record<string, string> = { listen: "正在听写…", fix: "正在找要改的地方…", end: "正在总结…" };
 
 // After the second telling: one line on how it went against the first (mid-sentence stalls per
 // minute), and a tick when the words from the fix came out. Never a score, never a new point.
-const plain = (t: string) => t.replace(/[\s、。！？!?,.・「」]/g, "");
+const plain = (t: string) => t.toLowerCase().replace(/[^a-z0-9]/g, "");
 function secondNote(a: Take | null, b: Take, text: string | undefined, better: string | undefined, focus: boolean): string[] {
   const out: string[] = [];
   const last = focus ? "最后一遍，留意上面那一件事就好。" : "最后一遍，放松讲。";
@@ -233,7 +234,7 @@ function secondNote(a: Take | null, b: Take, text: string | undefined, better: s
 function Good({ ja, onHear }: { ja: string; onHear: (ja: string) => void }) {
   return (
     <button className="good-card" onClick={() => onHear(ja)}>
-      <span className="good-tag">言えた</span>
+      <span className="good-tag">说得好</span>
       <span className="good-ja">{ja}</span>
       <Play />
     </button>
@@ -340,8 +341,6 @@ export default function Retell() {
   const [along, setAlong] = useState(false);
   // The answer to the fix stays hidden until the learner has tried to find it.
   const [shown, setShown] = useState(false);
-  // Readings of each telling, asked for as soon as it is transcribed (index 3: the telling of the old story).
-  const kana = useRef<Promise<string | undefined>[]>([]);
   // The keywords as renewed before each telling after the first (words already used well swapped for
   // new ones), the ones just taken off and the ones just put on; null: the topic's own.
   const [keyed, setKeyed] = useState<(RetellKeys & { fresh: string[] }) | null>(null);
@@ -374,10 +373,6 @@ export default function Retell() {
     keyRuns.current = Object.fromEntries(Object.entries(p.keyRuns ?? {}).map(([k, v]) => [k, v.n]));
     setRunsShown(keyRuns.current);
     setTopics(ts);
-    for (const t of ts) {
-      const ep = t.ep && p.episodes.find((e) => e.id === t.ep);
-      if (ep) ensureReadings(ep);
-    }
     known.current = knownTags(p);
     setCarry(retellCarry(p));
     // The earlier story first only before today's own story, not before one picked from the list.
@@ -401,9 +396,9 @@ export default function Retell() {
   const limit = warming ? AGAIN_SECONDS : SECONDS[round];
   const shownTopic = warming ? again!.topic : topic;
 
-  // Reading → morae per second; undefined when no clean reading came back.
-  async function rated(t: Take, slot: number) {
-    return { ...t, mps: moraRate(t.text, await kana.current[slot], t.span) };
+  // Words per minute over the spoken stretch (kept as mps, the Japanese app's morae per second).
+  async function rated(t: Take) {
+    return { ...t, mps: wordRate(t.text, t.span) };
   }
 
   async function begin() {
@@ -471,13 +466,13 @@ export default function Retell() {
         heard = await post<Heard>({ kind: "hear", clips, listener: who, topic: shownTopic!.title, avoid });
       } catch {}
     }
-    let text = heard ? heard.runs.map((r) => r.text).join("") : "";
+    let text = heard ? heard.runs.map((r) => r.text.trim()).filter(Boolean).join(" ") : "";
     if (!heard) {
       try {
         text = await transcribeLong(wav);
       } catch {}
     }
-    if (sec < 8 || chars(text) < 5) {
+    if (sec < 8 || chars(text) < 4) {
       setBusy("");
       setError("这一遍没听清，或者太短了。不要紧，再说一次这一遍。");
       return;
@@ -498,14 +493,8 @@ export default function Retell() {
       ...(heard && { stalls: perMinute(heard.runs.filter((r) => r.cut).length, span) }),
       ...(heard?.good && { good: heard.good }),
     };
-    const slot = old ? 3 : n;
-    kana.current[slot] = heard
-      ? Promise.resolve(heard.runs.map((r) => r.kana).join(""))
-      : post<{ kana: string[] }>({ kind: "kana", texts: [text] })
-          .then((r) => r.kana[0])
-          .catch(() => undefined);
     if (old) {
-      setAgainTake(await rated(take, 3));
+      setAgainTake(await rated(take));
       if (again?.natural?.length) {
         post<{ used: string[] }>({ kind: "uptake", natural: again.natural, said: text })
           .then((r) => setUptake(r.used))
@@ -558,7 +547,7 @@ export default function Retell() {
           if (f.carried !== "unused") recordPoints([{ tag: carry.tag, zh: carry.zh, ok: f.carried === "right" }], f.carried === "right" ? [] : [carry]);
         }
         if (st && f.stall.better) {
-          // The words that were missing: kept for 瞬間 (say it fast from the Chinese) and the review.
+          // The words that were missing: kept for 马上说 (say it fast from the Chinese) and the review.
           setStall(st);
           if (f.stall.zh && !hasCard(p, f.stall.better)) toggleCard({ ja: f.stall.better, zh: f.stall.zh, voice: RADIO_VOICE.A, scenarioId: "retell" });
         } else {
@@ -583,7 +572,7 @@ export default function Retell() {
     }
     // Third time: done.
     setBusy("end");
-    const all = await Promise.all(next.map((t, i) => rated(t!, i)));
+    const all = await Promise.all(next.map((t) => rated(t!)));
     setTakes(all);
     const cpm = all.map((t) => t.cpm);
     const mps = all.every((t) => t.mps) ? all.map((t) => t.mps!) : undefined;
@@ -670,14 +659,14 @@ export default function Retell() {
         {back}
         <h1 className="ep-head">讲三遍</h1>
         <div className="retell-score">
-          <span className="kicker">{prior.current.times + 1}回目</span>
+          <span className="kicker">第 {prior.current.times + 1} 次</span>
           <b className="retell-score-t">{topic.ja}</b>
           {score !== null ? (
             <>
               <span className={`retell-score-n ${prev === null || score >= prev ? "ok" : ""}`}>{score}</span>
               {prev !== null && (
                 <span className={`retell-score-up ${score >= prev ? "ok" : ""}`}>
-                  {score > prev ? `↑ ${score - prev}` : score < prev ? `↓ ${prev - score}` : "±0"}　前回 {prev}
+                  {score > prev ? `↑ ${score - prev}` : score < prev ? `↓ ${prev - score}` : "±0"}　上次 {prev}
                 </span>
               )}
             </>
@@ -686,7 +675,7 @@ export default function Retell() {
           )}
         </div>
         <div className="today retell-end">
-          <span className="kicker">{byMora ? "每秒说出的音拍" : "每分钟说出的字数"}</span>
+          <span className="kicker">{byMora ? "每分钟说出的词数（只算开口的时间）" : "每分钟说出的词数"}</span>
           <div className="retell-bars">
             {speed.map((c, i) => (
               <div key={i}>
@@ -741,7 +730,7 @@ export default function Retell() {
         {!onRoute && nextPick && (
           <Link href={nextPick.href} className="retell-next">
             <span>
-              <small>おすすめ · 次は</small>
+              <small>推荐 · 下一个</small>
               <b>{nextPick.ja}</b>
             </span>
             {nextPick.score !== null && <em>{nextPick.score}</em>}
@@ -750,7 +739,7 @@ export default function Retell() {
         )}
         {!onRoute && (
           <Link href="/retell/list" className="retell-pick">
-            一覧から選ぶ
+            从列表里选
           </Link>
         )}
       </main>
@@ -785,7 +774,7 @@ export default function Retell() {
           </span>
           {!warming && round === 0 && phase === "ready" && shownT.news ? (
             <Link href={`/news/${shownT.news}`} className="retell-other">
-              聞き直す ›
+              再听一遍 ›
             </Link>
           ) : (
             !warming &&
@@ -793,7 +782,7 @@ export default function Retell() {
             phase === "ready" &&
             !onRoute && (
               <Link href="/retell/list" className="retell-other">
-                一覧 ›
+                列表 ›
               </Link>
             )
           )}
@@ -804,13 +793,13 @@ export default function Retell() {
             {keys.map((k) => (
               <span key={k.ja} className={!warming && keyed?.fresh.includes(k.ja) ? "new" : ""}>
                 {k.ja}
-                {k.kana && /[一-龯々]/.test(k.ja) && <small>{k.kana}</small>}
+                {k.kana && <small>{k.kana}</small>}
                 {!warming && runsShown[k.ja] === 1 && <i className="key-ok">✓</i>}
               </span>
             ))}
           </div>
         )}
-        {!warming && !talking && keyed && keyed.done.length > 0 && <span className="retell-done">✓ 连续两遍说得又对又顺：{keyed.done.join("・")}，换成新词</span>}
+        {!warming && !talking && keyed && keyed.done.length > 0 && <span className="retell-done">✓ 连续两遍说得又对又顺：{keyed.done.join(" · ")}，换成新词</span>}
         {showStarters && (
           <div className="retell-starters">
             {shownT.starters.map((s) => (
@@ -832,7 +821,7 @@ export default function Retell() {
           </button>
         ) : (
           <button className="today-go retell-go" onClick={begin} disabled={phase === "starting" || !!busy}>
-            {phase === "starting" ? "マイク準備中…" : busy ? (BUSY[busy] ?? "…") : round === 0 ? "说" : `${nameOf(listener)}に話す`}
+            {phase === "starting" ? "准备麦克风…" : busy ? (BUSY[busy] ?? "…") : round === 0 ? "说" : `讲给${nameOf(listener)}`}
           </button>
         )}
       </div>
@@ -856,7 +845,7 @@ export default function Retell() {
             ? uptake.length
               ? `上次的故事讲完了。昨天的说法用上了：${uptake.map((u) => `「${u}」`).join("")} ✓`
               : "上次的故事讲完了，现在讲今天的。"
-            : "不打分。卡住了就说「えっと」接着讲。"}
+            : "不打分。卡住了就说「um」接着讲。"}
         </p>
       )}
 
@@ -917,7 +906,7 @@ export default function Retell() {
                             <Say ja={fix.stall.around} onHear={hear} />
                           </>
                         )}
-                        <span className="fix-saved">✓ 已存入フレーズ帳</span>
+                        <span className="fix-saved">✓ 已存入短语本</span>
                       </div>
                     )}
                   </>

@@ -80,12 +80,12 @@ export default function ListenTab() {
           {target ? (
             <Link href={newsEp ? `/ep/${newsEp.id}` : `/ep/new?news=${target.id}`} className="pl">
               <b>电台</b>
-              <span>ハルとケンが今朝のニュースを話す</span>
+              <span>Amy 和 Ben 聊今天的新闻</span>
             </Link>
           ) : (
             <Link href={ep ? `/ep/${ep.id}` : "/episodes"} className="pl">
               <b>电台</b>
-              <span>{ep ? (ep.title_ja ?? ep.title_zh) : "ゆるっと日本ラジオ"}</span>
+              <span>{ep ? (ep.title_ja ?? ep.title_zh) : "Easy Talk Radio"}</span>
             </Link>
           )}
           {(newsEp ?? ep) && (

@@ -7,9 +7,9 @@ import AskAi from "@/components/AskAi";
 import AudioWait from "@/components/AudioWait";
 
 export const metadata: Metadata = {
-  title: "日语听说练习",
+  title: "英语听说练习",
   description: "精听、跟读、AI 场景对话",
-  appleWebApp: { capable: true, title: "日语练习", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "英语练习", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {
@@ -31,7 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Google serves these in small unicode-range slices, so a page only downloads the glyphs it uses. */}
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@500;600&family=Shippori+Mincho:wght@500;600&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@500;600&family=Source+Serif+4:wght@500;600&display=swap"
         />
       </head>
       <body>

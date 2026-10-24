@@ -12,10 +12,10 @@ export function retellScore(r: Retell): number | null {
 
 // Life topics: stored by their Chinese prompt, shown by a Japanese name.
 export const LIFE_TOPICS = [
-  { zh: "今天上班（或今天一天）做了什么", ja: "今日の仕事" },
-  { zh: "这个周末做了什么，或打算做什么", ja: "週末のこと" },
-  { zh: "最近吃过的好吃的东西", ja: "最近おいしかった物" },
-  { zh: "最近让你吃惊或开心的一件事", ja: "最近びっくりしたこと" },
+  { zh: "今天上班（或今天一天）做了什么", ja: "My day at work" },
+  { zh: "这个周末做了什么，或打算做什么", ja: "My weekend" },
+  { zh: "最近吃过的好吃的东西", ja: "Something tasty I ate" },
+  { zh: "最近让你吃惊或开心的一件事", ja: "Something that surprised me" },
 ];
 
 export type TopicLog = {

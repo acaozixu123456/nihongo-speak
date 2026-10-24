@@ -3,7 +3,7 @@
 import { play, ttsUrl, unlock } from "@/lib/client/player";
 import type { TeacherFix, TeacherGood } from "@/lib/client/progress";
 
-const VOICE = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-MayuNeural";
+const VOICE = "en-US-Emma:DragonHDLatestNeural|en-US-EmmaNeural";
 
 // The teacher's marked part of a sentence, coloured where it sits.
 export function Marked({ text, mark, as: Tag }: { text: string; mark: string; as: "mark" | "em" }) {

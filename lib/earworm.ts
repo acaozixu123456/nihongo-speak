@@ -3,9 +3,9 @@ import { BlobNotFoundError, get, put } from "@vercel/blob";
 import * as z from "zod/v4";
 import type { Radio } from "@/lib/radio";
 import { vertexAccess } from "@/lib/vertex-tts";
-import { sungKana } from "@/lib/claude";
+import { LEARNER, LEVEL } from "@/lib/learner";
 
-// 洗脑歌: each 趣味电台 episode's words and grammar sung as a catchy J-pop song, with a little
+// 洗脑歌: each 趣味电台 episode's words and grammar sung as a catchy pop song, with a little
 // cartoon for every line. All Google models on Vertex AI, paid from the Google Cloud credit:
 // Gemini writes the lyrics and the scenes, Lyria 3 Pro sings them ($0.08) and Nano Banana draws
 // each scene ($0.067 each), about 60 cents an episode. The phone animates the pictures itself:
@@ -18,17 +18,17 @@ const WRITER = "gemini-3.8-flash";
 const SINGER = "lyria-3-pro-preview";
 const PAINTER = "gemini-3.1-flash-image";
 
-// 3: sung from kana lyrics and checked by ear, since Lyria read many kanji wrong.
-const VERSION = 3;
-// A song whose check still finds wrong readings is sung again, up to this many times in all.
+// Songs made before this version are sung again (their lyrics and pictures stay).
+const VERSION = 1;
+// A song whose check still finds words sung unclearly is sung again, up to this many times in all.
 const MAX_SINGS = 3;
 
 const Line = z.object({
-  sing: z.string().describe("歌う歌詞1行（日本語、8〜16字）。重点の単語や文型をそのまま入れる"),
-  kw: z.string().describe("この行で覚える単語・文型（画面に大きく出す。単語は表記どおり、文型は「〜ないように」の形）"),
-  kana: z.string().describe("kw の読み（ひらがな）。文型なら使われた形の読み"),
-  zh: z.string().describe("kw の中国語の意味（短く、15字以内）"),
-  scene: z.number().int().describe("この行で映す場面の番号（scenes の 0 から始まる添字）"),
+  sing: z.string().describe("One sung lyric line (English, 4-9 words). Put the key word or pattern in as is"),
+  kw: z.string().describe("The word or pattern to learn in this line (shown big on screen; a word as written, a pattern like 'used to + verb')"),
+  kana: z.string().describe("kw's pronunciation in IPA (for a pattern, the form used)"),
+  zh: z.string().describe("kw's Chinese meaning (short, 15 characters at most)"),
+  scene: z.number().int().describe("Number of the scene shown for this line (0-based index into scenes)"),
 });
 
 export const SongSchema = z.object({
@@ -42,10 +42,10 @@ export const SongSchema = z.object({
       }),
     )
     .describe("6〜8 scenes, each used by one or more lines"),
-  intro: z.array(Line).describe("イントロの問いかけ、1行"),
-  verse1: z.array(Line).describe("1番、4行"),
-  chorus: z.array(Line).describe("サビ、4行。2回歌う。一番大事な単語・文型を何度も繰り返す"),
-  verse2: z.array(Line).describe("2番、4行"),
+  intro: z.array(Line).describe("Intro question, 1 line"),
+  verse1: z.array(Line).describe("Verse 1, 4 lines"),
+  chorus: z.array(Line).describe("Chorus, 4 lines, sung twice. Repeats the most important word or pattern again and again"),
+  verse2: z.array(Line).describe("Verse 2, 4 lines"),
 });
 
 export type Song = z.infer<typeof SongSchema>;
@@ -59,9 +59,9 @@ export type Job = {
   lines?: (SongLine & { at: number })[]; // in sung order, the chorus twice
   end?: number;
   lyria?: string; // what Lyria said it sang, kept for checking the timing
-  sung?: string[]; // the lyrics Lyria was given, in kana, in the order of the song's lines (no repeat)
+  sung?: string[]; // the lyrics Lyria was given, in the order of the song's lines (no repeat)
   sings?: number; // times sung at this version
-  wrong?: { n: number; heard: string }[]; // lines the last check heard sung wrong
+  wrong?: { n: number; heard: string }[]; // lines the last check heard sung unclearly
   drawn?: boolean[];
   drawTries?: number;
   failedStep?: Step;
@@ -122,23 +122,23 @@ async function vertex(model: string, body: object, timeoutMs: number) {
   return reply.candidates?.[0]?.content?.parts ?? [];
 }
 
-const WRITE = `あなたは日本語学習者向けの「洗脑歌」（一度聞いたら頭から離れない覚え歌）の作詞家です。
-聞き手は日本で働く中国人、JLPT N4〜N3。ラジオ番組1回分の単語・文型を、楽しいJ-popの歌にして覚えてもらいます。
+const WRITE = `You write "earworm songs" for English learners: songs you can't get out of your head after hearing them once. ${LEARNER}
+Turn the words and patterns of one radio episode into a fun pop song so she remembers them.
 
-- 番組の重要単語と文型をできるだけ全部、歌詞の中でそのまま使う。サビは一番大事なものを何度も繰り返す（「邪魔 邪魔 靴が邪魔」のように）。
-- 単語の行では、表記と読みを続けて歌ってもよい（「玄関 げんかん 靴を脱ぐ」）。
-- 歌詞は番組の話の流れに沿って、オチまでわかるように。短く、リズムよく、歌いやすく。
-- 行ごとに、覚えるもの（kw）、読み、中国語の意味、映す場面を決める。
-- 場面は番組の話を面白く描いたマンガの1コマ。登場人物はハル（明るい女性）とケン（とぼけた男性）。文字や看板は描かせない。`;
+- Use as many of the episode's key words and patterns as possible, as they are, in the lyrics. The chorus repeats the most important ones again and again ("Out of stock, out of stock, sorry it's out of stock").
+- A word line may spell it out or say it twice ("Receipt, receipt, here's your receipt").
+- Follow the story of the episode so the punchline comes through. Short, rhythmic, easy to sing, ${LEVEL} English.
+- For each line decide what to learn (kw), its IPA, its Chinese meaning and the scene shown.
+- A scene is one funny comic panel of the episode's story. The characters are Amy (cheerful woman) and Ben (goofy man). No text or signs drawn.`;
 
 // The 今日 recap has no episode behind it: just what was learned that day, mistakes first.
 const DAY = `
-今回はラジオ番組ではなく、学習者が今日1日（または最近数日）で学んだもののまとめ（script は空）。
-- 話の筋は要らない。words・phrases・grammar をできるだけ多く歌詞に入れる。並びの先頭のもの（今日間違えたもの）ほど大事なので、サビで何度も繰り返す。
-- 場面は、その行の単語・文の意味がひと目でわかる面白い1コマ。ハルとケンが演じる。`;
+This time it is not a radio episode but what the learner learned today (or the last few days) (script is empty).
+- No story needed. Put as many of words, phrases and grammar as possible into the lyrics. The first ones in each list (today's mistakes) matter most: repeat them in the chorus.
+- Each scene is one funny panel that shows the meaning of the line's word or sentence at a glance, acted by Amy and Ben.`;
 
 const STYLE =
-  "Cute flat vector illustration, bold simple shapes, thick clean outlines, warm off-white paper background, palette of ink black, soft beige and a vivid vermilion red accent, playful and funny like a Japanese kids' educational TV show. Recurring characters: Haru, a cheerful young Japanese woman with a short bob and a red sweater; Ken, a goofy young man with messy hair and round glasses. Absolutely no text, letters or signs in the image. Vertical 9:16 composition with the main subject in the middle.";
+  "Cute flat vector illustration, bold simple shapes, thick clean outlines, warm off-white paper background, palette of ink black, soft beige and a vivid vermilion red accent, playful and funny like a kids' educational TV show. Recurring characters: Amy, a cheerful young woman with a short bob and a red sweater; Ben, a goofy young man with messy hair and round glasses. Absolutely no text, letters or signs in the image. Vertical 9:16 composition with the main subject in the middle.";
 
 async function writeLyrics(ep: Radio): Promise<Song> {
   const { $schema, ...schema } = z.toJSONSchema(SongSchema) as Record<string, unknown>;
@@ -180,7 +180,7 @@ const sections = (s: Song) => [
   ["Chorus", s.chorus],
 ] as const;
 
-// Lyria sings timed lyrics on time: given "[8.0:] 玄関ドアは…" it starts that line within half a
+// Lyria sings timed lyrics on time: given "[8.0:] Here's your receipt…" it starts that line within half a
 // second of 8.0 (checked with speech recognition). So the song is laid out here, at 120 BPM with a
 // line every two bars after a two-bar intro, and the captions follow the plan. Left to itself,
 // Lyria put in instrumental breaks and stretched lines, and only said where each section started.
@@ -188,11 +188,15 @@ const BAR2 = 4; // seconds: two bars of 4/4 at 120 BPM
 const LEAD = 0.4; // the singer comes in a little ahead of the beat
 
 // When each line is sung: as Lyria reports it back ("[8.0:] …") where it does, else as planned.
-export function lineTimes(text: string, planned: number[]) {
+export function lineTimes(text: string, planned: number[], lyrics: string[] = []) {
   const said: number[] = [];
-  // Only sung lines count: the section descriptions that follow carry times too, but in English.
+  // Only sung lines count: the section descriptions that follow carry times too. A sung line shares
+  // most of its words with one of the lyrics.
+  const words = (t: string) => t.toLowerCase().match(/[a-z']+/g) ?? [];
+  const sung = lyrics.map((l) => new Set(words(l)));
   for (const m of text.matchAll(/^\[(\d+(?:\.\d+)?):[^\]]*\]\s*(.+)$/gm)) {
-    if (/[\u3040-\u30ff\u4e00-\u9fff]/.test(m[2])) said.push(Number(m[1]));
+    const w = words(m[2]);
+    if (w.length && sung.some((l) => w.filter((x) => l.has(x)).length >= w.length / 2)) said.push(Number(m[1]));
   }
   const use = said.length >= planned.length ? said.slice(0, planned.length) : planned;
   return use.map((t) => Math.max(0, t - LEAD));
@@ -202,9 +206,8 @@ export function lineTimes(text: string, planned: number[]) {
 const unique = (s: Song) => [...s.intro, ...s.verse1, ...s.chorus, ...s.verse2];
 
 async function sing(id: string, song: Song, given?: string[]) {
-  // Lyria reads kanji wrong often enough (細菌, 工面, 一夜) that it only ever sees kana.
   const once = unique(song);
-  const sung = given?.length === once.length ? given : await sungKana(once.map((l) => l.sing));
+  const sung = given?.length === once.length ? given : once.map((l) => l.sing);
   const kana = new Map(once.map((l, i) => [l, sung[i]]));
   let t = BAR2;
   const planned: number[] = [];
@@ -221,7 +224,7 @@ async function sing(id: string, song: Song, given?: string[]) {
   const end = t + BAR2;
   // Gemini's style may name its own tempo; the timing needs this one.
   const style = song.style.replace(/\d+\s*BPM/gi, "");
-  const prompt = `Create a ${end}-second super catchy, upbeat J-pop earworm song for Japanese learners, like a cheerful kids-TV / anime opening jingle. ${style}. Exactly 120 BPM, 4/4. One clear lead vocal, diction clear and slow enough that every word is easy to hear. The chorus must be extremely repetitive and hook-heavy. Instrumental intro from 0.0 to ${BAR2.toFixed(1)} seconds. Each lyric line is sung over exactly two bars (${BAR2} seconds) and starts exactly at the time written before it, with no instrumental breaks between sections. The lyrics are written in kana so every word is sung with its right Japanese reading: sing each syllable exactly as written. Sing in Japanese exactly these timed lyrics:\n\n${lyrics}`;
+  const prompt = `Create a ${end}-second super catchy, upbeat pop earworm song for English learners, like a cheerful kids-TV jingle. ${style}. Exactly 120 BPM, 4/4. One clear lead vocal with a clear American English accent, diction clear and slow enough that every word is easy to hear. The chorus must be extremely repetitive and hook-heavy. Instrumental intro from 0.0 to ${BAR2.toFixed(1)} seconds. Each lyric line is sung over exactly two bars (${BAR2} seconds) and starts exactly at the time written before it, with no instrumental breaks between sections. Sing in English exactly these timed lyrics:\n\n${lyrics}`;
   const parts = await vertex(
     SINGER,
     { contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { responseModalities: ["AUDIO", "TEXT"] } },
@@ -232,19 +235,19 @@ async function sing(id: string, song: Song, given?: string[]) {
   await save(id, "song.mp3", Buffer.from(audio.data, "base64"), "audio/mpeg");
   const flat = sections(song).flatMap(([, lines]) => lines);
   const text = parts.map((p) => p.text ?? "").join("\n");
-  const at = lineTimes(text, planned);
+  const at = lineTimes(text, planned, sung);
   const duration = Number(text.match(/duration_secs:\s*([\d.]+)/)?.[1] ?? 0);
   return { lines: flat.map((l, i) => ({ ...l, at: at[i] })), end: Math.max(duration, end), lyria: text.slice(0, 6000), version: VERSION, sung };
 }
 
 const CheckSchema = z.object({
   wrong: z
-    .array(z.object({ n: z.number().int().describe("歌詞の行番号"), heard: z.string().describe("実際に聞こえた歌い方（かな）") }))
-    .describe("読み方を間違えて歌っている行だけ。正しく歌えている行は入れない"),
+    .array(z.object({ n: z.number().int().describe("The lyric line's number"), heard: z.string().describe("What was actually heard sung") }))
+    .describe("Only the lines whose words can't be made out or are sung as other words. Not the lines sung right"),
 });
 
-// Listens to the song and lists the lines sung with a wrong reading (a kanji read the Chinese way, a
-// syllable left out or changed). Stretched vowels, melody and timing don't count.
+// Listens to the song and lists the lines whose words don't come through (mumbled, swallowed, sung as
+// other words): a learner can't pick them up from it. Stretched vowels, melody and timing don't count.
 async function check(id: string, sung: string[]) {
   const mp3 = await readFile(id, "song.mp3");
   if (!mp3) throw new Error("找不到歌");
@@ -256,9 +259,8 @@ async function check(id: string, sung: string[]) {
       systemInstruction: {
         parts: [
           {
-            text: `日本語の覚え歌の発音チェック係です。歌を聞いて、下の歌詞（かな）と違う読み方で歌われている行を挙げてください。
-対象：違う音で歌っている（中国語の発音になっている、音が抜けている・別の音になっている）。
-対象外：伸ばし、こぶし、メロディー、タイミング、ほんの少しのなまり。自信がない行は挙げない。`,
+            text: `You check the diction of a song for English learners. Listen to the song and list the lines where a learner could not make out the words below: words swallowed, mumbled, left out or sung as other words.
+Not counted: stretched vowels, melody, timing, a slight accent. Leave out lines you aren't sure about.`,
           },
         ],
       },
@@ -267,7 +269,7 @@ async function check(id: string, sung: string[]) {
           role: "user",
           parts: [
             { inlineData: { mimeType: "audio/mpeg", data: mp3.toString("base64") } },
-            { text: `歌詞：
+            { text: `Lyrics:
 ${sung.map((l, i) => `${i + 1}. ${l}`).join("\n")}` },
           ],
         },
@@ -378,7 +380,7 @@ export async function step(id: string, ep: Radio | null): Promise<Job | null> {
 }
 
 // The picture at the top of an episode's page: one wide cartoon of what the show is about, with
-// Haru and Ken in it, drawn once (about 7 cents) and kept with the 洗脑歌 files as cover.png.
+// Amy and Ben in it, drawn once (about 7 cents) and kept with the 洗脑歌 files as cover.png.
 export async function drawCover(id: string, ep: Radio) {
   const have = await readFile(id, "cover.png");
   if (have) return true;
@@ -387,13 +389,13 @@ export async function drawCover(id: string, ep: Radio) {
     .slice(0, 14)
     .map((l) => l.ja)
     .join("\n");
-  const prompt = `Draw the cover illustration for one episode of a cheerful Japanese radio talk show for learners.
+  const prompt = `Draw the cover illustration for one episode of a cheerful English radio talk show for learners.
 Episode title (Chinese): ${ep.title_zh}
 Teaser: ${ep.hook_zh}
 What the hosts talk about:
 ${talk}
 
-Show the single most surprising or funny moment of this topic as one scene, set in Japan, with the two hosts Haru and Ken in it reacting to it. Wide 16:9 composition, the main subject a little right of center, calm space along the bottom edge.
+Show the single most surprising or funny moment of this topic as one scene, with the two hosts Amy and Ben in it reacting to it. Wide 16:9 composition, the main subject a little right of center, calm space along the bottom edge.
 
 Style: ${STYLE.replace(/Vertical 9:16 composition[^.]*\./, "")}`;
   for (let attempt = 0; attempt < 3; attempt++) {

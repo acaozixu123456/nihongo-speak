@@ -33,7 +33,7 @@ export const BLOCK_LABEL: Record<Block, string> = {
   review: "复习收藏",
   fix: "错句对比",
   podcast: "今天的播客",
-  news: "NHKやさしいことばニュース",
+  news: "BBC 简单英语新闻",
 };
 
 // sound: a short sound of the site's own (/beep2.mp3) instead of a voice.
@@ -54,7 +54,7 @@ export type Clip = {
 export type RadioPart = "open" | "letter" | "main" | "word" | "song";
 
 const ZH = ZH_VOICE;
-const JA = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-NanamiNeural";
+const JA = "en-US-Emma:DragonHDLatestNeural|en-US-EmmaNeural";
 // Time to say the sentence in your head before the answer.
 export const THINK_MS = 4000;
 
@@ -130,7 +130,7 @@ function fixClips(p: Progress, r: number): Clip[] {
         line: { ja: e.better, zh: w.zh, voice: JA },
         parts: [
           zh(NARRATION.said),
-          { voice: "ja-JP-NanamiNeural", text: e.said, pauseMs: 800 },
+          { voice: "en-US-EmmaNeural", text: e.said, pauseMs: 800 },
           zh(NARRATION.better),
           { voice: JA, text: e.better, pauseMs: 900 },
           { voice: JA, text: e.better, pauseMs: 900 },
@@ -178,7 +178,7 @@ function podcastClips(ep: Episode): Clip[] {
       c.line = { ja: s.text, zh: s.zh, voice: JA };
       if (s.kind === "ja") c.parts.push({ voice: JA, text: s.text, pauseMs: 700 });
       // Long enough to say it back in your head: about a third of a second per character, plus a beat.
-      else c.parts.push({ voice: JA, text: s.text, pauseMs: Math.min(8000, 1200 + s.text.length * 330) }, { voice: JA, text: s.text, pauseMs: 900 });
+      else c.parts.push({ voice: JA, text: s.text, pauseMs: Math.min(8000, 1200 + s.text.split(/\s+/).length * 550) }, { voice: JA, text: s.text, pauseMs: 900 });
     }
   }
   return withIntro(clips.filter((c) => c.parts.length), `今天的播客：${ep.title_zh}。`);
@@ -187,7 +187,7 @@ function podcastClips(ep: Episode): Clip[] {
 const HOST = RADIO_VOICE;
 
 // Stage directions like （笑） would be read out loud.
-const sayable = (ja: string) => ja.replace(/[（(][^）)]*[）)]/g, "").replace(/〜/g, "ー").trim();
+const sayable = (ja: string) => ja.replace(/[（(][^）)]*[）)]/g, "").replace(/[〜~]/g, "...").trim();
 
 // The show as clips, one per line. Episodes since the makeover open with the title call and carry
 // their own corners, gaps and aizuchi, and end with the line to keep (ひとこと); older ones are the
@@ -200,7 +200,7 @@ export function radioClips(ep: Radio, narrate = true): Clip[] {
     return {
       block: "radio",
       show: l.ja,
-      sub: `${l.who === "A" ? "ハル" : "ケン"} · ${l.zh}`,
+      sub: `${l.who === "A" ? "Amy" : "Ben"} · ${l.zh}`,
       line: { ja: l.ja, zh: l.zh, voice: HOST[l.who] },
       parts: [{ voice: HOST[l.who], text: sayable(l.ja), pauseMs: 350 }],
       part: l.part,
@@ -214,13 +214,13 @@ export function radioClips(ep: Radio, narrate = true): Clip[] {
     const call = (who: "A" | "B", ja: string, gap: number, both = false): Clip => ({
       block: "radio",
       show: ja,
-      sub: who === "A" ? "ハル" : "ケン",
+      sub: who === "A" ? "Amy" : "Ben",
       parts: [{ voice: HOST[who], text: ja, pauseMs: 300 }],
       part: "open",
       gap,
       with: both ? { voice: HOST.B, text: ja } : undefined,
     });
-    const titleCall = [call("A", "ハルと！", 0), call("B", "ケンの！", 0.05), call("A", "ゆるっと日本ラジオ！", 0.15, true)];
+    const titleCall = [call("A", "Amy and", 0), call("B", "Ben's", 0.05), call("A", "Easy Talk Radio!", 0.15, true)];
     const keep: Clip = {
       block: "radio",
       show: k.ja,
@@ -264,7 +264,7 @@ export function buildRound(p: Progress, r: number, used: Set<string>, episode: E
 
 // ---- Podcast script (Haiku), one a day ----
 
-const EPISODE_KEY = "nihongo-speak:podcast";
+const EPISODE_KEY = "english-speak:podcast";
 type SavedEpisode = Episode & { day: string };
 
 export function todayEpisode(): Episode | null {
@@ -296,7 +296,7 @@ export async function makeEpisode(p: Progress): Promise<Episode> {
 
 // ---- 趣味电台 script, a new one each round ----
 
-const RADIO_SEEN_KEY = "nihongo-speak:radio-seen";
+const RADIO_SEEN_KEY = "english-speak:radio-seen";
 
 // How the episode being written is getting on, for the pages that wait on it (往期, the route bar).
 // Null when none is being written.
@@ -469,8 +469,8 @@ async function clipAudio(parts: Part[], report?: Report): Promise<Frames & { fal
 // Keeps the phone's cache from growing without end: drop the oldest half when it gets big.
 export async function pruneCache() {
   try {
-    await caches.delete("nihongo-speak-podcast"); // the old commute-podcast cache
-    await caches.delete("nihongo-speak-moyu");
+    await caches.delete("english-speak-podcast"); // the old commute-podcast cache
+    await caches.delete("english-speak-moyu");
     const c = await caches.open(CACHE);
     const keys = await c.keys();
     if (keys.length > MAX_CACHED) for (const k of keys.slice(0, keys.length / 2)) await c.delete(k);

@@ -30,7 +30,7 @@ function roundCall(r: Rehearsal, i: number): CallDef {
     who: r.who,
     incoming: false,
     person: r.person,
-    talk: { ...r.talk, setup: `${r.talk.setup}\n\n今回（${i + 1}回目）の相手の反応：${r.twists[i] ?? ""}（これは相手の行動の説明。このままセリフにしない）` },
+    talk: { ...r.talk, setup: `${r.talk.setup}\n\nHow the other person reacts this time (try ${i + 1}): ${r.twists[i] ?? ""} (This describes what they do. Do not read it out as a line.)` },
   };
 }
 
@@ -167,7 +167,7 @@ export default function Rehearse() {
               <span className="zh">{m.zh}</span>
             </button>
           ))}
-          {debrief.d.missed.length > 0 && <span className="today-zh">已放进フレーズ帳，瞬間 会再考你。</span>}
+          {debrief.d.missed.length > 0 && <span className="today-zh">已放进短语本，「马上说」会再考你。</span>}
           <button className="today-go" onClick={() => setDebrief(null)}>准备下一个</button>
         </div>
       ) : pending ? (

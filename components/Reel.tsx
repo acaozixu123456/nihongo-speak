@@ -9,7 +9,7 @@ import { SRC_JA, type RecapItem } from "@/lib/client/recap";
 // 洗脑连播, over a little dance track.
 // calm: every item slams onto the screen on a beat and is said twice (the second time slower), its
 //   meaning popping in between; anything missed that day is said a third time, with a gap to say it along.
-// wild: faster music, the screen shakes and flashes; every item is shouted twice (「もう一回！」),
+// wild: faster music, the screen shakes and flashes; every item is shouted twice (「再来一次！」),
 //   then a second, faster lap of all of them.
 // Both end with a サビ of every item, one a beat, and confetti.
 
@@ -28,7 +28,7 @@ export default function Reel({ items, mode, onClose }: { items: RecapItem[]; mod
   const list = useRef(items);
   list.current = items;
 
-  const url = (it: RecapItem) => ttsUrl(it.say, it.voice ?? "ja-JP-AoiNeural");
+  const url = (it: RecapItem) => ttsUrl(it.say, it.voice ?? "en-US-JennyNeural");
 
   async function go(start: { lap: number; i: number }) {
     const mine = ++run.current;
@@ -162,7 +162,7 @@ export default function Reel({ items, mode, onClose }: { items: RecapItem[]; mod
     body = (
       <div className="rl-end">
         <div className="rl-end-n">{items.length}</div>
-        <div className="rl-end-t ja-serif">頭に入った！</div>
+        <div className="rl-end-t ja-serif">记住了！</div>
         <button className="rl-again" onClick={again}>
           再来一遍
         </button>
@@ -190,7 +190,7 @@ export default function Reel({ items, mode, onClose }: { items: RecapItem[]; mod
         {it.miss && <div className="rl-stamp">要記</div>}
         {phase.again && !phase.along && (
           <div className="rl-again-tag" key="again">
-            もう一回！
+            再来一次！
           </div>
         )}
         {phase.along && <div className="rl-along">跟着说！</div>}
@@ -200,7 +200,7 @@ export default function Reel({ items, mode, onClose }: { items: RecapItem[]; mod
 
   const n = phase === "end" || "rush" in phase ? items.length : phase.i + 1;
   const lapTag = phase !== "end" && !("rush" in phase) && phase.lap > 0 ? "加速 · " : "";
-  const src = phase === "end" ? "" : "rush" in phase ? "サビ" : lapTag + SRC_JA[items[phase.i].src];
+  const src = phase === "end" ? "" : "rush" in phase ? "副歌" : lapTag + SRC_JA[items[phase.i].src];
 
   return (
     <div

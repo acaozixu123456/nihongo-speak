@@ -1,7 +1,8 @@
 import "server-only";
 import * as z from "zod/v4";
 import { COACH, makeRadioWithClaude } from "@/lib/claude";
-import { inJapanese } from "@/lib/variant";
+import { inEnglish } from "@/lib/variant";
+import { LEVEL } from "@/lib/learner";
 import { vertexAccess, vertexConfigured } from "@/lib/vertex-tts";
 
 // 练一练: a short Duolingo-style round built from what the learner met in 趣味电台: words, key
@@ -17,20 +18,20 @@ const GameSchema = z.object({
         kind: z
           .enum(["meaning", "listen", "reading", "pick", "judge", "fill", "order", "dictate", "say"])
           .describe(
-            "meaning: 日本語を見て中国語の意味を選ぶ。listen: 音声だけ聞いて中国語の意味を選ぶ。pick: 中国語を見て日本語を選ぶ。fill: 新しい場面の日本語の文の空欄（＿＿）に入るものを選ぶ。order: 中国語を見て日本語のパーツを並べる。say: 中国語を見て日本語を声に出して言う。reading: 単語（漢字）を見て正しい読みを選ぶ（word の項目だけ）。judge: 項目を使った日本語の文が自然か不自然かを判断する（半分くらいは、ありがちな誤用の文にする）。dictate: 音声だけ聞いて、聞こえた文をパーツで並べる",
+            "meaning: see the English, pick the Chinese meaning. listen: hear the audio only, pick the Chinese meaning. pick: see the Chinese, pick the English. fill: pick what goes in the blank (___) of an English sentence in a new situation (TOEIC Part 5 style). order: see the Chinese, put English pieces in order. say: see the Chinese, say the English out loud. reading: see a word, pick its right pronunciation in IPA (word items only). judge: decide whether an English sentence using the item is natural or not (about half should be a typical misuse). dictate: hear the audio only, put the heard sentence together from pieces",
           ),
-        about: z.string().describe("この問題で練習する項目。与えられた項目の ja をそのまま一字一句コピーする"),
-        ja: z.string().describe("meaning/listen/reading/judge/dictate: 出題する日本語（reading は単語そのもの、dictate は読み上げる文で answer と同じ）。fill: ＿＿ を1つ含む、新しい日常・職場の場面の文。それ以外は空文字"),
-        zh: z.string().describe("pick/order/say: 出題する中国語。fill/judge/dictate: 文の中国語訳（judge で不自然な文なら、言いたかった意味）。meaning/listen/reading: 空文字"),
-        answer: z.string().describe("正解。meaning/listen は中国語、pick/fill は日本語、order/say/dictate は完成した日本語の文、reading はひらがな、judge は「自然」か「不自然」"),
+        about: z.string().describe("The item this question practises. Copy the item's ja exactly"),
+        ja: z.string().describe("meaning/listen/reading/judge/dictate: the English shown or read (reading: the word itself; dictate: the sentence read, same as answer). fill: a sentence from a new everyday or workplace situation with exactly one ___. Otherwise empty"),
+        zh: z.string().describe("pick/order/say: the Chinese shown. fill/judge/dictate: the sentence's Chinese translation (for an unnatural judge sentence, what it meant to say). meaning/listen/reading: empty"),
+        answer: z.string().describe("The right answer. meaning/listen: Chinese. pick/fill: English. order/say/dictate: the whole English sentence. reading: IPA. judge: 自然 or 不自然"),
         options: z
           .array(z.string())
-          .describe("meaning/listen/pick/fill: もっともらしいが間違いの選択肢3個（正解と同じ言語・同じくらいの長さ）。reading: 長音・促音・濁点などを変えた紛らわしい読み3個。judge: 不自然な文なら [正しい言い方の日本語文] を1個、自然な文なら空。order/dictate: 紛らわしい余分なパーツ1〜2個。say: 空"),
-        tiles: z.array(z.string()).describe("order/dictate のみ：answer を順番どおり3〜6個のパーツに分けたもの（つなげると answer と完全に一致）。それ以外は空"),
-        explain_zh: z.string().describe("答えたあとに見せる一言解説（中国語、1文、なぜそうなるか・使い方のコツ）"),
+          .describe("meaning/listen/pick/fill: 3 plausible wrong choices (same language and about the same length as the answer). reading: 3 confusable pronunciations (wrong stress, wrong vowel, l/r). judge: for an unnatural sentence, [the right English sentence], for a natural one empty. order/dictate: 1-2 confusing extra pieces. say: empty"),
+        tiles: z.array(z.string()).describe("order/dictate only: answer cut in order into 3-6 pieces (joined with spaces they give answer exactly). Otherwise empty"),
+        explain_zh: z.string().describe("One-line note shown after answering (Chinese, 1 sentence: why, or a tip for using it)"),
       }),
     )
-    .describe("各項目ちょうど2問"),
+    .describe("Exactly 2 questions per item"),
 });
 
 export type Game = z.infer<typeof GameSchema>;
@@ -38,19 +39,19 @@ export type Game = z.infer<typeof GameSchema>;
 export type GameItem = { ja: string; zh: string; kind: string; note?: string; level: number };
 
 const SYSTEM = `${COACH}
-学習者がポッドキャストで出会った単語・重点句・文法・質問した部分を、ゲーム形式で練習して、意味を本当に理解し、自分で使えるようにします。項目ごとのレベル（0〜5）で問題形式を選ぶ：
-- レベル0〜1（初めて・まだ不安定）：meaning・listen・reading（単語）で意味と読みを確認し、もう1問は pick。
-- レベル2〜3：fill・order・judge・dictate のどれかで、新しい場面の中で使わせる。
-- レベル4〜5：say（自分で言う）と dictate か listen。
-全体で、できるだけ多くの種類の形式を混ぜる。order・dictate・say の answer は1文だけ（15〜30字）。
-同じ項目の2問は必ず違う形式にする（意味 → 使う、のように角度を変える）。
-- kind が weak の項目は、学習者が会話で何度も間違えた文法・表現（注に実際の間違いと正しい言い方）。レベルに関わらず fill・judge・order・say から2つ選び、その文法を自分で正しく使わせる。judge では学習者がしがちな誤用の文を出し、explain_zh でなぜ間違いかを一言で。
-- fill・order・say の文は元の文のコピーではなく、学習者の日常や職場（日本在住、IT系）で実際に使う新しい場面の短い文（N3程度）にする。
-- 間違いの選択肢は、ありがちな勘違い（似た語、似た文型、助詞違い、似た意味の中国語）にする。明らかに無関係なものは出さない。
-- 中国語は簡体字。zh・explain_zh、meaning/listen の answer と options は必ず中国語だけで書く（日本語を混ぜると答えが見えてしまう）。日本語の語を引くときは「」に入れる。`;
+Turn the words, key phrases, grammar and parts she asked about from her listening into a game, so she really understands them and can use them herself. Pick the question format by each item's level (0-5):
+- Level 0-1 (new or still shaky): meaning, listen, reading (words) to check meaning and sound, and pick for the other question.
+- Level 2-3: one of fill, order, judge, dictate, using it in a new situation.
+- Level 4-5: say (she says it herself) and dictate or listen.
+Mix as many formats as possible overall. For order, dictate and say, answer is one sentence (8-15 words).
+The two questions of one item must use different formats (meaning → use, from different angles).
+- Items of kind weak are grammar points or expressions she kept getting wrong when speaking (the note has her real mistake and the right way). Whatever the level, pick 2 of fill, judge, order, say, and make her use that grammar correctly herself. In judge, show the misuse she tends to make and say in explain_zh in one line why it is wrong.
+- Sentences for fill, order and say are not copies of the original but short new sentences from her shop work or daily life (${LEVEL}). fill may look like a TOEIC Part 5 question.
+- Wrong choices are typical confusions (similar words, similar patterns, wrong preposition or tense, similar Chinese meanings). Nothing obviously unrelated.
+- Chinese is Simplified. zh, explain_zh, and the answer and options of meaning/listen must be Chinese only (English in them gives the answer away). Quote English words in 「」.`;
 
-const prompt = (topic: string | undefined, items: GameItem[]) => `${topic ? `番組のテーマ：${topic}\n` : ""}項目：
-${items.map((x) => `- [${x.kind}・レベル${x.level}] ${x.ja}${x.note ? `（${x.note}）` : ""}：${x.zh}`).join("\n")}`;
+const prompt = (topic: string | undefined, items: GameItem[]) => `${topic ? `Show's topic: ${topic}\n` : ""}Items:
+${items.map((x) => `- [${x.kind} · level ${x.level}] ${x.ja}${x.note ? ` (${x.note})` : ""}: ${x.zh}`).join("\n")}`;
 
 const MODEL = "gemini-3.8-flash";
 
@@ -94,11 +95,11 @@ async function batch(topic: string | undefined, items: GameItem[]): Promise<Batc
   const content = prompt(topic, items);
   const t = Date.now();
   // The model sometimes copies an item with its note; point each question back at the item itself.
-  // A Chinese prompt or choice with Japanese in it gives the answer away; such a question is dropped.
+  // A Chinese prompt or choice with English in it gives the answer away; such a question is dropped.
   const zhOk = (q: Game["questions"][number]) =>
-    !inJapanese(q.explain_zh) &&
-    !inJapanese(q.zh, 2) &&
-    (q.kind !== "meaning" && q.kind !== "listen" ? true : ![q.answer, ...q.options].some((x) => inJapanese(x, 2)));
+    !inEnglish(q.explain_zh) &&
+    !inEnglish(q.zh, 2) &&
+    (q.kind !== "meaning" && q.kind !== "listen" ? true : ![q.answer, ...q.options].some((x) => inEnglish(x, 2)));
   const fix = (qs: Game["questions"]) =>
     qs.filter(zhOk).map((q) => ({ ...q, about: items.find((x) => q.about === x.ja || q.about.startsWith(x.ja) || q.about.includes(x.ja))?.ja ?? q.about }));
   if (vertexConfigured()) {

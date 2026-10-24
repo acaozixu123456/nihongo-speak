@@ -95,7 +95,7 @@ export default function Listen({ scenario, active, onNext }: { scenario: Scenari
     <div>
       {/* One line of advice; speed and subtitles wait behind 設定 so the first listen needs no decisions. */}
       <div className="listen-bar">
-        <span>字幕なしで一回通して聞く</span>
+        <span>不看字幕，从头听一遍</span>
         <button className="text-btn" onClick={() => setTools(!tools)}>
           {rate}× · 字幕 {tools ? "‹" : "›"}
         </button>
@@ -120,7 +120,7 @@ export default function Listen({ scenario, active, onNext }: { scenario: Scenari
           <p className="muted" style={{ margin: "4px 0 0" }}>
             听不出的句子点开再听几遍。觉得差不多了，就开口跟着说。
           </p>
-          <button className="primary next-cta" onClick={onNext}>まねる →</button>
+          <button className="primary next-cta" onClick={onNext}>跟读 →</button>
         </div>
       )}
 
@@ -137,7 +137,7 @@ export default function Listen({ scenario, active, onNext }: { scenario: Scenari
                   toggleReveal(i);
                 }}
               >
-                {revealed.has(i) ? "隠す" : "見る"}
+                {revealed.has(i) ? "隐藏" : "看"}
               </button>
             </div>
             <div className={`ja ${visible ? "" : "hidden-text"}`}>{line.ja}</div>
@@ -150,9 +150,9 @@ export default function Listen({ scenario, active, onNext }: { scenario: Scenari
       {!finished && (
         <div className="sticky-cta">
           {current === null ? (
-            <button className="primary" onClick={() => playFrom(0, false)}>▶ 通して聞く</button>
+            <button className="primary" onClick={() => playFrom(0, false)}>▶ 从头听</button>
           ) : (
-            <button onClick={halt}>■ 止める</button>
+            <button onClick={halt}>■ 停</button>
           )}
         </div>
       )}

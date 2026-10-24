@@ -28,7 +28,7 @@ export default function Bag() {
 
       {due.length > 0 && (
         <Link href="/review" className="btn primary next-cta" style={{ display: "block" }}>
-          今日の{due.length}文を復習
+          复习今天的 {due.length} 句
         </Link>
       )}
 

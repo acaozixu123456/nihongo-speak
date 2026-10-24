@@ -9,7 +9,7 @@ import { play, preload, progress, stop, ttsUrl, unlock } from "@/lib/client/play
 // then overlap, then produce it unprompted. Nothing is recorded or scored.
 
 type Line = { ja: string; zh: string };
-const STEPS = ["聴く", "一緒に", "ひとりで"] as const;
+const STEPS = ["听", "一起说", "自己说"] as const;
 const SLOW = 0.9;
 
 export default function SayAlong({ lines, voice, onClose }: { lines: Line[]; voice: string; onClose: () => void }) {
@@ -108,7 +108,7 @@ export default function SayAlong({ lines, voice, onClose }: { lines: Line[]; voi
           再来一次
         </button>
         <button className="along-quit" onClick={close}>
-          閉じる
+          关闭
         </button>
       </div>
     );
@@ -117,7 +117,7 @@ export default function SayAlong({ lines, voice, onClose }: { lines: Line[]; voi
   return (
     <div className="today along-card" ref={box}>
       <span className="kicker">
-        一緒に言う · {at + 1} / {lines.length}
+        一起说 · {at + 1} / {lines.length}
       </span>
       <div className="along-steps">
         {STEPS.map((s, i) => (
@@ -144,7 +144,7 @@ export default function SayAlong({ lines, voice, onClose }: { lines: Line[]; voi
       <div className="along-row">
         <button onClick={() => start(at)}>再来一次</button>
         <button onClick={() => (at + 1 < lines.length ? start(at + 1) : (run.current++, stop(), setDone(true)))}>次 ›</button>
-        <button onClick={close}>やめる</button>
+        <button onClick={close}>停止</button>
       </div>
     </div>
   );

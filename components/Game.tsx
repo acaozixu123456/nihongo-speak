@@ -48,7 +48,7 @@ const TILES: Kind[] = ["order", "dictate"];
 const NATURAL = "自然";
 const ODD = "不自然";
 
-// Japanese a question plays once answered: the sentence itself, or the answer once it's Japanese.
+// English a question plays once answered: the sentence itself, or the answer once it's English.
 function spoken(q: Q) {
   if (q.kind === "judge") return q.answer === ODD && q.options[0] ? q.options[0] : q.ja;
   if (q.kind === "meaning" || q.kind === "listen" || q.kind === "reading") return q.ja;
@@ -60,7 +60,7 @@ function prepare(g: GameData, items: SkillItem[]): Q[] {
   const qs = g.questions
     .filter((q) => q.answer.trim())
     .map((q): Q | null => {
-      const tiles = TILES.includes(q.kind) && bare(q.tiles.join("")) === bare(q.answer) && q.tiles.length > 1 ? q.tiles : null;
+      const tiles = TILES.includes(q.kind) && bare(q.tiles.join(" ")) === bare(q.answer) && q.tiles.length > 1 ? q.tiles : null;
       if (TILES.includes(q.kind) && !tiles) return null;
       if (CHOICE.includes(q.kind) && q.options.filter((o) => o !== q.answer).length < 2) return null;
       if (q.kind === "judge" && ![NATURAL, ODD].includes(q.answer)) return null;
@@ -72,7 +72,7 @@ function prepare(g: GameData, items: SkillItem[]): Q[] {
     })
     .filter((q): q is Q => q !== null);
   // One 连连看 a little way in, when there are enough short items to pair up.
-  const short = shuffle(items.filter((x) => x.ja.length <= 10 && x.zh.length <= 14)).slice(0, 5);
+  const short = shuffle(items.filter((x) => x.ja.length <= 24 && x.zh.length <= 14)).slice(0, 5);
   if (short.length >= 3) {
     const match: Q = {
       kind: "match",
@@ -96,18 +96,18 @@ const PROMPT: Record<Kind, string> = {
   meaning: "这句是什么意思？",
   listen: "听一听，是什么意思？",
   reading: "怎么读？",
-  pick: "用日语怎么说？",
-  judge: "这句日语说得自然吗？",
+  pick: "用英语怎么说？",
+  judge: "这句英语说得自然吗？",
   fill: "空里填什么？",
-  order: "排成日语句子",
+  order: "排成英语句子",
   dictate: "听写：把听到的排出来",
-  say: "用日语说出来",
-  match: "连连看：日语和意思配对",
+  say: "用英语说出来",
+  match: "连连看：英语和意思配对",
 };
 
 // Each finished set is kept so it can be practised again (再练这一套), one per episode and one for 練習.
 type SavedSet = { items: SkillItem[]; data: GameData };
-const SET_KEY = (id: string) => `nihongo-speak:game:${id}`;
+const SET_KEY = (id: string) => `english-speak:game:${id}`;
 function saveSet(id: string, set: SavedSet) {
   try {
     localStorage.setItem(SET_KEY(id), JSON.stringify(set));
@@ -123,7 +123,7 @@ function savedSet(id: string): SavedSet | null {
 export const hasSavedSet = (id: string) => savedSet(id) !== null;
 
 // The stamp at the end, by how much was right the first time.
-const STAMP = (rate: number) => (rate === 1 ? "満点" : rate >= 0.8 ? "合格" : rate >= 0.5 ? "まあまあ" : "再来一次");
+const STAMP = (rate: number) => (rate === 1 ? "Perfect!" : rate >= 0.8 ? "Passed" : rate >= 0.5 ? "Not bad" : "再来一次");
 
 type Result = { q: Q; ok: boolean };
 
@@ -361,7 +361,7 @@ export default function Game({ id }: { id: string }) {
       </div>
       {cheer && (
         <div className="game-cheer" key={cheer.key}>
-          {cheer.n} 連続！
+          连对 {cheer.n} 题！
         </div>
       )}
       <Question
@@ -445,8 +445,8 @@ function say(ja: string) {
 function fromOf(items: SkillItem[], q: Q, epId?: string) {
   const it = q.about ? items.find((x) => skillKey(x.ja) === skillKey(q.about)) : undefined;
   if (!it) return "";
-  if (it.kind === "weak") return "苦手";
-  return epId && it.ep !== epId ? "前の回" : "";
+  if (it.kind === "weak") return "弱项";
+  return epId && it.ep !== epId ? "上一期" : "";
 }
 
 function Question({ q, again, from, onAnswer, onDone }: { q: Q; again: boolean; from: string; onAnswer: (ok: boolean) => void; onDone: (ok: boolean) => void }) {
@@ -466,12 +466,12 @@ function Question({ q, again, from, onAnswer, onDone }: { q: Q; again: boolean; 
   }, [q]);
 
   const choice = CHOICE.includes(q.kind) || q.kind === "judge";
-  const answerText = TILES.includes(q.kind) ? built.map((i) => q.pool[i]).join("") : "";
+  const answerText = TILES.includes(q.kind) ? built.map((i) => q.pool[i]).join(" ") : "";
 
   function decide(ok: boolean, sayAfter = true, soft = false) {
     setVerdict(ok);
     setUnsure(soft);
-    // The same ピンポン, haptics and day-long run as every other practice page; the round cheers its own run.
+    // The same ding, haptics and day-long run as every other practice page; the round cheers its own run.
     judged(ok ? "right" : "wrong", soft, false);
     onAnswer(ok);
     if (sayAfter) setTimeout(() => say(spoken(q)), 550);
@@ -534,7 +534,7 @@ function Question({ q, again, from, onAnswer, onDone }: { q: Q; again: boolean; 
               <div className="ja game-big">
                 {fillParts[0]}
                 <span className={`game-blank ${chosen ? "on" : ""}`}>{chosen ?? "\u3000\u3000"}</span>
-                {fillParts.slice(1).join("")}
+                {fillParts.slice(1).join("___")}
               </div>
               <div className="zh">{q.zh}</div>
             </>
@@ -587,7 +587,7 @@ function Question({ q, again, from, onAnswer, onDone }: { q: Q; again: boolean; 
           {heard !== null && heard && <p className="muted">听到：{heard}</p>}
           <HoldButton label={busy ? "识别中…" : "点一下说话"} disabled={busy} onRecorded={onRecorded} onError={setError} />
           <button className="small ghost" onClick={() => decide(false, true, true)}>
-            わからない・答えを見る
+            不知道 · 看答案
           </button>
         </div>
       )}
@@ -596,10 +596,10 @@ function Question({ q, again, from, onAnswer, onDone }: { q: Q; again: boolean; 
       {verdict === null && q.kind !== "say" && q.kind !== "match" && (
         <div className="sticky-cta">
           <button className="btn primary game-next" disabled={choice ? !chosen : !built.length} onClick={check}>
-            確認
+            Check
           </button>
           <button className="small ghost game-unsure" onClick={() => decide(false, true, true)}>
-            {q.kind === "listen" || q.kind === "dictate" ? "聞き取れない・答えを見る" : "わからない・答えを見る"}
+            {q.kind === "listen" || q.kind === "dictate" ? "没听出来 · 看答案" : "不知道 · 看答案"}
           </button>
         </div>
       )}
@@ -623,9 +623,9 @@ function Question({ q, again, from, onAnswer, onDone }: { q: Q; again: boolean; 
   );
 }
 
-const PRAISE = ["正解！", "すごい！", "いいね！", "完璧！", "その通り！"];
+const PRAISE = ["Correct!", "Great!", "Nice!", "Perfect!", "Exactly!"];
 
-// 连连看: tap a Japanese card, then its meaning. More than one wrong pair counts as a miss.
+// 连连看: tap an English card, then its meaning. More than one wrong pair counts as a miss.
 function Match({ pairs, onDone }: { pairs: { ja: string; zh: string }[]; onDone: (ok: boolean) => void }) {
   const [left] = useState(() => shuffle(pairs.map((p) => p.ja)));
   const [right] = useState(() => shuffle(pairs.map((p) => p.zh)));

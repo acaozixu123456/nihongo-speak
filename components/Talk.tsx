@@ -178,7 +178,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
             {messages.length ? "重新开始" : "开始对话"}
           </button>
           {userTurns > 0 && (
-            <button onClick={getFeedback} disabled={!!busy}>先生に見てもらう</button>
+            <button onClick={getFeedback} disabled={!!busy}>让老师看看</button>
           )}
         </div>
       </div>
@@ -189,7 +189,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
             <div className="ja">{m.text}</div>
             {shownZh.has(i) && <div className="zh">{m.zh}</div>}
             <div className="row" style={{ marginTop: 6 }}>
-              <button className="small" onClick={() => { unlock(); say(m.text); }}>もう一度</button>
+              <button className="small" onClick={() => { unlock(); say(m.text); }}>再听一次</button>
               <button className="small" onClick={() => toggleZh(i)}>{shownZh.has(i) ? "隐藏中文" : "中文"}</button>
               {m.zh && <Star {...card} ja={m.text} zh={m.zh} />}
             </div>
@@ -230,7 +230,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
             <div key={i} style={{ marginTop: 10 }}>
               <div className="ja">{s.ja}</div>
               <div className="zh">{s.zh}</div>
-              <button className="small" onClick={() => { unlock(); say(s.ja); }}>聞く</button>
+              <button className="small" onClick={() => { unlock(); say(s.ja); }}>听</button>
             </div>
           ))}
         </div>
@@ -262,8 +262,8 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
                   setDraft("");
                 }}
               >
-                <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="用日语输入" />
-                <button className="primary" type="submit" disabled={!!busy}>送る</button>
+                <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="用英语输入" />
+                <button className="primary" type="submit" disabled={!!busy}>发送</button>
                 <button type="button" onClick={() => setTyping(false)}>语音</button>
               </form>
             ) : (

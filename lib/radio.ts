@@ -2,81 +2,76 @@ import "server-only";
 import * as z from "zod/v4";
 import { makeRadioWithClaude } from "@/lib/claude";
 import { vertexAccess, vertexConfigured } from "@/lib/vertex-tts";
-import { checkReadings } from "@/lib/reading";
+import { LEARNER, LEVEL } from "@/lib/learner";
 
-// 趣味电台 (ゆるっと日本ラジオ): two hosts chat in Japanese like a real radio show (small talk, a
+// 趣味电台 (Easy Talk Radio): two hosts chat in English like a real radio show (small talk, a
 // listener's letter that is really the learner's own mistake, one surprising fact, a line to keep),
 // so listening practice is something the learner wants to hear to the end. Gemini on Vertex AI writes it (paid from the Google Cloud
 // credit); Claude takes over if that fails.
 
 const Line = z.object({
-  part: z
-    .enum(["open", "letter", "main", "word"])
-    .describe("open: オープニングトーク / letter: お便りコーナー / main: 本題 / word: 今日のひとこと"),
-  who: z.enum(["A", "B"]).describe("A: ハル（女性、知りたがり・リアクション大きめ）。B: ケン（男性、物知りだけど少しおとぼけ）"),
-  ja: z.string().describe("セリフ（日本語、1〜2文、40字以内）"),
-  zh: z.string().describe("中国語訳"),
+  part: z.enum(["open", "letter", "main", "word"]).describe("open: opening chat / letter: listener's letter / main: the main story / word: phrase of the day"),
+  who: z.enum(["A", "B"]).describe("A: Amy (woman, curious, big reactions). B: Ben (man, knows a lot but a bit goofy)"),
+  ja: z.string().describe("The line (English, 1-2 sentences, 20 words at most)"),
+  zh: z.string().describe("Chinese translation"),
   gap: z
     .number()
-    .describe("前のセリフが終わってからこのセリフまでの間（秒、0.15〜1.2）。かぶせない。テンポよく返すなら 0.15〜0.2、普通 0.3、驚き・ため・オチの前は 0.7〜1.2"),
+    .describe("Seconds from the end of the previous line to this one (0.15-1.2). No overlapping. Quick comebacks 0.15-0.2, normal 0.3, before a surprise, a pause or a punchline 0.7-1.2"),
   back: z
     .string()
-    .describe("このセリフの途中で、もう一人が小さく入れる相づち（「うんうん」「へえ」「そうそう」「あー」など、6字以内）。長めのセリフに4〜6回だけ。なければ空文字"),
+    .describe("A small backchannel the other host slips in during this line ('uh-huh', 'right', 'wow', 'oh', 'yeah', 2 words at most). Only on 4-6 longer lines in all. Otherwise empty"),
   easy: z
     .string()
-    .describe(
-      "このセリフがN3の学習者に難しいとき（N2以上の語や文法、硬い漢語、複雑な文）だけ、同じ意味をN4〜N3の語と文法で言い直したやさしい日本語。話し手の口調はそのまま。全体で4〜8行だけ。難しくなければ空文字",
-    ),
+    .describe(`Only when this line is hard for a ${LEVEL} learner (B2 words or above, idioms, complex sentences): the same meaning in ${LEVEL} words and grammar, in the speaker's tone. Only 4-8 lines in all. Otherwise empty`),
 });
 
 export const RadioSchema = z.object({
-  title_zh: z.string().describe("番組タイトル（中国語、15字以内）。思わず聞きたくなる問いかけ型"),
-  title_ja: z.string().describe("title_zh と同じ問いかけの日本語タイトル（20字以内）。直訳ではなく、自然な日本語の見出し"),
-  hook_zh: z
-    .string()
-    .describe("画面に出す中国語の1〜2文。答えを言わずに疑問を投げかけ、続きを聞きたくさせる"),
-  lines: z.array(Line).describe("open → letter → main → word の順に、合わせて30〜40行の掛け合い"),
+  title_zh: z.string().describe("The show's title (Chinese, 15 characters at most). A question that makes you want to listen"),
+  title_ja: z.string().describe("The same question as title_zh as a natural English title (10 words at most). Not a word-for-word translation"),
+  hook_zh: z.string().describe("1-2 Chinese sentences shown on screen. Raise the question without giving the answer, so she wants to hear the rest"),
+  lines: z.array(Line).describe("open → letter → main → word, 30-40 lines of back-and-forth in all"),
   story: z
     .object({
       keys: z
-        .array(z.object({ ja: z.string().describe("語（表記どおり）"), kana: z.string().describe("読み（ひらがな）") }))
-        .describe("本題を人に話すときの骨組みになる言葉、ちょうど3つ。話の順に：きっかけ・意外な事実・オチ。本題に実際に出た語"),
+        .array(z.object({ ja: z.string().describe("The word (as written)"), kana: z.string().describe("Its pronunciation in IPA") }))
+        .describe("Exactly 3 words that form the skeleton for telling the main story to someone, in the story's order: how it starts, the surprising fact, the punchline. Words actually used in the main story"),
       summary: z
         .array(z.string())
-        .describe("ハルが word の最初に言う、本題のまとめ3文（日本語、それぞれ30字以内）。lines の中のセリフと一字一句同じにする"),
+        .describe("The 3-sentence summary of the main story Amy says at the start of word (English, 15 words at most each). Exactly the same as those lines in lines"),
     })
-    .describe("聞いたあとに、この話を自分で人に話すための骨組み"),
+    .describe("The skeleton for telling this story to someone after listening"),
   hitokoto: z
     .object({
-      when_ja: z.string().describe("どんな場面で使うか（日本語、短く。例：「温めますか？」って聞かれたら）"),
-      ja: z.string().describe("今日いちばん持ち帰ってほしい、そのまま言える短い一文（日本語、15字以内）"),
-      zh: z.string().describe("中国語の意味と、ひとことの注意（20字以内）"),
+      when_ja: z.string().describe("When to use it (English, short. E.g. 'When a customer asks for a discount')"),
+      ja: z.string().describe("The one short sentence you most want her to take home today, sayable as is (English, 8 words at most)"),
+      zh: z.string().describe("Chinese meaning and one small tip (20 characters at most)"),
     })
-    .describe("今日のひとこと。お便りがあれば、その正しい言い方"),
+    .describe("Phrase of the day. If there was a letter, the right way to say it"),
   phrases: z
-    .array(z.object({ ja: z.string().describe("会話に出てきた、そのまま日常や職場で使える表現（日本語、20字以内、「〜」を使わない完全な文）"), zh: z.string() }))
-    .describe("重点句、3〜4個"),
+    .array(z.object({ ja: z.string().describe("A phrase from the conversation she can use as is at the shop or in daily life (English, 12 words at most, a complete sentence, no '...')"), zh: z.string() }))
+    .describe("Key phrases, 3-4"),
   words: z
     .array(
       z.object({
-        ja: z.string().describe("会話に出てきた単語（表記どおり）"),
-        kana: z.string().describe("読み（ひらがな）"),
-        zh: z.string().describe("中国語の意味（短く）"),
+        ja: z.string().describe("A word from the conversation (as written)"),
+        kana: z.string().describe("Its pronunciation in IPA"),
+        zh: z.string().describe("Chinese meaning (short)"),
       }),
     )
-    .describe("N3学習者が覚えておくべき単語、6〜8個。会話に実際に出たものだけ。誰でも知っている基本語は除く"),
+    .describe("6-8 words worth learning, especially ones common on the TOEIC. Only words actually said. Leave out basic words everyone knows"),
   grammar: z
     .array(
       z.object({
-        pattern: z.string().describe("文型（例：「〜わけじゃない」）"),
-        zh: z.string().describe("意味と使い方（中国語、1〜2文）"),
-        ja: z.string().describe("会話の中で実際に使われた文（そのまま）"),
+        pattern: z.string().describe("The pattern (e.g. 'used to + verb')"),
+        zh: z.string().describe("Meaning and use (Chinese, 1-2 sentences)"),
+        ja: z.string().describe("The sentence it was actually used in (as is)"),
       }),
     )
-    .describe("会話に出てきたN4〜N2の文法・言い回し、2〜3個"),
+    .describe("2-3 grammar points or set phrases used in the conversation"),
 });
 
-// Episodes made before the 2026-10 makeover: no parts, gaps or ひとこと, and a question at the end.
+// Episodes made before the show had parts, gaps or a phrase of the day (none in this app, kept so the
+// phone's saved episodes all read the same way).
 export const OldRadioSchema = RadioSchema.extend({
   title_ja: z.string().optional(),
   story: RadioSchema.shape.story.optional(),
@@ -84,70 +79,69 @@ export const OldRadioSchema = RadioSchema.extend({
   hitokoto: RadioSchema.shape.hitokoto.optional(),
   quiz_zh: z.string().optional(),
   letter: z.object({ said: z.string(), better: z.string(), where: z.string().optional() }).optional(),
-  // 1 once the readings over story.keys and words were checked (lib/reading.ts).
   readings: z.number().optional(),
 });
 
-// What the phone stores and plays: new episodes, and old ones as they were saved.
+// What the phone stores and plays.
 export type Radio = z.infer<typeof OldRadioSchema>;
 
-// A listener's letter for お便り: a sentence the learner got wrong lately, and the better way.
+// A listener's letter: a sentence the learner got wrong lately, and the better way.
 export type Letter = { said: string; better: string; where?: string };
 
-// Picked at random so the episodes don't all drift to the same kind of trivia. All about Japan:
-// the learner lives and works there.
+// Picked by the week so the episodes don't all drift to the same kind of trivia. Close to the learner's
+// life: the shop, customers from abroad, offices and the kind of world the TOEIC is set in.
 const TOPICS = [
-  "日本の日常にある「なぜ？」（コンビニ、電車、自販機、ゴミ出しなど）",
-  "日本語の言葉の意外な語源",
-  "日本の会社・職場の不思議な習慣",
-  "日本の食べ物の意外な歴史（ラーメン、カレー、寿司、お菓子など）",
-  "日本の地理・地名・都道府県の冷知識",
-  "日本の動物・自然の不思議（奈良の鹿、温泉に入るサルなど）",
-  "日本の歴史上の人物の意外なエピソード",
-  "数字で見る日本の驚きの事実",
-  "日本のお祭り・年中行事の由来",
-  "日本生まれの発明品の誕生秘話（インスタントラーメン、カラオケ、絵文字など）",
-  "日本と中国で同じ漢字なのに意味が違う言葉",
-  "日本の鉄道・駅の驚きの話",
-  "日本の家・住まい・マナーの不思議",
-  "日本の方言と県民性",
-  "日本のアニメ・ゲーム・キャラクター業界の裏話",
+  "the surprising stories behind famous brands and shops",
+  "why shops and supermarkets are laid out the way they are (the psychology of shopping)",
+  "customer service around the world: tipping, bowing, 'have a nice day'",
+  "the strange history of everyday things (receipts, price tags, shopping bags, credit cards)",
+  "office life around the world: meetings, emails, small talk",
+  "travel and airports: surprising facts",
+  "food from around the world and how it got its name",
+  "English words with surprising origins",
+  "numbers that will surprise you about money and shopping",
+  "famous inventions that happened by accident",
+  "what tourists in Japan find surprising",
+  "hotels, restaurants and the hospitality business behind the scenes",
+  "how English differs in the US, the UK and Australia",
+  "jobs that exist in other countries but not in Japan or China",
+  "the science of habits, sleep and learning",
 ];
 
-const SYSTEM = `あなたは日本語学習者向けラジオ番組「ゆるっと日本ラジオ」の放送作家です。聞き手は日本で働く中国人で、日本語レベルはJLPT N4〜N3。通勤中や休憩中にイヤホンで聞き、画面は見ません。
-目的は「本物のラジオみたいで、思わず最後まで聞きたくなる」こと。勉強っぽさより楽しさを優先してください。
+const SYSTEM = `You are the writer of "Easy Talk Radio", a radio show for English learners. ${LEARNER} She listens with earphones on her way to work or on a break, without looking at the screen.
+The goal: it should feel like a real radio show she wants to hear to the end. Fun comes before "study".
 
-パーソナリティ：
-- ハル（A、女性）：好奇心旺盛でリアクションが大きい。口ぐせは「え、ちょっと待って」「〜じゃないですか！」。ケンに敬語まじりで話す。
-- ケン（B、男性）：物知りだけど少しおとぼけ。もったいぶるのが好きで「実はね…」が口ぐせ。タメ口。
-- 二人は仲がよく、軽くいじり合う。ちゃんと笑う（「あはは」「ふふっ」をセリフで言う）。
+Hosts:
+- Amy (A, woman): curious, big reactions. Often says "Wait, what?" and "No way!".
+- Ben (B, man): knows a lot but is a bit goofy. Loves building suspense: "Okay, so here's the thing...".
+- They are good friends and tease each other a little. They laugh for real (say "haha" in the line).
 
-番組の流れ（タイトルコールは別に入るので書かない）：
-1. open（4〜6行）：今日の曜日や季節の話から入る雑談。ケンが本題のネタを少しだけにおわせて引っぱる。
-2. letter（6〜8行）：ハルが「お便りが来てます！ラジオネーム、通勤ハムスターさん」とお便りを読む。内容は指定されたもの（日本語で失敗した話）。二人で「あるある」と笑って、なぜそう聞こえるかと正しい言い方を短く教える。最後に「通勤ハムスターさん、次は〜で！」と励ます。
-3. main（14〜20行）：日本に関するひとつの意外な事実・冷知識。最初に「えっ、本当？」と思う問いを出し、すぐには答えを言わず、ヒントや脱線を挟んで、後半で答えを明かす。
-4. word（6〜8行）：まずハルが「今日の話、まとめると…」と言って、本題を3文で振り返る（story.summary の3文をそのまま、1文ずつ別のセリフに。リスナーが誰かにこの話をするとき、そのまま使える言い方で。ケンは短く相づちだけ）。次に「今日のひとこと」。hitokoto の一文を、ハルが紹介して、二人でそれぞれ1回ずつ言う。最後に「また来週〜」ではなく「それじゃ、また次回！」のように明るく締める。
+Show order (the title call is added separately, don't write it):
+1. open (4-6 lines): small talk about the day or the season. Ben teases the main topic a little.
+2. letter (6-8 lines): Amy says "We got a letter! It's from our listener, Busy Bee." and reads it. Its content is given below (a small mistake she made in English). The two laugh ("happens to everyone!"), briefly explain why it sounds odd, and give the right way. End with "Busy Bee, next time try: ...!" to cheer her on.
+3. main (14-20 lines): one surprising fact. Start with a question that makes you go "really?", don't answer at once, add hints and side stories, reveal the answer in the second half.
+4. word (6-8 lines): first Amy says "So, to sum up today's story..." and goes over the main story in 3 sentences (the 3 sentences of story.summary exactly, one per line, in words a listener can use as is to tell this story to someone. Ben only gives short reactions). Then the "phrase of the day": Amy introduces the hitokoto sentence and each host says it once. End brightly, e.g. "See you next time!".
 
-会話を生きたものにする：
-- 一人が長く説明し続けない。2〜3行ごとに相手が反応する（「へえ〜！」「マジで？」「いやいや」「え、なんで？」）。
-- セリフは前のセリフにかぶせない（gap は 0.15 以上）。短い反応はすぐ返し、驚き・オチの前はためる（gap を長く）。
-- back（相づち）は説明が長いセリフにだけ、全体で4〜6回。
-- 事実は確かなものだけ。諸説ある話は「諸説あるけど」と言う。数字や年号を作らない。
+Make the conversation alive:
+- Nobody explains for long. Every 2-3 lines the other reacts ("Really?", "No way!", "Come on!", "Wait, why?").
+- Lines don't overlap (gap 0.15 or more). Short reactions come back fast; pause before a surprise or a punchline (longer gap).
+- back (backchannels) only on lines that explain at length, 4-6 in all.
+- Only facts you are sure of. If accounts differ, say "some people say". Don't make up numbers or dates.
 
-日本語：
-- 語彙・文法はN3程度。難しい言葉が出たら、会話の中でもう一人が言い換える（「つまり〜ってこと？」）。
-- 1行は短く（40字以内）。話し言葉で自然に。縮約形（〜ちゃう、〜てる）はそのまま使ってよい。
-- 漢字は普通に使う（読み上げ用なので、ふりがなは不要）。
-- 全部そのまま読み上げるので、（笑）のようなト書き・記号・絵文字・「〜」は書かない。伸ばす音は「ー」で書く。
+English:
+- Vocabulary and grammar around ${LEVEL}. When a harder word comes up, the other host rephrases it in the talk ("So you mean...?").
+- Keep each line short (20 words at most). Natural spoken English; contractions are fine.
+- Everything is read out loud, so no stage directions like (laughs), no symbols, emoji or "...".
 
-最後に、この回の学習ノートも作る（聞き終わったあとの復習用）：
-- story：聞いたあと、リスナーがこの話を同僚や友だちに話す練習をする。そのための骨組みの言葉3つと、まとめ3文。
-- hitokoto：今日のひとこと。お便りの正しい言い方を優先する。
-- phrases（重点句）：会話に実際に出てきた表現から、職場や日常でそのまま使えるもの。「〜」で省略せず、そのまま言える短い文にする。
-- words：覚える価値のある単語。読みと中国語訳をつける。
-- grammar：会話で使われた文型と、その実際の文。`;
+Last, also write the study notes for this episode (for review after listening):
+- story: after listening she practises telling this story to a coworker or friend. 3 skeleton words and a 3-sentence summary.
+- hitokoto: the phrase of the day. Prefer the right way from the letter.
+- phrases: phrases actually used, that she can use as is at the shop or in daily life. Complete sentences, no "...".
+- words: words worth learning, with IPA and Chinese, TOEIC words first.
+- grammar: patterns used and the sentences they were used in.`;
 
-const WEEKDAY = ["日", "月", "火", "水", "木", "金", "土"];
+const WEEKDAY = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const MONTH = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 // One genre for a whole week (weeks start on Monday, Tokyo time), so the same words and ways of
 // saying things keep coming back from one episode to the next: Krashen's narrow listening.
@@ -156,27 +150,27 @@ function weekTopic(now: Date) {
   return TOPICS[week % TOPICS.length];
 }
 
-// wish: a listener's request (点播), in their own words, usually Chinese. letter: what the learner
-// got wrong lately, read out in お便り. recent: words taught in the last few episodes, a few of which
-// come back so they are met again.
-// news: this morning's NHK やさしいことばニュース article the learner heard; the hosts talk it over.
+// wish: a listener's request, in their own words, usually Chinese. letter: what the learner got wrong
+// lately, read out as the listener's letter. recent: words taught in the last few episodes, a few of
+// which come back so they are met again.
+// news: this morning's news article the learner heard; the hosts talk it over.
 export type RadioNews = { title: string; summary: string[]; words: string[] };
 
 function prompt(avoid: string[], wish?: string, letter?: Letter, recent: string[] = [], news?: RadioNews) {
   const now = new Date(Date.now() + 9 * 3600 * 1000);
   const topic = news
-    ? `今朝のNHKニュース「${news.title}」（内容：${news.summary.join("")}）。リスナーは今朝このニュースを聞いた。open でハルが「今朝のニュースで〜」と紹介し、main ではニュースの事実は変えず足さずに、ハルとケンが自分たちの生活や仕事に引きつけてゆるく話す。ニュースの語（${news.words.join("、")}）を会話の中で自然に何度か使う`
+    ? `This morning's news "${news.title}" (content: ${news.summary.join(" ")}). The listener heard this news this morning. In open, Amy brings it up ("So I heard on the news this morning..."); in main, without changing or adding to the facts, Amy and Ben chat about it casually, tying it to their own work and life. Use the news words (${news.words.join(", ")}) naturally several times`
     : wish
-    ? `リスナーからのリクエスト「${wish}」。このテーマで、日本で暮らす人に身近な話にする（open でハルがリクエストを紹介する）`
-    : `今週のテーマ「${weekTopic(now)}」の中から、ひとつの話（今週は毎回このテーマなので、open で「今週は〜ウィーク」と軽く触れてよい）`;
+    ? `A listener's request: "${wish}". Make it close to the life of someone working in a shop in Japan (Amy introduces the request in open)`
+    : `One story from this week's theme "${weekTopic(now)}" (every episode this week has this theme, so in open they may mention "It's ... week!")`;
   const mail = letter
-    ? `お便りの中身：通勤ハムスターさん（日本で働く中国人）は${letter.where ? `「${letter.where}」で、` : ""}「${letter.said}」と言ってしまった。正しくは「${letter.better}」。これを本人の失敗談として、少し面白く読む（場面がなければ自然な場面を作る）。`
-    : "お便りの中身：日本で働く外国人がよくやる、日本語のちょっとした言い間違い・聞き間違いの失敗談をひとつ作る（コンビニ、職場、電車など）。";
-  return `今日：${now.getUTCMonth() + 1}月${now.getUTCDate()}日（${WEEKDAY[now.getUTCDay()]}曜日）、東京
-今回のジャンル：${topic}
+    ? `The letter: Busy Bee (a Chinese woman working in a shop in Japan) ${letter.where ? `was at "${letter.where}" and ` : ""}said "${letter.said}". The right way is "${letter.better}". Read it as her own little mistake, a bit funny (make up a natural situation if none is given).`
+    : "The letter: make up one small, funny English mistake a shop worker made with a foreign customer (at the register, giving directions, on the phone).";
+  return `Today: ${WEEKDAY[now.getUTCDay()]}, ${MONTH[now.getUTCMonth()]} ${now.getUTCDate()}
+This episode's genre: ${topic}
 ${mail}
-${avoid.length ? `最近扱ったテーマ（重ならないように）：${avoid.join("、")}` : ""}
-${recent.length ? `最近の回で覚えた単語：${recent.join("、")}\nこのうち2〜3個を、会話の中で自然にもう一度使う（意味は説明し直さなくてよい。words には入れない）。` : ""}`;
+${avoid.length ? `Recent topics (don't repeat): ${avoid.join(" / ")}` : ""}
+${recent.length ? `Words learned in recent episodes: ${recent.join(", ")}\nUse 2-3 of them again naturally in the conversation (no need to explain them again; don't put them in words).` : ""}`;
 }
 
 // Same model family as the voices: Gemini 3.8 Flash, global location.
@@ -240,19 +234,6 @@ async function withGemini(avoid: string[], wish: string | undefined, letter: Let
   }
 }
 
-// The readings in the notes, checked by two other models before the episode goes out.
-export async function withCheckedReadings<T extends Radio>(r: T): Promise<T> {
-  const keys = r.story?.keys ?? [];
-  const words = r.words ?? [];
-  const kana = await checkReadings([...keys, ...words]);
-  return {
-    ...r,
-    ...(r.story ? { story: { ...r.story, keys: keys.map((k, i) => ({ ...k, kana: kana[i] })) } } : {}),
-    words: words.map((w, i) => ({ ...w, kana: kana[keys.length + i] })),
-    readings: 1,
-  };
-}
-
 export type Making = { stage: "write"; lines: number } | { stage: "retry" } | { stage: "claude" };
 
 // Gemini, and once more if it stalls or fails; then Claude, which takes longer and shows no lines.
@@ -269,7 +250,7 @@ export async function makeRadio(
       try {
         if (attempt) onProgress({ stage: "retry" });
         const r = await withGemini(avoid, wish, letter, recent, (lines) => onProgress({ stage: "write", lines }), news);
-        return { ...(await withCheckedReadings(r)), letter, by: "gemini" };
+        return { ...r, letter, by: "gemini" };
       } catch (e) {
         console.warn("radio: Gemini failed", e);
       }
@@ -277,5 +258,5 @@ export async function makeRadio(
   }
   onProgress({ stage: "claude" });
   const r = await makeRadioWithClaude(RadioSchema, SYSTEM, prompt(avoid, wish, letter, recent, news));
-  return { ...(await withCheckedReadings(r)), letter, by: "claude" };
+  return { ...r, letter, by: "claude" };
 }

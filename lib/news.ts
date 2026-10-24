@@ -3,11 +3,11 @@ import { BlobNotFoundError, del, get, put } from "@vercel/blob";
 import { newsNotes } from "@/lib/claude";
 import { addDays } from "@/lib/progress-model";
 import { NEWS_DAYS, newsVoice, type NewsArticle } from "@/lib/news-model";
-import { nhkArticle, nhkImage, nhkList, nhkSession, plain, spoken, spokenAll, withReadings } from "@/lib/nhk";
+import { newsList, storyImage, storyText } from "@/lib/bbc";
 
-// Every morning (cron, 8:30 JST) the newest NHKやさしいことばニュース articles are fetched, given our
-// notes and kept in one private Blob file the phone reads through /api/news. Their sentences are then
-// asked for once from our own /api/tts, so the CDN holds the voice before the train.
+// Twice a day (cron, 21:00 and 8:30 JST) the newest BBC stories are fetched, written as short articles for
+// the learner with our notes, and kept in one private Blob file the phone reads through /api/news. Their
+// sentences are then asked for once from our own /api/tts, so the CDN holds the voice before the train.
 
 const PATH = "news/articles.json";
 export type NewsFile = { made: number; items: NewsArticle[] };
@@ -20,8 +20,7 @@ export async function readNews(): Promise<NewsFile> {
   return res?.statusCode === 200 ? ((await new Response(res.stream).json()) as NewsFile) : { made: 0, items: [] };
 }
 
-// NHK's picture for each article, kept as long as the article (it needs NHK's session, so the phone can't
-// get it from NHK itself).
+// The story's picture, kept as long as the article.
 const imgPath = (id: string) => `news/img/${id}.jpg`;
 
 export async function readNewsImage(id: string): Promise<ArrayBuffer | null> {
@@ -33,13 +32,12 @@ async function writeNews(f: NewsFile) {
   await put(PATH, JSON.stringify(f), { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: "application/json" });
 }
 
-// The articles of the last few days NHK put out that aren't kept yet, made one by one (a failed one is
+// The articles of the last few days the BBC put out that aren't kept yet, made one by one (a failed one is
 // tried again next time). Old ones are dropped. redo: make the kept ones of those days again too (after
 // the notes or the voice text changed).
 export async function refreshNews(today: string, opts: { days?: number; redo?: boolean } = {}): Promise<{ added: string[]; failed: string[]; file: NewsFile }> {
   const read = await readNews();
-  const s = await nhkSession();
-  const list = await nhkList(s);
+  const list = await newsList();
   const from = addDays(today, -(opts.days ?? 3));
   const file = opts.redo ? { ...read, items: read.items.filter((a) => !list.some((n) => n.id === a.id && n.day >= from)) } : read;
   const have = new Set(file.items.map((a) => a.id));
@@ -49,24 +47,24 @@ export async function refreshNews(today: string, opts: { days?: number; redo?: b
   const made = await Promise.all(
     todo.map(async (n) => {
       try {
-        const a = await nhkArticle(s, n.id);
-        const flat = a.paras.flatMap((p) => p.map((segs, i) => ({ segs, p: i === 0 })));
-        const notes = await newsNotes(withReadings(a.title), flat.map((x) => withReadings(x.segs)));
-        const zh = new Map(notes.zh.map((z) => [Math.round(z.n), z.zh]));
+        const notes = await newsNotes(n.title, await storyText(n));
+        const sentences = notes.sentences.map((x) => x.en.trim()).filter(Boolean);
+        if (sentences.length < 3) throw new Error(`news ${n.id}: only ${sentences.length} sentences`);
         const article: NewsArticle = {
           id: n.id,
           day: n.day,
           at: n.at,
           rank: n.rank,
-          title: a.title,
-          title_ja: plain(a.title),
-          title_say: spokenAll(a.title),
+          title: [{ t: notes.title }],
+          title_ja: notes.title,
+          title_say: notes.title,
           title_zh: notes.title_zh,
-          sentences: flat.map((x, i) => ({ segs: x.segs, ja: plain(x.segs), say: spoken(x.segs), zh: zh.get(i + 1) ?? "", ...(x.p && i > 0 ? { p: true as const } : {}) })),
+          // A new paragraph after the opening sentence, as a news reader pauses after the lead.
+          sentences: notes.sentences.filter((x) => x.en.trim()).map((x, i) => ({ segs: [{ t: x.en.trim() }], ja: x.en.trim(), say: x.en.trim(), zh: x.zh, ...(i === 1 ? { p: true as const } : {}) })),
           words: notes.words,
           keys: notes.keys,
           summary: notes.summary,
-          url: a.url,
+          url: n.link,
           ...(read.items.find((o) => o.id === n.id)?.image ? { image: true as const } : {}),
         };
         added.push(n.id);
@@ -95,7 +93,7 @@ export async function refreshNews(today: string, opts: { days?: number; redo?: b
   await Promise.all(
     items.map(async (a, k) => {
       const u = !a.image && uri.get(a.id);
-      const body = u ? await nhkImage(s, u) : null;
+      const body = u ? await storyImage(u) : null;
       if (!body) return;
       await put(imgPath(a.id), Buffer.from(body), { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: "image/jpeg" });
       items[k] = { ...a, image: true };
@@ -130,6 +128,5 @@ export async function warmVoices(base: string, items: NewsArticle[]) {
 
 // Must match ttsUrl in lib/client/player.ts (news is never in the voice library).
 function ttsAddress(base: string, text: string, voice: string) {
-  const kanjiOnly = !/[\u3040-\u30f5\u30f7-\u30fa\u30fd-\u30ff]/.test(text);
-  return `${base}/api/tts?${new URLSearchParams({ text, voice, v: "2", ...(kanjiOnly ? { yomi: "3" } : {}) })}`;
+  return `${base}/api/tts?${new URLSearchParams({ text, voice, v: "2" })}`;
 }

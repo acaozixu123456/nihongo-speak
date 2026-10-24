@@ -90,7 +90,7 @@ export default function RouteBar() {
   return (
     <>
       <div className="route-bar">
-        <button className="route-x" onClick={() => router.push("/")} aria-label="閉じる">
+        <button className="route-x" onClick={() => router.push("/")} aria-label="关闭">
           ×
         </button>
         <div className="route-segs">
@@ -107,7 +107,7 @@ export default function RouteBar() {
       {pending && finished(r) && (
         <div className="route-end">
           <button className="btn primary" onClick={() => router.push("/")}>
-            今日はここまで
+            今天就到这里
           </button>
         </div>
       )}
@@ -116,7 +116,7 @@ export default function RouteBar() {
           <span className="kicker">下一个</span>
           <span className="display">{up.ja}</span>
           <span className="route-ring">{waiting ? <span className="spin" /> : count}</span>
-          <span className="route-meta">{waiting && up.href.startsWith(NEW_EP) ? (making ? makingText(making) : "新しい回を作っています") : up.meta}</span>
+          <span className="route-meta">{waiting && up.href.startsWith(NEW_EP) ? (making ? makingText(making) : "正在做新的一期") : up.meta}</span>
         </button>
       )}
     </>

@@ -46,7 +46,7 @@ export type { AskedItem, Skill, Card, CustomScenario, DiaryEntry, DrillItem, Lea
 // The phone's localStorage is the working copy; it is synced to the server
 // (when storage is set up) so nothing is lost if Safari data is cleared.
 
-const KEY = "nihongo-speak:progress:v1";
+const KEY = "english-speak:progress:v1";
 const INTERVALS = [1, 3, 7, 14, 30, 60];
 export const GOALS = [30, 50, 80];
 export const MAX_FREEZES = 2;
@@ -113,7 +113,7 @@ export function useProgress(): Progress {
 export type TeacherGood = { before: string; after: string; mark: string; zh: string };
 export type TeacherFix = { tag: string; said: string; better: string; mark: string; zh: string };
 export type Teacher = { day: string; made: number; order: string[]; hide: string[]; why_zh: string; note_zh: string; letter_ja?: string; good?: TeacherGood | null; fix?: TeacherFix | null; news?: string };
-const TEACHER_KEY = "nihongo-speak:teacher";
+const TEACHER_KEY = "english-speak:teacher";
 let teacher: Teacher | null | undefined;
 
 // The teacher's one thing to fix, while its weak point is still there to drill.
@@ -363,7 +363,7 @@ export type QuickItem = {
   where: string; // the situation the line comes from, e.g. "☀️ 早会汇报进度 · 佐藤"
 };
 
-const DIARY_VOICE = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-NanamiNeural";
+const DIARY_VOICE = "en-US-Emma:DragonHDLatestNeural|en-US-EmmaNeural";
 
 // Short lines only: the drill is about getting a sentence out in a few seconds.
 const QUICK_MAX_CHARS = 32;
@@ -557,7 +557,7 @@ export function weakItems(p: Progress, n: number): SkillItem[] {
       ja: w.pattern ?? w.tag,
       zh: w.zh,
       kind: "weak",
-      note: w.examples[0] ? `言った：${w.examples[0].said} → 正しくは：${w.examples[0].better}`.slice(0, 180) : undefined,
+      note: w.examples[0] ? `You said: ${w.examples[0].said} → Better: ${w.examples[0].better}`.slice(0, 180) : undefined,
       ep: `${WEAK_EP}${w.tag}`,
     }));
 }
@@ -606,7 +606,7 @@ export function drillRound(w: WeakPoint): QuickItem[] {
   );
 }
 
-const DRILL_VOICE = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-MayuNeural";
+const DRILL_VOICE = "en-US-Emma:DragonHDLatestNeural|en-US-EmmaNeural";
 
 // How many sentences have been answered fast three times in a row.
 export const quickMastered = (p: Progress) => Object.values(p.quick).filter((s) => s.fast >= 3).length;
@@ -782,7 +782,7 @@ export function reviewCard(id: string, remembered: boolean) {
 // ---- 趣味电台 episodes ----
 
 // The two hosts: Aoi and Keita map to bright Gemini voices and fall back to Azure's free ones.
-export const RADIO_VOICE = { A: "ja-JP-AoiNeural", B: "ja-JP-KeitaNeural" } as const;
+export const RADIO_VOICE = { A: "en-US-JennyNeural", B: "en-US-DavisNeural" } as const;
 
 // Keep a new episode with its notes, and put its key sentences into review from tomorrow (today
 // they are practised in the episode's own 練習).
@@ -819,7 +819,7 @@ const titling = new Set<string>();
 export function ensureTitleJa(ep: RadioEpisode) {
   if (ep.title_ja || titling.has(ep.id)) return;
   titling.add(ep.id);
-  const opening = ep.lines.slice(0, 6).map((l) => l.ja).join("").slice(0, 400);
+  const opening = ep.lines.slice(0, 6).map((l) => l.ja).join(" ").slice(0, 400);
   fetch("/api/radio-title", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ zh: ep.title_zh, opening }) })
     .then((r) => (r.ok ? r.json() : null))
     .then((d: { ja?: string } | null) => {
@@ -831,40 +831,7 @@ export function ensureTitleJa(ep: RadioEpisode) {
     .finally(() => titling.delete(ep.id));
 }
 
-// Episodes saved before their readings were checked (one showed 生乾き as なまどらき) get them
-// checked once, on first view; a reading nobody agrees on is dropped rather than shown.
-const reading = new Set<string>();
-export function ensureReadings(ep: RadioEpisode) {
-  if (ep.readings || reading.has(ep.id)) return;
-  const keys = ep.story?.keys ?? [];
-  const words = [...keys, ...(ep.words ?? [])].slice(0, 12).map((w) => ({ ja: w.ja, kana: w.kana ?? "" }));
-  if (!words.length) return;
-  reading.add(ep.id);
-  fetch("/api/readings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ words }) })
-    .then((r) => (r.ok ? r.json() : null))
-    .then((d: { kana?: string[] } | null) => {
-      if (d?.kana?.length !== words.length) return;
-      const kana = d.kana;
-      const p = read();
-      write({
-        ...p,
-        episodes: p.episodes.map((e) =>
-          e.id !== ep.id
-            ? e
-            : {
-                ...e,
-                ...(e.story ? { story: { ...e.story, keys: e.story.keys.map((k, i) => ({ ...k, kana: kana[i] ?? k.kana })) } } : {}),
-                words: (e.words ?? []).map((w, i) => ({ ...w, kana: kana[keys.length + i] ?? w.kana })),
-                readings: 1,
-              },
-        ),
-      });
-    })
-    .catch(() => {})
-    .finally(() => reading.delete(ep.id));
-}
-
-// やさしく for an episode saved before scripts came with easy versions of the hard lines: asked for
+// 简单版 for an episode saved before scripts came with easy versions of the hard lines: asked for
 // once, kept on its lines ("" where a line is easy enough). Resolves to whether it worked.
 const easing = new Map<string, Promise<boolean>>();
 export const hasEasy = (ep: RadioEpisode) => ep.lines.some((l) => l.easy !== undefined);

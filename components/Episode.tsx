@@ -7,7 +7,7 @@ import { makingText, newsRadio, radioClips, useRadioMaking, type Clip, type Clip
 import { newsItems } from "@/lib/client/news";
 import { mixRadio, type Mixed } from "@/lib/client/radio-mix";
 import { play, preload, SILENCE, ttsUrl, unlock } from "@/lib/client/player";
-import { easyLine, ensureEasy, ensureReadings, ensureTitleJa, findEpisode, hasEasy, markHeard, RADIO_VOICE, useProgress } from "@/lib/client/progress";
+import { easyLine, ensureEasy, ensureTitleJa, findEpisode, hasEasy, markHeard, RADIO_VOICE, useProgress } from "@/lib/client/progress";
 import { setAudioSession } from "@/lib/client/recorder";
 import { useHydrated } from "@/lib/client/hydrated";
 import Earworm from "./Earworm";
@@ -23,12 +23,12 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "words", label: "单词" },
   { key: "grammar", label: "语法" },
 ];
-const HOST_NAME = { A: "ハル", B: "ケン" } as const;
-const PART_NAME: Record<RadioPart, string> = { open: "開幕", letter: "お便り", main: "本題", word: "ひとこと", song: "歌" };
+const HOST_NAME = { A: "Amy", B: "Ben" } as const;
+const PART_NAME: Record<RadioPart, string> = { open: "开场", letter: "来信", main: "正题", word: "一句话", song: "歌" };
 
 type Phase = "idle" | "loading" | "playing" | "paused";
-const ZH_KEY = "nihongo-speak:ep-zh";
-const RATE_KEY = "nihongo-speak:ep-rate";
+const ZH_KEY = "english-speak:ep-zh";
+const RATE_KEY = "english-speak:ep-rate";
 // Slower speeds for when the hosts run too fast to follow.
 const RATES = [1, 0.85, 0.7];
 
@@ -65,7 +65,7 @@ export function NewEpisode() {
     <main className="page">
       <Link href="/" className="back">← 听</Link>
       <p className="muted game-wait">
-        <span className="spin" /> {making ? makingText(making) : "新しい回を作っています"}
+        <span className="spin" /> {making ? makingText(making) : "正在做新的一期"}
       </p>
     </main>
   );
@@ -80,7 +80,6 @@ export default function Episode({ id }: { id: string }) {
   useEffect(() => {
     if (!ep) return;
     ensureTitleJa(ep);
-    ensureReadings(ep);
     if (!hasEasy(ep) && !easyAsked.has(ep.id)) {
       easyAsked.add(ep.id);
       ensureEasy(ep);
@@ -98,7 +97,7 @@ export default function Episode({ id }: { id: string }) {
   const [tab, setTab] = useState<Tab>("script");
   const [showZh, setShowZhState] = useState(false);
   const [rate, setRateState] = useState(1);
-  // やさしく: lines (by index in the script) long-pressed and shown in easy Japanese, the ones being
+  // やさしく: lines (by index in the script) long-pressed and shown in easy English, the ones being
   // made, and a short note when a line is easy enough already or couldn't be made.
   const [flipped, setFlipped] = useState<Set<number>>(new Set());
   const [making, setMaking] = useState<Set<number>>(new Set());
@@ -143,7 +142,7 @@ export default function Episode({ id }: { id: string }) {
     notes.current?.querySelector<HTMLElement>(".sline.now")?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [speaking, open]);
 
-  // 长按一句 → やさしく (from the 问 AI bar): that line in easy Japanese, made now if it has none yet.
+  // 长按一句 → やさしく (from the 问 AI bar): that line in easy English, made now if it has none yet.
   const lineEp = ep?.id;
   useEffect(() => {
     if (!lineEp) return;
@@ -393,6 +392,9 @@ export default function Episode({ id }: { id: string }) {
   const nowSec = pos * total;
   const playingNow = phase === "playing";
   const title = ep.title_ja ?? ep.title_zh;
+  // Lines said back right (1) or not (0) on /ep/[id]/say.
+  const said = p.news?.[`radio:${ep.id}`]?.said ?? {};
+  const saidN = ep.lines.filter((_, i) => said[i] === 1).length;
 
   // Once playing, the show is a chat: every line said so far, the one being said lit up.
   const started = phase !== "idle" || !!prep.current;
@@ -407,7 +409,7 @@ export default function Episode({ id }: { id: string }) {
       {!started ? (
         <>
           <div className="kicker">
-            {k ? "ゆるっと日本ラジオ" : "趣味电台"} · {shortDate(ep.date)}
+            {k ? "Easy Talk Radio" : "趣味电台"} · {shortDate(ep.date)}
           </div>
           <div className={`radio-cover ${cover ? "drawn" : ""}`} style={cover ? { backgroundImage: `url(${cover})` } : undefined}>
             {!cover && <h1 className="radio-title">{title}</h1>}
@@ -416,7 +418,7 @@ export default function Episode({ id }: { id: string }) {
           {ep.title_ja && <p className="radio-title-zh">{ep.title_zh}</p>}
           <div className="radio-hook">{ep.hook_zh}</div>
           <button className="radio-start" onClick={toggle}>
-            ▶ 聞く
+            ▶ 听
           </button>
         </>
       ) : (
@@ -441,13 +443,13 @@ export default function Episode({ id }: { id: string }) {
           )}
           <div className="chat" ref={chat}>
             {shown.map((c, i) => {
-              const w = c.line ? (c.line.voice === RADIO_VOICE.A ? "A" : "B") : c.sub === "ハル" ? "A" : c.sub === "ケン" ? "B" : null;
-              if (!w) return <div key={i} className="chat-chip">{c.part === "song" ? "♪ 洗脳歌" : c.show}</div>;
+              const w = c.line ? (c.line.voice === RADIO_VOICE.A ? "A" : "B") : c.sub === HOST_NAME.A ? "A" : c.sub === HOST_NAME.B ? "B" : null;
+              if (!w) return <div key={i} className="chat-chip">{c.part === "song" ? "♪ 洗脑歌" : c.show}</div>;
               const li = lineAt.get(c.show);
               const easy = li === undefined ? "" : (ep.lines[li].easy ?? "");
               const asEasy = !!easy && flipped.has(li!);
               const isNow = i === at;
-              const nw = next && i === at && (next.line ? (next.line.voice === RADIO_VOICE.A ? "A" : "B") : next.sub === "ハル" ? "A" : next.sub === "ケン" ? "B" : null);
+              const nw = next && i === at && (next.line ? (next.line.voice === RADIO_VOICE.A ? "A" : "B") : next.sub === HOST_NAME.A ? "A" : next.sub === HOST_NAME.B ? "B" : null);
               const flipIt = (e: React.MouseEvent) => {
                 e.stopPropagation();
                 flip(li!);
@@ -461,12 +463,12 @@ export default function Episode({ id }: { id: string }) {
                     data-easy-line={li === undefined ? undefined : c.show}
                     onClick={() => seekClip(i)}
                   >
-                    <span className={`av av-${w}`}>{w === "A" ? "春" : "健"}</span>
+                    <span className={`av av-${w}`}>{HOST_NAME[w][0]}</span>
                     <div className={`bub ${asEasy ? "easyb" : ""}`}>
                       {asEasy ? (
                         <>
-                          <button className="easy-lab" onClick={flipIt} aria-label="原文に戻す">
-                            やさしく ×
+                          <button className="easy-lab" onClick={flipIt} aria-label="回到原文">
+                            简单版 ×
                           </button>
                           <span className="easy-ja">{easy}</span>
                           <span className="orig">{c.show}</span>
@@ -478,7 +480,7 @@ export default function Episode({ id }: { id: string }) {
                       )}
                       {li !== undefined && making.has(li) && (
                         <span className="easy-making">
-                          <span className="spin" /> やさしく…
+                          <span className="spin" /> 简单版…
                         </span>
                       )}
                       {li !== undefined && easyNote?.i === li && <span className="easy-making">{easyNote.text}</span>}
@@ -493,7 +495,7 @@ export default function Episode({ id }: { id: string }) {
           </div>
           {done && k && (
             <div className="hitokoto">
-              <div className="hk-k">今日のひとこと</div>
+              <div className="hk-k">今天的一句话</div>
               <div className="hk-when">{k.when_ja}</div>
               <button className="hk-ja" onClick={() => say(k.ja)}>
                 {k.ja}
@@ -538,7 +540,7 @@ export default function Episode({ id }: { id: string }) {
             )}
             <div className="radio-ctrl">
               <button className="player-tool" onClick={() => jump(-1)} disabled={!prep.current} aria-label="再听这一句">
-                戻る
+                上一句
               </button>
               <button className="radio-play" onClick={toggle} aria-label={playingNow ? "暂停" : "播放"}>
                 {phase === "loading" ? <span className="spin" /> : playingNow ? "❚❚" : "▶"}
@@ -550,7 +552,7 @@ export default function Episode({ id }: { id: string }) {
           </div>
           {away && at >= 0 && (
             <button className="now-pill" onClick={backToNow}>
-              ↓ 今のセリフ
+              ↓ 现在这句
             </button>
           )}
         </>
@@ -582,9 +584,15 @@ export default function Episode({ id }: { id: string }) {
 
           <div className="radio-rows">
             <button className="radio-row" onClick={() => setOpen(!open)}>
-              <span>スクリプト</span>
+              <span>文稿</span>
               <em>{open ? "收起" : "›"}</em>
             </button>
+            <Link href={`/ep/${ep.id}/say`} className="radio-row">
+              <span>
+                逐句练说{saidN > 0 ? <small> · 已说对 {saidN} / {ep.lines.length} 句</small> : <small> · 每一句都能练，AI 判对错</small>}
+              </span>
+              <em>›</em>
+            </Link>
             <Link href={`/ep/${ep.id}/game`} className="radio-row">
               <span>
                 练一练{ep.asked?.length ? <small> · 含你问过 AI 的 {ep.asked.length} 处</small> : null}
@@ -632,6 +640,14 @@ export default function Episode({ id }: { id: string }) {
                       {showZh && <div className="zh">{l.zh}</div>}
                       <Mark st={stateOf(l.ja)} live={!!loading} />
                     </div>
+                    <Link
+                      href={`/ep/${ep.id}/say?i=${i}`}
+                      className={`nw-say${said[i] === 1 ? " g" : said[i] === 0 ? " r" : ""}`}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label="练说这一句"
+                    >
+                      说
+                    </Link>
                   </div>
                 ))}
               </div>
@@ -785,7 +801,7 @@ function Typing({ audio, who, from, to }: { audio: React.RefObject<HTMLAudioElem
   if (!(t > from + 0.1 && t < to)) return null;
   return (
     <div className={`msg ${who === "A" ? "l" : "r"} typing`}>
-      <span className={`av av-${who}`}>{who === "A" ? "春" : "健"}</span>
+      <span className={`av av-${who}`}>{HOST_NAME[who][0]}</span>
       <div className="bub">
         <i />
         <i />

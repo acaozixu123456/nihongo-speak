@@ -10,7 +10,7 @@ import { setAudioSession } from "@/lib/client/recorder";
 import { stepDone } from "@/lib/client/route";
 
 const RATES = [0.9, 1, 1.1];
-const RATE_KEY = "nihongo-speak:moyu-rate";
+const RATE_KEY = "english-speak:moyu-rate";
 
 type Phase = "idle" | "loading" | "playing" | "paused";
 

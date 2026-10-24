@@ -3,7 +3,7 @@
 export const ZH_VOICE = "zh-CN-XiaoxiaoNeural";
 
 export const NARRATION = {
-  quick: "心里瞬间说。听到中文，先在心里说日语。",
+  quick: "心里瞬间说。听到中文，先在心里说英语。",
   review: "复习今天到期的收藏。",
   lines: "再一句一句听。",
   said: "你当时说的是：",

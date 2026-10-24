@@ -25,7 +25,7 @@ const DOING: Record<string, string> = {
   draw: "正在给每句歌词画插图",
 };
 
-const CACHE = "nihongo-speak-earworm";
+const CACHE = "english-speak-earworm";
 const file = (id: string, f: string) => `/api/earworm/${id}/${f}`;
 
 // Fetched once and kept, so the song plays again without the network.
@@ -229,7 +229,7 @@ export default function Earworm({ ep, kicker = "趣味电台 · 洗脑歌", onEn
         <span className="ew-text">
           <span className="ew-title">洗脑歌</span>
           <span className="muted">
-            {[...new Set(ready.lines!.map((l) => l.kw))].slice(0, 5).join("・")} 唱给你听
+            {[...new Set(ready.lines!.map((l) => l.kw))].slice(0, 5).join(" · ")} 唱给你听
           </span>
         </span>
       </button>

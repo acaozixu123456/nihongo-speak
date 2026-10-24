@@ -6,8 +6,8 @@ import { useRef, useState } from "react";
 import { addCustom, type CustomScenario } from "@/lib/client/progress";
 
 const IDEAS = {
-  work: ["会议上想说「我有不同意见」但没说出口", "课长问进度，我只会说「大丈夫です」", "客户打电话来，没听懂就挂了", "想请前辈帮忙看代码，不知道怎么开口"],
-  life: ["便利店店员问我要不要袋子，我愣住了", "去区役所办手续，听不懂要填什么", "理发店说不清想要的发型", "快递来了说不在家，不会改时间"],
+  work: ["外国客人问有没有大一号，我只会说「Wait」", "客人想退货，我不知道怎么解释规定", "客人问免税怎么办，我答不上来", "店长让我用英语给新同事讲注意事项"],
+  life: ["在国外餐厅点菜，服务员问我怎么做牛排", "酒店前台说房间还没准备好", "外国朋友约我周末出去，我不知道怎么回", "在机场转机，不知道去哪个登机口"],
 };
 
 // Shrinks a photo to at most 1280px on the long side, as JPEG, so it uploads quickly.
@@ -99,11 +99,11 @@ export default function NewScenario(props: { topic?: string; category?: "work" |
           <div className="photo-pick">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={photo} alt="照片" />
-            <button className="small" onClick={() => setPhoto(null)}>外す</button>
+            <button className="small" onClick={() => setPhoto(null)}>去掉</button>
           </div>
         ) : (
           <button style={{ width: "100%", marginTop: 10 }} onClick={() => file.current?.click()}>
-            写真を選ぶ
+            选照片
           </button>
         )}
         <div className="suggest">
@@ -114,12 +114,12 @@ export default function NewScenario(props: { topic?: string; category?: "work" |
           ))}
         </div>
         <button className="primary next-cta" onClick={generate} disabled={(!topic.trim() && !photo) || busy}>
-          {busy ? "AI 正在还原现场，大约半分钟…" : "やり直す"}
+          {busy ? "AI 正在还原现场，大约半分钟…" : "重来"}
         </button>
         {error && <p className="error">{error}</p>}
       </div>
       <p className="small-text">
-        AI 会写出这个场合的对话（包括你当时没说出来的那句），配上读音、中文和配音，然后直接进入跟读和对话。场景会留在「场景 · 我的」里。
+        AI 会写出这个场合的对话（包括你当时没说出来的那句），配上中文和配音，然后直接进入跟读和对话。场景会留在「场景 · 我的」里。
       </p>
     </main>
   );

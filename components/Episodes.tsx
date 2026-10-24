@@ -69,7 +69,7 @@ export default function Episodes() {
         ) : null}
         {wishing ? null : (
           <button className="entry" onClick={() => setWishing(true)}>
-            <span className="entry-text ja-serif">リクエスト</span>
+            <span className="entry-text ja-serif">点播</span>
             <span className="chev" aria-hidden>›</span>
           </button>
         )}

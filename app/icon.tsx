@@ -13,13 +13,13 @@ export default function Icon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#e8452c",
+          background: "#2c6be8",
           color: "#fff",
           fontSize: 300,
           fontWeight: 700,
         }}
       >
-        話
+        E
       </div>
     ),
     size,

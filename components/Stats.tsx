@@ -55,11 +55,11 @@ export default function Stats() {
         <div className="me-nums">
           <span>
             <b className="accent">{hydrated ? streak(p) : "–"}</b>
-            <small>日連続</small>
+            <small>天连续</small>
           </span>
           <span>
             <b>{hydrated ? all.said : "–"}</b>
-            <small>話した文</small>
+            <small>说过的句子</small>
           </span>
         </div>
         <div className="me-days" aria-hidden>
@@ -79,11 +79,11 @@ export default function Stats() {
       <div className="card big3">
         <div>
           <b>{Math.round(all.speakSec / 60)}<small>分</small></b>
-          <span>話した時間</span>
+          <span>开口时间</span>
         </div>
         <div>
           <b>{all.said}</b>
-          <span>話した文</span>
+          <span>说过的句子</span>
         </div>
         <div>
           <b>{(p.retells ?? []).length}</b>
@@ -155,7 +155,7 @@ export default function Stats() {
             value: w.quickMs === null ? null : Math.round(w.quickMs / 100) / 10,
           }))}
         />
-        <div className="small-text">看到中文到开始说日语用了几秒。往下走，说明开口越来越快了。</div>
+        <div className="small-text">看到中文到开始说英语用了几秒。往下走，说明开口越来越快了。</div>
       </div>
 
       <h2>开口时长（每周分钟）</h2>
@@ -167,7 +167,7 @@ export default function Stats() {
         />
       </div>
 
-      <h2>三回話す：第一遍每分钟能说多少字</h2>
+      <h2>讲三遍：第一遍每分钟能说多少个词</h2>
       <div className="card">
         <Line
           unit="字/分"

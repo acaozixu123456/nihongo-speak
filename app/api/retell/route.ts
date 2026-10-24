@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { retellEnd, retellFix, retellKana, retellKeys, retellUptake } from "@/lib/claude";
+import { retellEnd, retellFix, retellKeys, retellUptake } from "@/lib/claude";
 import { hearRuns } from "@/lib/gemini-hear";
 
 export const maxDuration = 60;
@@ -9,14 +9,12 @@ type Body =
   | { kind: "fix"; topic: string; said: string; known?: string[]; carry?: { focus_zh: string; better: string }; stall?: { before: string; after: string; secs: number } }
   | { kind: "uptake"; natural: string[]; said: string }
   | { kind: "end"; topic: string; first: string; last: string; focus?: string }
-  | { kind: "kana"; texts: string[] }
   | { kind: "keys"; topic: string; keys: { ja: string; kana?: string; runs?: number }[]; pool?: { ja: string; kana?: string }[]; said: string[] };
 
 const text = (s: unknown, n: number): s is string => typeof s === "string" && s.trim().length > 0 && s.length <= n;
 
-// 三回話す: each telling written down word for word (with the listener's reaction), the one point
-// to fix after the first telling, the wrap-up after the third, the next day's check of what stuck,
-// and (when the recording could only go to Azure) the readings that speed is counted from.
+// 讲三遍: each telling written down word for word (with the listener's reaction), the one point
+// to fix after the first telling, the wrap-up after the third, and the next day's check of what stuck.
 export async function POST(request: Request) {
   const b = (await request.json()) as Body;
   if (b.kind === "hear") {
@@ -25,7 +23,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "录音不对" }, { status: 400 });
     }
     try {
-      const avoid = Array.isArray(b.avoid) ? b.avoid.filter((t) => text(t, 40)).slice(0, 30) : [];
+      const avoid = Array.isArray(b.avoid) ? b.avoid.filter((t) => text(t, 80)).slice(0, 30) : [];
       return NextResponse.json(await hearRuns({ clips, listener: String(b.listener ?? ""), topic: String(b.topic ?? "").slice(0, 200), avoid }));
     } catch (e) {
       console.error(e);
@@ -41,16 +39,6 @@ export async function POST(request: Request) {
     } catch (e) {
       console.error(e);
       return NextResponse.json({ used: [] });
-    }
-  }
-  if (b.kind === "kana") {
-    const texts = Array.isArray(b.texts) ? b.texts.filter((t) => text(t, 3000)).slice(0, 4) : [];
-    if (!texts.length) return NextResponse.json({ error: "没有内容" }, { status: 400 });
-    try {
-      return NextResponse.json({ kana: await retellKana(texts) });
-    } catch (e) {
-      console.error(e);
-      return NextResponse.json({ error: e instanceof Error ? e.message : "AI 出错了" }, { status: 502 });
     }
   }
   // An episode topic is its title plus the start of its main corner (up to ~620 characters, see Retell.tsx epTopic).
@@ -70,7 +58,7 @@ export async function POST(request: Request) {
     if (b.kind === "keys") {
       const words = (x: unknown, n: number) =>
         (Array.isArray(x) ? x : [])
-          .filter((k): k is { ja: string; kana?: string } => !!k && text(k.ja, 30))
+          .filter((k): k is { ja: string; kana?: string } => !!k && text(k.ja, 40))
           .slice(0, n)
           .map((k) => ({ ja: k.ja, kana: typeof k.kana === "string" ? k.kana.slice(0, 40) : undefined, runs: Math.max(0, Math.min(9, Number((k as { runs?: number }).runs) || 0)) }));
       const said = Array.isArray(b.said) ? b.said.filter((t) => text(t, 3000)).slice(0, 3) : [];

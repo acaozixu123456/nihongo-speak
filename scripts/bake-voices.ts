@@ -2,14 +2,14 @@
 // and plays fixed content without Azure (for example after the Azure trial ends). Content that is
 // written on the fly (AI replies, feedback, the daily podcast) is still synthesized on demand.
 //
-//   npx tsx scripts/bake-voices.ts [site] [--redo-ja] [--max=80] [--lite] [--batch]     (default https://nihongo-speak.vercel.app)
+//   npx tsx scripts/bake-voices.ts [site] [--redo-ja] [--max=80] [--lite] [--batch]     (default https://english-speak.vercel.app)
 //
-// Japanese sentences are recorded with Gemini TTS straight from here when GEMINI_API_KEY is set;
-// everything else, and Japanese without the key, goes through the site. --redo-ja re-records the
-// existing Japanese files that scripts/gemini-recorded.txt doesn't list yet. Gemini allows 100
+// English sentences are recorded with Gemini TTS straight from here when GEMINI_API_KEY is set;
+// everything else, and English without the key, goes through the site. --redo-ja re-records the
+// existing English files that scripts/gemini-recorded.txt doesn't list yet. Gemini allows 100
 // requests a day, so --max caps how many this run uses (the app needs some too) and a run stops
 // asking Gemini once the day's quota is gone; run it again the next day to continue, or use --lite
-// (Gemini Flash-Lite TTS, which has a quota of its own). --batch sends all the Japanese sentences
+// (Gemini Flash-Lite TTS, which has a quota of its own). --batch sends all the English sentences
 // as one Batch API job instead: half the price, no daily quota, done in minutes.
 //
 // The site is asked with only the first voice of a list, so
@@ -25,7 +25,7 @@ import { FLASH, FLASH_LITE, geminiConfigured, geminiVoice, synthesizeGemini, syn
 import { voiceKey } from "../lib/voice-key";
 
 const args = process.argv.slice(2);
-const site = args.find((a) => !a.startsWith("--")) ?? "https://nihongo-speak.vercel.app";
+const site = args.find((a) => !a.startsWith("--")) ?? "https://english-speak.vercel.app";
 const redoJa = args.includes("--redo-ja");
 const model = args.includes("--lite") ? FLASH_LITE : FLASH;
 const batch = args.includes("--batch");
@@ -113,7 +113,7 @@ async function main() {
       appendFileSync(geminiLog, `${key}\n`);
       done++;
     }
-    geminiQuotaGone = true; // the rest of the run leaves Japanese alone
+    geminiQuotaGone = true; // the rest of the run leaves Gemini alone
   }
   const worker = async () => {
     for (let next = todo.shift(); next; next = todo.shift()) {

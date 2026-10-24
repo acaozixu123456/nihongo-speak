@@ -1,10 +1,11 @@
 import type { Line, Scenario } from "@/content/scenarios";
 import type { Generated } from "@/lib/claude";
+import { HD_MAN, HD_WOMAN, MAN_2, MAN_3, WOMAN_2, WOMAN_3 } from "@/content/voices";
 
 // Voices for AI-written scenarios: the role-play partner gets the most natural (HD) voice.
 const POOLS = {
-  male: ["ja-JP-Masaru:DragonHDLatestNeural|ja-JP-KeitaNeural", "ja-JP-DaichiNeural", "ja-JP-NaokiNeural"],
-  female: ["ja-JP-Nanami:DragonHDLatestNeural|ja-JP-MayuNeural", "ja-JP-AoiNeural", "ja-JP-ShioriNeural"],
+  male: [HD_MAN, MAN_2, MAN_3],
+  female: [HD_WOMAN, WOMAN_2, WOMAN_3],
 };
 
 export function buildScenario(g: Generated, category: "work" | "life", id: string): Scenario {
@@ -16,14 +17,14 @@ export function buildScenario(g: Generated, category: "work" | "life", id: strin
     voices.set(c.name, pool[used[c.gender]++ % pool.length]);
   }
   const fallback = POOLS.female[1];
-  const lines: Line[] = g.lines.map((l) => ({ ...l, voice: voices.get(l.speaker) ?? fallback }));
+  const lines: Line[] = g.lines.map((l) => ({ ...l, kana: "", voice: voices.get(l.speaker) ?? fallback }));
   return {
     id,
     title: g.title,
     titleZh: g.titleZh,
     category,
     icon: g.icon,
-    level: "N3",
+    level: "A2-B1",
     summaryZh: g.summaryZh,
     lines,
     talk: {

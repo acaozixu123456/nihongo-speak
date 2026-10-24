@@ -10,13 +10,13 @@ import { setAudioSession } from "./recorder";
 
 export type Phase = "idle" | "loading" | "playing" | "paused" | "done";
 export const RATES = [0.8, 1, 1.2, 1.4];
-const RATE_KEY = "nihongo-speak:news-rate";
+const RATE_KEY = "english-speak:news-rate";
 // Loop: off, the sentence playing, or the whole round (the article) again and again. voices: the round again
 // in the next voice; six: each sentence in all six voices; talk: the same with a beep and time to say it
 // after each. The page does those three (here they end like off).
 export type Loop = "off" | "one" | "all" | "voices" | "six" | "talk";
 export const LOOPS: Loop[] = ["off", "one", "all", "voices", "six", "talk"];
-const LOOP_KEY = "nihongo-speak:news-loop";
+const LOOP_KEY = "english-speak:news-loop";
 
 // onRoundEnd may hold the next round back until it settles (a question between rounds).
 // idx, seek: the clip's place in the round as passed in, even when prepare dropped one that failed.

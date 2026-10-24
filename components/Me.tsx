@@ -10,7 +10,7 @@ import { useHydrated } from "@/lib/client/hydrated";
 import { FixBlock, GoodBlock } from "./TeacherMemo";
 import { SenseiFace, SenseiSays, speak } from "./Sensei";
 
-const VOICE = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-MayuNeural";
+const VOICE = "en-US-Emma:DragonHDLatestNeural|en-US-EmmaNeural";
 const hear = (ja: string) => {
   unlock();
   play(ttsUrl(ja, VOICE), 1).catch(() => {});
@@ -99,7 +99,7 @@ function Areas({ p }: { p: Progress }) {
       {retell && (
         <NoteArea
           id="retell"
-          title="复述（三回話す）"
+          title="复述（讲三遍）"
           n={retell}
           extra={
             r && (
@@ -156,7 +156,7 @@ export default function Me() {
       <header className="sp-head">
         <SenseiFace size={64} nod={!!good} />
         <div>
-          <h1>森老师</h1>
+          <h1>Moore 老师</h1>
         </div>
       </header>
 
@@ -175,14 +175,14 @@ export default function Me() {
         </section>
       ) : due > 0 ? (
         <section className="sp-blk">
-          <SenseiSays ja={`今日は${due}文、復習しましょう。`} zh={`今天复习 ${due} 句`} />
+          <SenseiSays ja={`Let's review ${due} sentences today.`} zh={`今天复习 ${due} 句`} />
           <Link href="/review" className="pil-go on">
             复习
           </Link>
         </section>
       ) : (
         hydrated && (
-          <SenseiSays ja="毎晩、あなたの話したことを読んで、明日の練習を決めていますよ。" zh="每天晚上我会看你说过的话，安排第二天的练习。" />
+          <SenseiSays ja="Every night I read what you said, and plan tomorrow's practice." zh="每天晚上我会看你说过的话，安排第二天的练习。" />
         )
       )}
 
@@ -207,7 +207,7 @@ export default function Me() {
                     中文 ›
                   </button>
                 ))}
-              <div className="sig">{day && `${day} · `}森より</div>
+              <div className="sig">{day && `${day} · `}Ms. Moore</div>
             </section>
           )}
           {good && (

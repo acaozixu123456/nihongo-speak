@@ -33,7 +33,7 @@ export function CallList() {
       <header className="page-mast">
         <div>
           <h1>打电话</h1>
-          <p className="muted">只有声音，默认不显示文字。听不清就说「もう一度お願いします」。</p>
+          <p className="muted">只有声音，默认不显示文字。听不清就说「Sorry, could you say that again?」。</p>
         </div>
       </header>
       {/* Grouped by direction instead of a 電/受 badge on every row. */}
@@ -195,7 +195,7 @@ export default function Call({ call, round }: { call: CallDef; round?: RoundProp
       recordTalkTurn();
       setMessages([
         ...messages,
-        { role: "user", text: r.heard || "（聞き取れませんでした）" },
+        { role: "user", text: r.heard || "（没听清）" },
         { role: "assistant", text: r.said, audio: URL.createObjectURL(r.audio) },
       ]);
       await r.played.catch(() => setError("音频播放失败"));
@@ -253,7 +253,7 @@ export default function Call({ call, round }: { call: CallDef; round?: RoundProp
     <main className="call">
       {phase !== "live" && <Link href={round?.back ?? "/call"} className="back">← {round ? "预演" : "打电话"}</Link>}
       <header className="call-head">
-        <div className="call-avatar" aria-hidden>{call.incoming ? "受" : "電"}</div>
+        <div className="call-avatar" aria-hidden>{call.incoming ? "接" : "拨"}</div>
         <div className="call-who">{call.who}</div>
         <div className="call-state">{status}</div>
       </header>
@@ -369,10 +369,10 @@ export default function Call({ call, round }: { call: CallDef; round?: RoundProp
             round.round < round.total ? (
               <button className="primary next-cta" onClick={round.onNext}>第 {round.round + 1} 遍{round.next ? ` · ${round.next}` : ""}</button>
             ) : (
-              <button className="primary next-cta" onClick={round.onNext}>終わり</button>
+              <button className="primary next-cta" onClick={round.onNext}>结束</button>
             )
           ) : (
-            <button className="primary next-cta" onClick={pickUp}>もう一度かける</button>
+            <button className="primary next-cta" onClick={pickUp}>再打一次</button>
           )}
         </>
       )}

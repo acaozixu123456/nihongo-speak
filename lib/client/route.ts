@@ -14,9 +14,9 @@ export type StopKey = "fix" | "listen" | "game" | "song" | "retell" | "skills" |
 export type Stop = { key: StopKey; ja: string; meta: string; href: string; min: number };
 export type Route = { day: string; quiet: boolean; stops: Stop[]; at: number };
 
-const KEY = "nihongo-speak:route";
-const EVENT = "nihongo-speak:route";
-export const NEXT = "nihongo-speak:route-next";
+const KEY = "english-speak:route";
+const EVENT = "english-speak:route";
+export const NEXT = "english-speak:route-next";
 // The episode a route is waiting on, until /api/podcast has written it.
 export const NEW_EP = "/ep/new";
 const QUICK_N = 5;
@@ -90,57 +90,57 @@ export function plan(p: Progress, quiet: boolean): Stop[] {
   const ep = todaysEpisode(p);
   const epHref = ep ? `/ep/${ep.id}` : NEW_EP;
   // min: what each stop really takes, so the total on the start card is honest.
-  const listen: Stop = { key: "listen", ja: "聴く", meta: ep ? (ep.title_ja ?? ep.title_zh) : "新しい回", href: epHref, min: 7 };
+  const listen: Stop = { key: "listen", ja: "听", meta: ep ? (ep.title_ja ?? ep.title_zh) : "新的一期", href: epHref, min: 7 };
   // The episode's 洗脑歌, sung right after it.
-  const song: Stop = { key: "song", ja: "一休み", meta: "洗脑歌", href: `${epHref}/song`, min: 2 };
-  if (quiet) return [listen, song, { key: "flow", ja: "流す", meta: "心の中で", href: "/moyu", min: 10 }];
+  const song: Stop = { key: "song", ja: "歇一下", meta: "洗脑歌", href: `${epHref}/song`, min: 2 };
+  if (quiet) return [listen, song, { key: "flow", ja: "默念", meta: "在心里说", href: "/moyu", min: 10 }];
 
   const cards = todaysCards(p).length;
-  const review: Stop[] = cards > 0 ? [{ key: "review", ja: "復習", meta: `${cards}文`, href: "/review", min: Math.ceil(cards / 2) }] : [];
+  const review: Stop[] = cards > 0 ? [{ key: "review", ja: "复习", meta: `${cards} 句`, href: "/review", min: Math.ceil(cards / 2) }] : [];
   const day = Number(dayKey().replace(/-/g, ""));
   // The people who remember earlier calls come first.
   const pool = calls.filter((c) => c.person);
   const call = (pool.length ? pool : calls)[day % (pool.length || calls.length)];
-  const phone: Stop = { key: "call", ja: "電話", meta: call.who, href: `/call/${call.id}`, min: 4 };
+  const phone: Stop = { key: "call", ja: "电话", meta: call.who, href: `/call/${call.id}`, min: 4 };
   // The episode's 練習 also brings back older items that are due and the weak points, so there is no
   // second practice round on a day with an episode.
-  const game: Stop = { key: "game", ja: "練習", meta: "今の話", href: `${epHref}/game`, min: 5 };
+  const game: Stop = { key: "game", ja: "练习", meta: "刚才这期", href: `${epHref}/game`, min: 5 };
   // 話す is 三回話す (today's story, three times) once a day; on a second route the same day it is 瞬間.
   const speak: Stop = retellToday(p)
-    ? { key: "quick", ja: "話す", meta: `瞬間 ${QUICK_N}問`, href: "/quick", min: 3 }
-    : { key: "retell", ja: "話す", meta: "三回", href: "/retell", min: 10 };
+    ? { key: "quick", ja: "说", meta: `马上说 ${QUICK_N} 题`, href: "/quick", min: 3 }
+    : { key: "retell", ja: "说", meta: "复述三遍", href: "/retell", min: 10 };
   // Today follows the three cards on 今日: 聴く (the episode and its song), 話す (三回話す on the story
   // just heard, then 電話, which brings it up too), and 先生 last: the teacher's one point, the
   // episode's 練習 and the sentences due.
   const f = teacherFix(p);
-  const fix: Stop[] = f ? [{ key: "fix", ja: "直す", meta: f.better, href: `/quick?drill=${encodeURIComponent(f.tag)}`, min: 1 }] : [];
+  const fix: Stop[] = f ? [{ key: "fix", ja: "改", meta: f.better, href: `/quick?drill=${encodeURIComponent(f.tag)}`, min: 1 }] : [];
   const episode: Stop[] = [listen, song, speak, phone, ...fix, game];
   if (ep) return [...episode, ...review];
   // No episode yet: open with something that doesn't need it while it is written.
   const skills = dueSkillCount(p) + weakItems(p, 3).length;
-  const lead: Stop[] = skills > 0 ? [{ key: "skills", ja: "練習", meta: `前の ${Math.min(skills, 12)}問`, href: "/practice", min: 5 }] : review;
+  const lead: Stop[] = skills > 0 ? [{ key: "skills", ja: "练习", meta: `之前的 ${Math.min(skills, 12)} 题`, href: "/practice", min: 5 }] : review;
   return [...lead, ...episode, ...(lead === review ? [] : review)];
 }
 
-// A day around the NHK news: what is not heard yet on the train (each article twice), 三回話す on one of
+// A day around the BBC news: what is not heard yet on the train (each article twice), 三回話す on one of
 // them, a call, then the teacher's point, practice and the sentences due.
 // n: articles not heard yet (0: none, so no listening stop); min: both passes of them.
 function newsPlan(p: Progress, quiet: boolean, n: number, min: number, day: string): Stop[] {
-  const listen: Stop[] = n ? [{ key: "listen", ja: "聴く", meta: `${newsDay(day)} ${n}本`, href: "/news", min }] : [];
-  if (quiet) return [...listen, { key: "flow", ja: "流す", meta: "心の中で", href: "/moyu", min: 10 }];
+  const listen: Stop[] = n ? [{ key: "listen", ja: "听", meta: `${newsDay(day)} ${n} 篇`, href: "/news", min }] : [];
+  if (quiet) return [...listen, { key: "flow", ja: "默念", meta: "在心里说", href: "/moyu", min: 10 }];
   const cards = todaysCards(p).length;
-  const review: Stop[] = cards > 0 ? [{ key: "review", ja: "復習", meta: `${cards}文`, href: "/review", min: Math.ceil(cards / 2) }] : [];
+  const review: Stop[] = cards > 0 ? [{ key: "review", ja: "复习", meta: `${cards} 句`, href: "/review", min: Math.ceil(cards / 2) }] : [];
   const d = Number(dayKey().replace(/-/g, ""));
   const pool = calls.filter((c) => c.person);
   const call = (pool.length ? pool : calls)[d % (pool.length || calls.length)];
   const speak: Stop = retellToday(p)
-    ? { key: "quick", ja: "話す", meta: `瞬間 ${QUICK_N}問`, href: "/quick", min: 3 }
-    : { key: "retell", ja: "話す", meta: "三回", href: "/retell", min: 10 };
+    ? { key: "quick", ja: "说", meta: `马上说 ${QUICK_N} 题`, href: "/quick", min: 3 }
+    : { key: "retell", ja: "说", meta: "复述三遍", href: "/retell", min: 10 };
   const f = teacherFix(p);
-  const fix: Stop[] = f ? [{ key: "fix", ja: "直す", meta: f.better, href: `/quick?drill=${encodeURIComponent(f.tag)}`, min: 1 }] : [];
+  const fix: Stop[] = f ? [{ key: "fix", ja: "改", meta: f.better, href: `/quick?drill=${encodeURIComponent(f.tag)}`, min: 1 }] : [];
   const skills = dueSkillCount(p) + weakItems(p, 3).length;
-  const practice: Stop[] = skills > 0 ? [{ key: "skills", ja: "練習", meta: `前の ${Math.min(skills, 12)}問`, href: "/practice", min: 5 }] : [];
-  return [...listen, speak, { key: "call", ja: "電話", meta: call.who, href: `/call/${call.id}`, min: 4 }, ...fix, ...practice, ...review];
+  const practice: Stop[] = skills > 0 ? [{ key: "skills", ja: "练习", meta: `之前的 ${Math.min(skills, 12)} 题`, href: "/practice", min: 5 }] : [];
+  return [...listen, speak, { key: "call", ja: "电话", meta: call.who, href: `/call/${call.id}`, min: 4 }, ...fix, ...practice, ...review];
 }
 
 // Which of the three cards on 今日 a stop belongs to.
@@ -177,7 +177,7 @@ export function startRoute(p: Progress, quiet: boolean): string {
   return current(route)!.href;
 }
 
-const QUIET_KEY = "nihongo-speak:quiet";
+const QUIET_KEY = "english-speak:quiet";
 export function quietPref() {
   try {
     return localStorage.getItem(QUIET_KEY) === "1";

@@ -2,12 +2,12 @@ import { people } from "@/content/calls";
 import { retellRead } from "@/lib/claude";
 import { vertexAccess } from "@/lib/vertex-tts";
 
-// 三回話す's ears: Gemini on Vertex AI (billed to the Google Cloud credit) writes down a telling word
-// for word, mistakes, restarts and えっと included, so the one fix is about what was really said and
+// 讲三遍's ears: Gemini on Vertex AI (billed to the Google Cloud credit) writes down a telling word
+// for word, mistakes, restarts and "um" included, so the one fix is about what was really said and
 // not about what the recogniser misheard. The client cuts the recording at every silence of a second
 // or more. Each piece is written down on its own: given the whole story, the model "heard" what fits
-// it (a past-tense story turned a spoken 行きます into 行きました every time), alone it writes what was
-// said. A second, text-only call (Haiku, faster at it) then says which silences fell in the middle of a sentence (stuck)
+// it (in the Japanese app a past-tense story turned every spoken present tense into past), alone it
+// writes what was said. A second, text-only call (Haiku, faster at it) then says which silences fell in the middle of a sentence (stuck)
 // rather than between sentences (planning the next one, as native speakers do too), and gives the
 // listener's reaction to what was actually told.
 
@@ -72,15 +72,15 @@ async function ask<T>(parts: object[], schema: object, timeoutMs: number): Promi
   return JSON.parse(out) as T;
 }
 
+// kana is the Japanese app's reading of the piece; here it is the text itself (speed is counted in words).
 const pieceSchema = {
   type: "OBJECT",
-  properties: { text: { type: "STRING" }, kana: { type: "STRING" } },
-  required: ["text", "kana"],
+  properties: { text: { type: "STRING" } },
+  required: ["text"],
 };
 
-const PIECE = `日本語学習者の発話の一部分の録音です。学習者の間違いを見つけるための記録なので：
-- text：聞こえた音のとおりに一字一句書く。文法や言葉の間違い（時制・活用・助詞など）、言い直し、言いかけ、「えっと」「あの」もそのまま。直したり補ったりしない。聞き取れない音は書かない。何も話していなければ空文字。
-- kana：text の読みを、ひらがな・カタカナ・「ー」だけで、ひと続きに書く。`;
+const PIECE = `A recording of part of what an English learner said. It is a record for finding her mistakes, so:
+- text: write down exactly the words as heard. Keep grammar and word mistakes (tense, -s, articles, prepositions and so on), restarts, unfinished words, "um", "uh" as they are. Don't correct or fill in anything. Leave out sounds you can't make out. Empty if nothing was said.`;
 
 // Now and then a request hangs until its timeout (a telling of ten pieces failed outright twice in four
 // tries). If one hasn't answered in `after` ms a second starts alongside it and the first answer wins;
@@ -112,14 +112,15 @@ function hedged<T>(go: () => Promise<T>, after: number): Promise<T> {
   });
 }
 
-export function piece(clip: string, mimeType = "audio/mp3"): Promise<{ text: string; kana: string }> {
+export async function piece(clip: string, mimeType = "audio/mp3"): Promise<{ text: string; kana: string }> {
   const parts = [{ text: PIECE }, { inlineData: { mimeType, data: clip } }];
-  return hedged(() => ask(parts, pieceSchema, 25000), 9000);
+  const { text } = await hedged(() => ask<{ text: string }>(parts, pieceSchema, 25000), 9000);
+  return { text, kana: text };
 }
 
 const styleOf = (id: string) => {
   const p = people.find((x) => x.id === id);
-  return p ? `${p.name}。${p.persona.split("話し方：")[1] ?? ""}` : "友達。くだけた話し方";
+  return p ? `${p.name}. ${p.persona.split("Way of talking:")[1]?.trim() ?? ""}` : "a friend, talks casually";
 };
 
 // Pieces of one recording written down, in order: a piece with no answer after 35s (or failed twice) is
@@ -185,8 +186,8 @@ export async function hearRuns(a: { clips: string[]; listener: string; topic: st
     cut: i < got.length - 1 && !!read.cut?.[i],
   }));
   // Only words really said (the model sometimes tidies them up), and not one praised before.
-  const plain = (t: string) => t.replace(/[\s、。！？!?,.・「」]/g, "");
-  const said = plain(got.map((p) => p.text).join(""));
+  const plain = (t: string) => t.toLowerCase().replace(/[^a-z0-9']/g, "");
+  const said = plain(got.map((p) => p.text).join(" "));
   const good = (read.good ?? "").trim();
   const ok = good && plain(good).length >= 3 && said.includes(plain(good)) && !a.avoid?.some((x) => plain(x) === plain(good));
   return { runs, reaction: read.reaction ?? "", good: ok ? good : "", ms: [t1 - t0, Date.now() - t1] };

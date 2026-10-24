@@ -1,4 +1,4 @@
-// Japanese speech from Gemini TTS, encoded as the same MP3 Azure gives us (24 kHz, 48 kbit/s,
+// English speech from Gemini TTS, encoded as the same MP3 Azure gives us (24 kHz, 48 kbit/s,
 // mono) so 摸鱼模式 can keep joining clips frame by frame. No "server-only" here because
 // scripts/bake-voices.ts uses it too.
 export const FLASH = "gemini-3.8-flash-tts";
@@ -7,21 +7,21 @@ export const FLASH_LITE = "gemini-3.8-flash-lite-tts";
 
 // The scenarios name Azure voices; each one maps to a Gemini voice of the same gender and feel.
 const VOICES: Record<string, string> = {
-  Masaru: "Charon",
-  Keita: "Achird",
-  Daichi: "Iapetus",
-  Naoki: "Orus",
-  Nanami: "Sulafat",
-  Mayu: "Leda",
-  Aoi: "Aoede",
-  Shiori: "Despina",
-  // 森先生 (components/Sensei.tsx): not an Azure voice, so Azure falls back to the next one in her list.
-  Mori: "Gacrux",
+  Andrew: "Charon",
+  Brian: "Iapetus",
+  Guy: "Orus",
+  Davis: "Achird",
+  Ava: "Sulafat",
+  Emma: "Leda",
+  Jenny: "Aoede",
+  Aria: "Despina",
+  // Ms. Moore (components/Sensei.tsx): not an Azure voice, so Azure falls back to the next one in her list.
+  Moore: "Gacrux",
 };
 
-// "ja-JP-Masaru:DragonHDLatestNeural|ja-JP-KeitaNeural" → "Charon". Null for voices with no match.
+// "en-US-Andrew:DragonHDLatestNeural|en-US-AndrewNeural" → "Charon". Null for voices with no match.
 export function geminiVoice(voiceId: string) {
-  const name = /^ja-JP-([A-Za-z]+)/.exec(voiceId.split("|")[0])?.[1]?.replace(/Neural$/, "");
+  const name = /^en-US-([A-Za-z]+)/.exec(voiceId.split("|")[0])?.[1]?.replace(/Neural$/, "");
   return (name && VOICES[name]) || null;
 }
 
@@ -66,12 +66,12 @@ function apiKey() {
 }
 
 // Only the sentence is sent: a style instruction in front of it gets read out loud. Every voice here
-// is Japanese, and saying so matters: a word written only in kanji (邪魔, 確認) was read in Chinese.
+// speaks American English.
 export const request = (text: string, voice: string) => ({
   contents: [{ parts: [{ text }] }],
   generationConfig: {
     responseModalities: ["AUDIO"],
-    speechConfig: { languageCode: "ja-JP", voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
+    speechConfig: { languageCode: "en-US", voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
   },
 });
 
@@ -113,7 +113,7 @@ export async function synthesizeGeminiBatch(items: { key: string; text: string; 
     method: "POST",
     body: JSON.stringify({
       batch: {
-        display_name: "nihongo-speak voices",
+        display_name: "english-speak voices",
         input_config: {
           requests: { requests: items.map((i) => ({ request: request(i.text, i.voice), metadata: { key: i.key } })) },
         },
