@@ -14,6 +14,7 @@ export async function POST(request: Request) {
   const ja = typeof b.ja === "string" ? b.ja.trim() : "";
   if (!ja || ja.length > 300 || audio.length < 2000 || audio.length > 3_000_000) return NextResponse.json({ error: "录音不对" }, { status: 400 });
   let said = "";
+  const t0 = Date.now();
   try {
     said = (await piece(audio, "audio/wav")).text.trim();
   } catch (e) {
@@ -26,7 +27,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "没听清，再说一次" }, { status: 502 });
     }
   }
+  const t1 = Date.now();
   if (!said) return NextResponse.json({ said, parts: [{ t: ja, ok: false }], miss_zh: "" } satisfies SayCheck & { said: string });
+  // Said exactly (punctuation aside): nothing to ask.
+  const plain = byChars(ja, said);
+  if (plain.every((p) => p.ok)) return NextResponse.json({ said, parts: plain, miss_zh: "", ms: [t1 - t0, 0] });
   let check: SayCheck;
   try {
     check = await sayCheck({ ja, said });
@@ -35,7 +40,8 @@ export async function POST(request: Request) {
     console.error(e);
     check = { parts: byChars(ja, said), miss_zh: "" };
   }
-  return NextResponse.json({ said, ...check });
+  // ms: how long writing down and checking took, to watch the wait.
+  return NextResponse.json({ said, ...check, ms: [t1 - t0, Date.now() - t1] });
 }
 
 // When the AI's parts don't put the sentence back together: the characters said in order (longest common
