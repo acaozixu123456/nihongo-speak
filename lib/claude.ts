@@ -1119,7 +1119,9 @@ const PictureCheckSchema = z.object({
   why: z.string().describe("理由（英語、短く）"),
 });
 
-export async function pictureCheck(jpeg: Buffer, ja: string, zh: string, intent: string): Promise<{ ok: boolean; why: string }> {
+// kind: a word's picture must show that meaning; a sentence's is one moment of its situation, so it must fit it
+// and not point to something else, but it needn't show every part (numbers, who said it, what is planned).
+export async function pictureCheck(jpeg: Buffer, ja: string, zh: string, intent: string, kind: "word" | "sentence" = "word"): Promise<{ ok: boolean; why: string }> {
   const res = await client.messages.parse({
     ...smart(600),
     system: "You check pictures for a Japanese vocabulary and listening app. A picture that shows the wrong meaning teaches the wrong meaning, so be strict: when in doubt, ok=false.",
@@ -1130,7 +1132,10 @@ export async function pictureCheck(jpeg: Buffer, ja: string, zh: string, intent:
           { type: "image", source: { type: "base64", media_type: "image/jpeg", data: jpeg.toString("base64") } },
           {
             type: "text",
-            text: `This picture is meant to show: ${ja} (Chinese: ${zh}).\nIt was drawn from this prompt: ${intent}\n\nWould a learner looking at it think of exactly this meaning? Reject it if it shows something else, is confusing, shows readable text or numbers prominently, or has obvious errors (deformed people, wrong country).`,
+            text:
+              kind === "word"
+                ? `This picture is meant to show the word: ${ja} (Chinese: ${zh}).\nIt was drawn from this prompt: ${intent}\n\nWould a learner looking at it think of exactly this meaning? Reject it if it shows something else, is confusing, shows readable text or numbers prominently, or has obvious errors (deformed people, wrong country).`
+                : `This picture is shown while a learner hears this sentence from a news story: ${ja} (Chinese: ${zh}).\nIt was drawn from this prompt: ${intent}\n\nIt only has to show the situation of the sentence (who, where, what is going on) so the learner can picture it; it need not show numbers, dates, who said it or plans. Reject it only if it would make the learner think of a different situation, contradicts the sentence, shows readable text or numbers prominently, or has obvious errors (deformed people, wrong country).`,
           },
         ],
       },
