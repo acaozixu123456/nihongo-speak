@@ -10,6 +10,8 @@ import type { NewsArticle } from "@/lib/news-model";
 import { todaysEpisode } from "@/lib/client/route";
 
 const md = (day: string) => `${Number(day.slice(5, 7))}/${Number(day.slice(8))}`;
+// The masthead's date, as a magazine prints its issue: 10月23日 金曜日.
+const issue = (day: string) => `${Number(day.slice(5, 7))}月${Number(day.slice(8))}日 ${"日月火水木金土"[new Date(`${day}T12:00:00`).getDay()]}曜日`;
 
 // 聴く: one article big (picture, title, one button), every other article in a row to swipe through below it,
 // and the rest (radio, song, listening to all of them back to back) folded under 更多.
@@ -43,34 +45,49 @@ export default function ListenTab() {
   const [more, setMore] = useState(false);
 
   return (
-    <main className="page">
-      <h1 className="tab-h1">
-        听{set.day && <small>{newsDay(set.day)}</small>}
-      </h1>
-      {hero ? (
-        <Link href={`/news/${hero.id}`} className="lt-hero">
-          <Art a={hero} />
-          <div className="lt-body">
-            {mark(hero.id)?.heard && <div className="lt-tag done">✓ 听过</div>}
-            <div className="lt-title">{hero.title_ja}</div>
-            <div className="lt-zh">{hero.title_zh}</div>
-            <div className="lt-go">▶ 听这篇</div>
+    <main className="page mag">
+      <div className="mg-mast">
+        <h1>聴く</h1>
+        {(set.day || hero) && (
+          <div className="mg-issue">
+            NHK やさしいことばニュース<b>{issue(set.day || hero!.day)}</b>
           </div>
+        )}
+      </div>
+      {hero ? (
+        <Link href={`/news/${hero.id}`} className="mg-hero">
+          <Art a={hero} />
+          <div className="mg-kick">
+            No.01{mark(hero.id)?.heard && <span className="mg-ok">✓ 聴いた</span>}
+          </div>
+          <div className="mg-h2">{hero.title_ja}</div>
+          <div className="mg-zh">{hero.title_zh}</div>
+          <div className="mg-go">▶ 聴く</div>
         </Link>
       ) : (
         hydrated && <p className="muted">还没有新闻（每天晚上 21:00 自动更新）</p>
       )}
       {rest.length > 0 && (
-        <div className="lt-rest">
-          {rest.map((a) => (
-            <Link key={a.id} href={`/news/${a.id}`} className="lt-card">
-              <Art a={a} />
-              <b>{a.title_ja}</b>
-              <span className="lt-d">{md(a.day)}</span>
-              {mark(a.id)?.heard && <i className="lt-ok">✓</i>}
-            </Link>
-          ))}
-        </div>
+        <>
+          <div className="mg-sec">
+            <b>ほかの記事</b>
+            <span />
+            <em>{rest.length}本</em>
+          </div>
+          <div className="lt-rest">
+            {rest.map((a, k) => (
+              <Link key={a.id} href={`/news/${a.id}`} className="lt-card">
+                <Art a={a} />
+                <div className="mg-no">
+                  No.{String(k + 2).padStart(2, "0")}
+                  <span>{md(a.day)}</span>
+                </div>
+                <b>{a.title_ja}</b>
+                {mark(a.id)?.heard && <i className="lt-ok">✓</i>}
+              </Link>
+            ))}
+          </div>
+        </>
       )}
       <button className={`lt-more${more ? " open" : ""}`} onClick={() => setMore(!more)}>
         更多<span>›</span>

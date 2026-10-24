@@ -24,6 +24,7 @@ type Check = { said: string; verdict: "good" | "close" | "off"; mine: Part[]; st
 type Got = Check | "wait" | "fail";
 
 const SAYS = ["見ながら", "ヒントだけ", "何も見ないで"] as const;
+const SAYS_ZH = ["看着说一遍", "只看关键词", "只看中文"] as const;
 
 const whole = (c: Check) => c.verdict === "good";
 const bare = (t: string) => t.replace(/[、。，．・「」『』（）！？\s]/g, "");
@@ -211,14 +212,19 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
 
       {k < 3 ? (
         <>
-          <div className="say-steps">
-            {SAYS.map((l, x) => (
-              <span key={l} className={x === k ? "on" : x < k ? (grade(got[x]) === "✓" ? "ok" : "past") : ""}>
-                {x + 1}回目{x < k ? ` ${grade(got[x])}` : ""}
-              </span>
-            ))}
+          {/* Which telling, as a big numeral; the three marks beside it fill in green as each is ✓. */}
+          <div className="mg-step">
+            <div className="mg-step-n">{k + 1}</div>
+            <div className="mg-step-t">
+              <b>{SAYS[k]}</b>
+              <span>{SAYS_ZH[k]}</span>
+            </div>
+            <div className="mg-step-dots">
+              {SAYS.map((l, x) => (
+                <i key={l} className={x === k ? "on" : x < k ? (grade(got[x]) === "✓" ? "ok" : "past") : ""} />
+              ))}
+            </div>
           </div>
-          <div className="say-kind">{SAYS[k]}</div>
           <div className="say-card" data-line={k === 0 ? s.ja : undefined}>
             {k === 0 ? (
               <p className="say-s"><Ruby segs={s.segs} /></p>
