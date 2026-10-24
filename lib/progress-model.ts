@@ -124,7 +124,8 @@ export type RetellPoint = { tag: string; zh: string; focus_zh: string; you_said:
 // miss: the sentences (indexes) marked ？ as not caught by ear; they come back, in another voice, before the
 // next articles, and are cleared once heard again.
 // voice: the voice picked for the article (NEWS_VOICES), when not the anchor's.
-export type NewsMark = { heard?: string; got?: number; told?: string; miss?: number[]; voice?: string };
+// said: 一文ずつ三回話す, by sentence: 1 said whole the third time, 0 not.
+export type NewsMark = { heard?: string; got?: number; told?: string; miss?: number[]; voice?: string; said?: Record<number, 0 | 1> };
 export const NEWS_MARKS_KEPT = 120;
 
 export type Retell = {
@@ -350,8 +351,8 @@ export function merge(a: Progress, b: Progress): Progress {
   for (const [k, v] of Object.entries(b.news ?? {})) {
     const o = news[k] ?? {};
     const later = (x?: string, y?: string) => (x && y ? (x > y ? x : y) : (x ?? y));
-    news[k] = { heard: later(o.heard, v.heard), told: later(o.told, v.told), got: (newer === b ? v.got : o.got) ?? v.got ?? o.got, miss: (newer === b ? v.miss : o.miss) ?? v.miss ?? o.miss, voice: (newer === b ? v.voice : o.voice) ?? v.voice ?? o.voice };
-    for (const f of ["heard", "told", "got", "miss", "voice"] as const) if (news[k][f] === undefined) delete news[k][f];
+    news[k] = { heard: later(o.heard, v.heard), told: later(o.told, v.told), got: (newer === b ? v.got : o.got) ?? v.got ?? o.got, miss: (newer === b ? v.miss : o.miss) ?? v.miss ?? o.miss, voice: (newer === b ? v.voice : o.voice) ?? v.voice ?? o.voice, said: o.said || v.said ? (newer === b ? { ...o.said, ...v.said } : { ...v.said, ...o.said }) : undefined };
+    for (const f of ["heard", "told", "got", "miss", "voice", "said"] as const) if (news[k][f] === undefined) delete news[k][f];
   }
   const newsKept = Object.fromEntries(Object.entries(news).sort((x, y) => (x[0] < y[0] ? 1 : -1)).slice(0, NEWS_MARKS_KEPT));
 

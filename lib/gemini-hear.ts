@@ -112,8 +112,8 @@ function hedged<T>(go: () => Promise<T>, after: number): Promise<T> {
   });
 }
 
-function piece(clip: string): Promise<{ text: string; kana: string }> {
-  const parts = [{ text: PIECE }, { inlineData: { mimeType: "audio/mp3", data: clip } }];
+export function piece(clip: string, mimeType = "audio/mp3"): Promise<{ text: string; kana: string }> {
+  const parts = [{ text: PIECE }, { inlineData: { mimeType, data: clip } }];
   return hedged(() => ask(parts, pieceSchema, 25000), 9000);
 }
 

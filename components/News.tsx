@@ -47,6 +47,13 @@ export function Ruby({ segs, fill = 0 }: { segs: Seg[]; fill?: number }) {
   );
 }
 
+const MicIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+    <rect x="9" y="3" width="6" height="11" rx="3" />
+    <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+  </svg>
+);
+
 const md = (day: string) => `${Number(day.slice(5, 7))}月${Number(day.slice(8))}日`;
 // NHK's picture for the story (lib/news.ts keeps it with the article).
 export function NewsImage({ a, className }: { a: NewsArticle; className: string }) {
@@ -227,6 +234,7 @@ function Article({ a }: { a: NewsArticle }) {
   }, [j.loop]);
   useHeardAtHalf(a, at + 1);
   const miss = missOf(p, a);
+  const saidAt = p.news?.[a.id]?.said ?? {};
   // Another voice picked while playing: on from the same sentence in it.
   const said = useRef(voice);
   useEffect(() => {
@@ -296,6 +304,9 @@ function Article({ a }: { a: NewsArticle }) {
                     </button>
                   )}
                   {zh && s.zh && <div className="nw-zh">{s.zh}</div>}
+                  <Link href={`/news/${a.id}/say?i=${i}`} className={`nw-say${saidAt[i] === 1 ? " g" : saidAt[i] === 0 ? " r" : ""}`} aria-label="この文を三回話す">
+                    {saidAt[i] === 1 ? "✓" : saidAt[i] === 0 ? "!" : <MicIcon />}
+                  </Link>
                 </div>
               );
             })}
