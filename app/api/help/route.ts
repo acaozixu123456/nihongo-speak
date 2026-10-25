@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { recognize, synthesize } from "@/lib/azure";
-import { retellHelp } from "@/lib/claude";
+import { retellHelp, retellHelpLines } from "@/lib/claude";
 import { helpFromAudio, piece, type Help } from "@/lib/gemini-hear";
 import { byChars } from "@/lib/say-match";
 import { synthesizeVertex, vertexConfigured } from "@/lib/vertex-tts";
@@ -68,12 +68,13 @@ export async function POST(request: Request) {
 
   const ctx = { topic: str(b.topic, 300), keys: (Array.isArray(b.keys) ? b.keys : []).map((k) => str(k, 30)).slice(0, 6), before: str(b.before, 400) };
   if (!ctx.topic) return NextResponse.json({ error: "缺少话题" }, { status: 400 });
+  // Already written down: her line streamed as NDJSON, the first line (say + its voice) as soon as Haiku
+  // has written it, then the whole sentence (next + zh + its voice).
+  if (typeof b.said === "string") return streamHelp(str(b.said, 600), ctx, t0);
   let help: Help & { by: string };
   try {
     help =
-      typeof b.said === "string" && b.said.trim()
-        ? { ...(await retellHelp(str(b.said, 600), ctx)), by: "haiku" }
-        : audio.length > 2000
+      audio.length > 2000
         ? await Promise.any([
             helpFromAudio(audio, ctx).then((h) => ({ ...h, by: "gemini" })),
             recognize(wav()).then((r) => retellHelp(r.text, ctx)).then((h) => ({ ...h, by: "azure+haiku" })),
@@ -89,6 +90,38 @@ export async function POST(request: Request) {
   // Both lines voiced at once: the second is needed only if the learner stays stuck, but then at once.
   const [a, n] = await Promise.all([voice(help.say).catch(() => ""), voice(help.next).catch(() => "")]);
   return NextResponse.json({ ...help, audio: { say: a, next: n }, ms: [t1 - t0, Date.now() - t1] });
+}
+
+function streamHelp(said: string, ctx: { topic: string; keys: string[]; before: string }, t0: number) {
+  const enc = new TextEncoder();
+  const body = new ReadableStream({
+    async start(out) {
+      const send = (o: object) => out.enqueue(enc.encode(`${JSON.stringify(o)}\n`));
+      const got: Record<string, string> = {};
+      let first: Promise<void> | null = null;
+      try {
+        for await (const { key, value } of retellHelpLines(said, ctx)) {
+          got[key] = value;
+          // ADDED follows SAY at once; voicing starts on SAY and the line goes out with ADDED.
+          if (key === "say" && value) {
+            const v = voice(value).catch(() => "");
+            first = Promise.resolve().then(async () => {
+              const audio = await v;
+              send({ said, say: value, added: got.added ?? "", audio, ms: Date.now() - t0 });
+            });
+          }
+        }
+        if (!got.say) throw new Error("no SAY line");
+        await first;
+        send({ next: got.next ?? "", zh: got.zh ?? "", added: got.added ?? "", audio: got.next ? await voice(got.next).catch(() => "") : "", ms: Date.now() - t0 });
+      } catch (e) {
+        console.error("help stream:", e);
+        send({ error: "先生没听清" });
+      }
+      out.close();
+    },
+  });
+  return new Response(body, { headers: { "Content-Type": "application/x-ndjson", "Cache-Control": "no-store" } });
 }
 
 // The clause the learner is in, from its start up to its next break (、 or 。), at least a few characters

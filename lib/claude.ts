@@ -1152,3 +1152,31 @@ export async function retellHelp(said: string, c: HelpCtx) {
   if (!res.parsed_output) throw new Error(`help: ${res.stop_reason}`);
   return res.parsed_output as z.infer<typeof HelpSchema>;
 }
+
+// The same help written as plain lines and streamed: each field as soon as its line is complete, so her
+// first line (SAY, written first) is voiced while the rest is still being written (~1 s sooner).
+export async function* retellHelpLines(said: string, c: HelpCtx): AsyncGenerator<{ key: string; value: string }> {
+  const stream = client.messages.stream({
+    model: MODEL,
+    max_tokens: 1000,
+    thinking: { type: "disabled" },
+    system: helpRules(c, "lines"),
+    messages: [{ role: "user", content: said || "（まだ何も話していない）" }],
+  });
+  let buf = "";
+  const line = (l: string) => {
+    const m = /^\s*(SAY|ADDED|NEXT|ZH)\s*[:：]\s*(.*)$/.exec(l);
+    return m ? { key: m[1].toLowerCase(), value: m[2].trim() } : null;
+  };
+  for await (const ev of stream) {
+    if (ev.type !== "content_block_delta" || ev.delta.type !== "text_delta") continue;
+    buf += ev.delta.text;
+    for (let i = buf.indexOf("\n"); i >= 0; i = buf.indexOf("\n")) {
+      const got = line(buf.slice(0, i));
+      buf = buf.slice(i + 1);
+      if (got) yield got;
+    }
+  }
+  const got = line(buf);
+  if (got) yield got;
+}
