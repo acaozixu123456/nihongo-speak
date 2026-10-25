@@ -6,6 +6,7 @@ import type { Making, Radio } from "@/lib/radio";
 import type { NewsArticle } from "@/lib/news-model";
 import { listenIntro, NARRATION, ZH_VOICE } from "@/content/narration";
 import { AUDIO_CACHE, ttsUrl } from "./player";
+import { speechOf, type Speech } from "./follow";
 import {
   allScenarios,
   dayKey,
@@ -37,7 +38,9 @@ export const BLOCK_LABEL: Record<Block, string> = {
 };
 
 // sound: a short sound of the site's own (/beep2.mp3) instead of a voice.
-export type Part = { voice: string; text?: string; sound?: string; pauseMs?: number };
+// pauseFor: on top of pauseMs, this many times as long as the voice spoke in the clip so far (time to
+// say it after it).
+export type Part = { voice: string; text?: string; sound?: string; pauseMs?: number; pauseFor?: number };
 export type Clip = {
   block: Block;
   show: string; // the line on screen and on the lock screen
@@ -447,8 +450,9 @@ const pause = (ms: number): Frames => {
   return { chunks: new Array(n).fill(QUIET), sec: n * QUIET_SEC };
 };
 
-async function clipAudio(parts: Part[], report?: Report): Promise<Frames & { fallback: boolean }> {
-  const out = { chunks: [] as Uint8Array[], sec: 0, fallback: false };
+async function clipAudio(parts: Part[], report?: Report): Promise<Frames & { fallback: boolean; speech: Speech | null }> {
+  const out = { chunks: [] as Uint8Array[], sec: 0, fallback: false, speech: null as Speech | null };
+  let spoken = 0;
   for (const p of parts) {
     let said: Frames | null = null;
     if (p.text) {
@@ -456,8 +460,13 @@ async function clipAudio(parts: Part[], report?: Report): Promise<Frames & { fal
       // Only the Japanese line itself counts: the Chinese narration is always Azure.
       if (got.fallback && p.voice.startsWith("ja-")) out.fallback = true;
       said = mp3Frames(got.buf);
+      // Where the first line really speaks, for the read-along.
+      const sp = out.speech ? null : await speechOf(got.buf);
+      if (sp) out.speech = { from: out.sec + sp.from, to: out.sec + sp.to, gaps: sp.gaps.map(([a, b]) => [out.sec + a, out.sec + b]) };
+      spoken += sp ? sp.to - sp.from : said.sec;
     } else if (p.sound) said = mp3Frames((await fetchAudio(p.sound, report)).buf);
-    for (const a of [said, p.pauseMs ? pause(p.pauseMs) : null]) {
+    const ms = (p.pauseMs ?? 0) + (p.pauseFor ? spoken * p.pauseFor * 1000 : 0);
+    for (const a of [said, ms ? pause(ms) : null]) {
       if (!a) continue;
       out.chunks.push(...a.chunks);
       out.sec += a.sec;
@@ -518,12 +527,13 @@ export function mp3Frames(buf: ArrayBuffer): Frames {
   return { chunks, sec };
 }
 
-export type Prepared = { clips: Clip[]; url: string; starts: number[]; total: number };
+// speech: where each clip's voice speaks (seconds into the clip), when it could be measured.
+export type Prepared = { clips: Clip[]; url: string; starts: number[]; total: number; speech: (Speech | null)[] };
 
 // Fetch every clip (a few at a time), drop any that fail, and join the rest into one MP3.
 // onProgress hears how each clip (by index into clips) is getting on.
 export async function prepare(clips: Clip[], onProgress?: (i: number, s: ClipState) => void): Promise<Prepared> {
-  const out: (Frames | null)[] = new Array(clips.length).fill(null);
+  const out: ((Frames & { speech: Speech | null }) | null)[] = new Array(clips.length).fill(null);
   let next = 0;
   const worker = async () => {
     while (next < clips.length) {
@@ -550,5 +560,5 @@ export async function prepare(clips: Clip[], onProgress?: (i: number, s: ClipSta
     total += a!.sec;
   }
   const blob = new Blob(kept.flatMap(({ a }) => a!.chunks as BlobPart[]), { type: "audio/mpeg" });
-  return { clips: kept.map((x) => x.c), url: URL.createObjectURL(blob), starts, total };
+  return { clips: kept.map((x) => x.c), url: URL.createObjectURL(blob), starts, total, speech: kept.map((x) => x.a!.speech) };
 }

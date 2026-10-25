@@ -139,8 +139,10 @@ export function articleClips(a: NewsArticle, voice: string, mode: "read" | "ear"
 
 // 6つの声: the title, then each sentence said by all six voices before the next, one round per sentence (so
 // it starts at once and the next sentence is made while this one plays). Round r + 1 is sentence r.
-// talk: after each voice a beep and 3-5 s (by the sentence's length) to say it.
-export const talkGap = (say: string) => Math.min(5000, Math.max(3000, say.length * 120));
+// talk: after each voice a beep and time to say it: half as long again as that voice took, plus a second
+// and a half (a 6 s sentence leaves 10.5 s), so a long one can be said to the end.
+export const TALK_FOR = 1.5;
+export const TALK_MS = 1500;
 export function sixRounds(a: NewsArticle, voice: string, talk = false): Clip[][] {
   return [
     [{ block: "news", show: a.title_ja, parts: [{ voice, text: titleSay(a), pauseMs: 900 }] }],
@@ -151,7 +153,7 @@ export function sixRounds(a: NewsArticle, voice: string, talk = false): Clip[][]
           show: s.ja,
           sub: `${VOICE_LABEL[k]} · ${s.zh}`,
           parts: talk
-            ? [{ voice: v, text: s.say, pauseMs: 250 }, { voice: v, sound: "/beep2.mp3", pauseMs: talkGap(s.say) }]
+            ? [{ voice: v, text: s.say, pauseMs: 250 }, { voice: v, sound: "/beep2.mp3", pauseMs: TALK_MS, pauseFor: TALK_FOR }]
             : [{ voice: v, text: s.say, pauseMs: k === NEWS_VOICES.length - 1 ? (a.sentences[i + 1]?.p ? 1000 : 800) : 450 }],
         }),
       ),
