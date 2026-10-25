@@ -13,7 +13,9 @@ export const maxDuration = 30;
 // Story (三回話す): Gemini listening to the clip races Azure writing it down + Haiku; the first answer wins.
 // Sentence (NHK 一文ずつ): the sentence is known, so no AI writes anything: where the learner got to is
 // found in it, and she says that clause up to its next break.
-type Body = { audio?: string; topic?: string; keys?: string[]; before?: string; sentence?: string };
+// hear: only write down one phrase (sent while the learner is still telling). said: what they said, already
+// written down that way, so only her line is left to write.
+type Body = { audio?: string; topic?: string; keys?: string[]; before?: string; sentence?: string; hear?: boolean; said?: string };
 
 // Her voice for these lines: Azure's (fast, ~0.5 s) rather than her usual Gemini one (~4 s), else Gemini.
 const VOICE = "ja-JP-MayuNeural";
@@ -38,6 +40,16 @@ export async function POST(request: Request) {
     return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
   };
 
+  if (b.hear) {
+    if (audio.length < 2000) return NextResponse.json({ text: "" });
+    try {
+      return NextResponse.json({ text: (await recognize(wav())).text, ms: Date.now() - t0 });
+    } catch (e) {
+      console.error("help hear:", e);
+      return NextResponse.json({ error: "没听清" }, { status: 502 });
+    }
+  }
+
   if (b.sentence) {
     const ja = str(b.sentence, 300);
     let said = "";
@@ -59,7 +71,9 @@ export async function POST(request: Request) {
   let help: Help & { by: string };
   try {
     help =
-      audio.length > 2000
+      typeof b.said === "string" && b.said.trim()
+        ? { ...(await retellHelp(str(b.said, 600), ctx)), by: "haiku" }
+        : audio.length > 2000
         ? await Promise.any([
             helpFromAudio(audio, ctx).then((h) => ({ ...h, by: "gemini" })),
             recognize(wav()).then((r) => retellHelp(r.text, ctx)).then((h) => ({ ...h, by: "azure+haiku" })),
