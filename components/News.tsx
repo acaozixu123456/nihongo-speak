@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { NEWS_VOICES, VOICE_LABEL, newsPace, type NewsArticle, type Seg } from "@/lib/news-model";
 import { useHydrated } from "@/lib/client/hydrated";
 import { LOOPS, RATES, useJoined } from "@/lib/client/joined";
+import { fillOf } from "@/lib/client/follow";
 import { articleClips, fullOpen, saidCount, sixRounds, backClips, backSet, clearBack, listenSet, missOf, newsDay, newsToTell, toggleMiss, useNews, voiceOf } from "@/lib/client/news";
 import { play, ttsUrl, unlock } from "@/lib/client/player";
 import { dayKey, markNews, useProgress } from "@/lib/client/progress";
@@ -65,7 +66,6 @@ export function NewsImage({ a, className }: { a: NewsArticle; className: string 
 // The article's sentences grouped by NHK's paragraphs (indexes), one card each.
 const paras = (a: NewsArticle) =>
   a.sentences.reduce<number[][]>((out, s, i) => (s.p || !out.length ? out.push([i]) : out[out.length - 1].push(i), out), []);
-const lenOf = (segs: Seg[]) => segs.reduce((n, s) => n + s.t.length, 0);
 
 const LOOP_LABEL = { off: "なし", one: "1文", all: "記事", voices: "声替え", six: "6声", talk: "6声+話" } as const;
 
@@ -279,7 +279,7 @@ function Article({ a }: { a: NewsArticle }) {
       <div className="mg-sheet">
       <div className="mg-dl">{md(a.day)} · NHK やさしいことばニュース</div>
       <h1 className={`nw-title${at === -1 ? " now" : ""}`} data-ask-topic={a.title_ja}>
-        <Ruby segs={a.title} fill={at === -1 ? j.frac * lenOf(a.title) : 0} />
+        <Ruby segs={a.title} fill={at === -1 ? fillOf(a.title, j.speech, j.sec, j.frac) : 0} />
       </h1>
       {zh && <div className="nw-zh">{a.title_zh}</div>}
       <div className="mg-orn">◆</div>
@@ -292,7 +292,7 @@ function Article({ a }: { a: NewsArticle }) {
                 <div key={i} ref={(el) => void (lines.current[i] = el)} className={`nw-s${i === at ? " now" : ""}${miss.includes(i) ? " miss" : ""}`}>
                   <p data-line={s.ja} onClick={() => goTo(i)}>
                     <span className="mg-hl">
-                      <Ruby segs={s.segs} fill={i === at ? j.frac * lenOf(s.segs) : 0} />
+                      <Ruby segs={s.segs} fill={i === at ? fillOf(s.segs, j.speech, j.sec, j.frac) : 0} />
                     </span>
                   </p>
                   {i === at && six && j.idx >= 0 && (
@@ -505,7 +505,7 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
         ) : second && s ? (
           <div onClick={() => setShowZh(!showZh)}>
             <p className="nw-now" data-line={s.ja}>
-              <Ruby segs={s.segs} fill={j.frac * lenOf(s.segs)} />
+              <Ruby segs={s.segs} fill={fillOf(s.segs, j.speech, j.sec, j.frac)} />
             </p>
             {showZh ? <div className="nw-zh">{s.zh}</div> : <small className="muted nw-tap">点一下看中文</small>}
             {!inBack && (

@@ -27,6 +27,8 @@ export function useJoined(rounds: Clip[][], o: { album: string; loopable?: boole
   const [round, setRound] = useState(0);
   const [idx, setIdx] = useState(-1);
   const [frac, setFrac] = useState(0);
+  // Seconds into the clip playing, for the read-along (with the clip's speech, below).
+  const [sec, setSec] = useState(0);
   const [rate, setRateState] = useState(1);
   const [loop, setLoopState] = useState<Loop>("off");
   const [error, setError] = useState("");
@@ -82,6 +84,20 @@ export function useJoined(rounds: Clip[][], o: { album: string; loopable?: boole
     while (i + 1 < cur.starts.length && cur.starts[i + 1] <= a.currentTime) i++;
     return i;
   }
+
+  // timeupdate comes only about four times a second, too coarse to follow the voice: 20 times instead.
+  useEffect(() => {
+    if (phase !== "playing") return;
+    let id = 0;
+    let last = 0;
+    const tick = (now: number) => {
+      if (now - last > 50) ((last = now), onTime());
+      id = requestAnimationFrame(tick);
+    };
+    id = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   const make = (i: number) => (i < s.rounds.length ? prepare(s.rounds[i]) : null);
 
@@ -169,7 +185,10 @@ export function useJoined(rounds: Clip[][], o: { album: string; loopable?: boole
       }
     }
     const end = cur.starts[i + 1] ?? cur.total;
-    setFrac(Math.min(1, (t - cur.starts[i]) / Math.max(0.1, end - cur.starts[i] - 0.4)));
+    const sp = cur.speech[i];
+    const t0 = cur.starts[i];
+    setSec(t - t0);
+    setFrac(Math.max(0, Math.min(1, sp ? (t - t0 - sp.from) / Math.max(0.1, sp.to - sp.from) : (t - t0) / Math.max(0.1, end - t0 - 0.4))));
     setIdx((was) => {
       if (was !== i && navigator.mediaSession && typeof MediaMetadata !== "undefined") {
         navigator.mediaSession.metadata = new MediaMetadata({ title: cur.clips[i].show, artist: BLOCK_LABEL[cur.clips[i].block], album: s.o.album });
@@ -252,5 +271,6 @@ export function useJoined(rounds: Clip[][], o: { album: string; loopable?: boole
   // The clip now playing, as the round passed in (prepare may have dropped one that failed).
   const clip = s.cur && idx >= 0 ? s.cur.clips[idx] : null;
   const total = s.cur?.total ?? 0;
-  return { audioProps, phase, round, idx: origOf(idx), clip, frac, rate, setRate, loop, setLoop, error, start, toggle, seek, again, skip, total, time: () => audio.current?.currentTime ?? 0 };
+  const speech = s.cur && idx >= 0 ? s.cur.speech[idx] : null;
+  return { audioProps, phase, round, idx: origOf(idx), clip, frac, sec, speech, rate, setRate, loop, setLoop, error, start, toggle, seek, again, skip, total, time: () => audio.current?.currentTime ?? 0 };
 }
