@@ -216,6 +216,8 @@ async function post<T>(body: unknown): Promise<T> {
 // whole next sentence to repeat; on the second only the first step; on the third only 「うん、それで？」.
 // The mic is shut and the clock stopped while she speaks, so her voice isn't taken as theirs.
 const PREFETCH_S = 0.8;
+// Each phrase is written down once the learner pauses this long, while they go on telling.
+const PHRASE_S = 0.5;
 const STUCK_S = 3;
 const START_S = 5;
 const GO_ON = "うん、それで？";
@@ -461,6 +463,8 @@ export default function Retell() {
   // Places she helped on an earlier telling that the learner then said by themselves.
   const [selfSaid, setSelfSaid] = useState<Helped[]>([]);
   const segs = useRef<Blob[]>([]);
+  // This telling's phrases, being written down as they are said (null: that one failed).
+  const phrases = useRef<Promise<string | null>[]>([]);
   const stoppedMs = useRef(0);
   const stoppedAt = useRef(0);
   // Readings of each telling, asked for as soon as it is transcribed (index 3: the telling of the old story).
@@ -560,6 +564,7 @@ export default function Retell() {
     stoppedAt.current = 0;
     helping.current = false;
     ahead.current = null;
+    phrases.current = [];
     showHelp(null);
     live.current = true;
     listen(r);
@@ -589,6 +594,7 @@ export default function Retell() {
     const e = ears.current;
     if (!e || helping.current || !live.current) return;
     const q = e.quiet();
+    if (e.fresh && q >= PHRASE_S && level < 2) phrases.current.push(hearPhrase(e.phrase()));
     const h = helpNow.current;
     // She has said her first step and nothing has come since.
     if (h && !e.spoke) {
@@ -604,17 +610,36 @@ export default function Retell() {
     if (q >= wait) void stepIn(1);
   }
 
+  const helpPost = (body: object) =>
+    fetch("/api/help", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) =>
+      r.ok ? r.json() : Promise.reject(new Error(String(r.status))),
+    );
+
+  function hearPhrase(clip: string): Promise<string | null> {
+    if (!clip) return Promise.resolve("");
+    return helpPost({ hear: true, audio: clip })
+      .then((r: { text?: string }) => r.text ?? "")
+      .catch(() => null);
+  }
+
+  // Her line: from the phrases already written down (only the last few, the sentence being said), so only
+  // her words are left to write; from the recording itself when one of them couldn't be written down.
   function ask(clip: string): Promise<HelpRes | null> {
     const t = shownTopic!;
     const keys = (warming ? t.keys : (keyed?.keys ?? topic!.keys)).map((k) => k.ja);
     const before = helped.current.filter((x) => x.round === slot).map((x) => x.next).join("");
-    return fetch("/api/help", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ audio: clip, topic: `${t.ja}\n${t.about}`.slice(0, 300), keys, before }),
-    })
-      .then((r) => (r.ok ? (r.json() as Promise<HelpRes>) : null))
-      .catch(() => null);
+    const base = { topic: `${t.ja}\n${t.about}`.slice(0, 300), keys, before };
+    const last = phrases.current.slice(-4);
+    const fromAudio = () => helpPost({ ...base, audio: clip }) as Promise<HelpRes>;
+    const go = clip && last.length
+      ? Promise.all(last).then((texts) => {
+          const said = texts.join("");
+          return texts.some((x) => x === null) || !said.trim() ? fromAudio() : (helpPost({ ...base, said }) as Promise<HelpRes>);
+        })
+      : clip
+        ? fromAudio()
+        : (helpPost(base) as Promise<HelpRes>);
+    return go.catch(() => null);
   }
 
   // She speaks: the mic is shut and the clock stopped meanwhile, then the mic opens again.

@@ -25,8 +25,11 @@ export class Ears {
   private lastVoice = 0;
   private startedAt = Date.now();
   private alive = false;
-  // Said something (a real stretch of speech) since listening started.
+  private total = 0; // samples heard so far
+  private markAt = 0; // where the last phrase() ended
+  // Said something (a real stretch of speech) since listening started; since the last phrase().
   spoke = false;
+  fresh = false;
 
   constructor(stream: MediaStream, private ctx: AudioContext) {
     this.ring = new Float32Array(Math.ceil(ctx.sampleRate * KEEP_S));
@@ -49,12 +52,14 @@ export class Ears {
       this.pos = (this.pos + 1) % this.ring.length;
     }
     this.filled = Math.min(this.ring.length, this.filled + x.length);
+    this.total += x.length;
     const rms = Math.sqrt(e / x.length);
     const dur = x.length / this.ctx.sampleRate;
     if (rms > Math.max(0.012, this.floor * 3)) {
       this.run += dur;
       if (this.run >= SPEECH_S) {
         this.spoke = true;
+        this.fresh = true;
         this.lastVoice = Date.now();
       }
     } else {
@@ -72,8 +77,21 @@ export class Ears {
 
   // The last `sec` seconds as 16 kHz WAV, base64; "" when there is hardly anything.
   clip(sec = 14): string {
+    return this.last(Math.floor(sec * this.ctx.sampleRate));
+  }
+
+  // What was said since the last call (one phrase, cut at a short silence), to be written down while the
+  // learner goes on: when they get stuck, only the last bit is left to write down.
+  phrase(): string {
+    const n = this.total - this.markAt;
+    this.markAt = this.total;
+    this.fresh = false;
+    return this.last(n);
+  }
+
+  private last(want: number): string {
     const rate = this.ctx.sampleRate;
-    const n = Math.min(this.filled, Math.floor(sec * rate));
+    const n = Math.min(this.filled, want);
     if (n < rate * 0.5) return "";
     const raw = new Float32Array(n);
     for (let i = 0; i < n; i++) raw[i] = this.ring[(this.pos - n + i + this.ring.length) % this.ring.length];
