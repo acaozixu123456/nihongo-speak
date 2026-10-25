@@ -146,9 +146,69 @@ export function progress() {
   return { at: a.currentTime, of: Number.isFinite(a.duration) ? a.duration : 0 };
 }
 
+// The thing just tapped (a ▶, a sentence, a 聞く button) shows the wait on itself: data-audio="wait"
+// while its sound is fetched (a spinner, see globals.css), "play" once it sounds. Found from the tap,
+// so no page has to wire it up: the nearest element React gave an onClick, else the nearest button.
+let tapped: { at: number; el: HTMLElement } | null = null;
+let owner: HTMLElement | null = null;
+let ownerPos = "";
+
+function clickable(t: EventTarget | null): HTMLElement | null {
+  for (let n = t instanceof Element ? t : null; n && n !== document.body; n = n.parentElement) {
+    if (n.matches("button, [role=button], a[href]")) return n as HTMLElement;
+    const k = Object.keys(n).find((k) => k.startsWith("__reactProps$"));
+    if (k && typeof (n as unknown as Record<string, { onClick?: unknown }>)[k]?.onClick === "function") return n as HTMLElement;
+  }
+  return null;
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener(
+    "click",
+    (e) => {
+      const n = clickable(e.target);
+      // A whole stage or sheet isn't marked; the small note at the top says it instead.
+      const r = n?.getBoundingClientRect();
+      tapped = n && r && r.width * r.height < innerWidth * innerHeight * 0.3 ? { at: Date.now(), el: n } : null;
+    },
+    true,
+  );
+}
+
+function mark(state: "wait" | "play" | null) {
+  const n = owner;
+  if (!n) return;
+  n.querySelector(":scope > .aw-spin")?.remove();
+  if (!state) {
+    delete n.dataset.audio;
+    delete n.dataset.audioSmall;
+    n.style.position = ownerPos;
+    owner = null;
+    return;
+  }
+  n.dataset.audio = state;
+  delete n.dataset.audioSmall;
+  if (state === "wait") {
+    const r = n.getBoundingClientRect();
+    const css = getComputedStyle(n);
+    const s = document.createElement("span");
+    s.className = "aw-spin";
+    // A button gives its whole face to the spinner, drawn in its own text colour; a sentence keeps
+    // its words and gets the spinner at its right edge.
+    if (r.height < 64 && n.matches("button, [role=button], a[href]")) {
+      s.style.setProperty("--aw", css.color);
+      n.dataset.audioSmall = "";
+    }
+    if (css.position === "static") n.style.position = "relative";
+    s.setAttribute("aria-hidden", "true");
+    n.appendChild(s);
+  }
+}
+
 export function stop() {
   turn++;
   setWaiting(false);
+  mark(null);
   const a = el();
   a.pause();
   finish?.();
@@ -157,8 +217,16 @@ export function stop() {
 
 // Resolves when playback ends or is stopped.
 export function play(src: string, playbackRate = rate): Promise<void> {
+  // Each tap marks the first sound it starts, and only one started soon after it.
+  const t = tapped && Date.now() - tapped.at < 3000 && tapped.el.isConnected ? tapped.el : null;
+  tapped = null;
   stop();
   const mine = turn;
+  if (t) {
+    owner = t;
+    ownerPos = t.style.position;
+    mark("wait");
+  }
   // A recording that never closed properly leaves iPhone in call mode, where sound
   // goes to the quiet earpiece. Playback always switches back to the speaker.
   if (!isRecording()) setAudioSession("playback");
@@ -166,16 +234,19 @@ export function play(src: string, playbackRate = rate): Promise<void> {
   return new Promise((resolve, reject) => {
     const done = () => {
       a.onended = a.onerror = a.onplaying = null;
+      if (mine === turn) mark(null);
       resolve();
     };
     finish = done;
     const fail = (e: unknown) => {
       finish = null;
       a.onended = a.onerror = a.onplaying = null;
+      if (mine === turn) mark(null);
       reject(e);
     };
     // A recording already kept answers at once; only a real wait is shown.
-    const slow = setTimeout(() => mine === turn && setWaiting(true), 400);
+    // The note at the top is only for a sound nothing on the page is marked for.
+    const slow = setTimeout(() => mine === turn && !owner && setWaiting(true), 400);
     const loaded = load(src);
     loaded.finally(() => {
       clearTimeout(slow);
@@ -188,6 +259,7 @@ export function play(src: string, playbackRate = rate): Promise<void> {
       // Safari resets playbackRate when the source changes.
       a.onplaying = () => {
         a.playbackRate = playbackRate;
+        if (mine === turn) mark("play");
       };
       a.src = url;
       a.defaultPlaybackRate = playbackRate;
