@@ -9,7 +9,9 @@ import { play, stop, ttsUrl, unlock } from "@/lib/client/player";
 import { hasCard, markNews, toggleCard, useProgress } from "@/lib/client/progress";
 import { verdict } from "@/lib/client/fx";
 import { loadPause, startPause, stopPause } from "@/lib/client/bgm";
-import { renewAudio } from "@/lib/client/audio";
+import { audioCtx, renewAudio } from "@/lib/client/audio";
+import { Ears } from "@/lib/client/ears";
+import { SenseiFace, speakClip, SENSEI_VOICE } from "./Sensei";
 import HoldButton from "./HoldButton";
 import { Ruby } from "./News";
 
@@ -25,6 +27,14 @@ type Got = Check | "wait" | "fail";
 
 const SAYS = ["見ながら", "ヒントだけ", "何も見ないで"] as const;
 const SAYS_ZH = ["看着说一遍", "只看关键词", "只看中文"] as const;
+
+// 森先生 on the 2nd and 3rd telling: once the learner has been quiet STUCK_S after starting (START_S before
+// saying anything) the recording ends and she says the clause they were in, up to its next break; then they
+// say the sentence again from the start. Her line is asked for already at PREFETCH_S of quiet.
+const PREFETCH_S = 1.2;
+const STUCK_S = 3;
+const START_S = 5;
+type Help = { say: string; audio?: string } | "wait";
 
 const whole = (c: Check) => c.verdict === "good";
 const bare = (t: string) => t.replace(/[、。，．・「」『』（）！？\s]/g, "");
@@ -97,6 +107,62 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
   const [end, setEnd] = useState(false);
   const s = a.sentences[i];
   const turn = useRef(0);
+  const [help, setHelp] = useState<Help | null>(null);
+  const [stopKey, setStopKey] = useState(0);
+  const ears = useRef<Ears | null>(null);
+  const ahead = useRef<Promise<Help | null> | null>(null);
+  const stuck = useRef(false);
+  const watcher = useRef<number | undefined>(undefined);
+  const deaf = () => {
+    window.clearInterval(watcher.current);
+    ears.current?.close();
+    ears.current = null;
+  };
+  useEffect(() => deaf, []);
+
+  const ask = (audio: string): Promise<Help | null> =>
+    fetch("/api/help", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sentence: s.ja, audio }) })
+      .then((r) => (r.ok ? (r.json() as Promise<{ say: string; audio?: string }>) : null))
+      .then((h) => (h?.say ? h : null))
+      .catch(() => null);
+
+  // The mic is open: listen alongside it (2nd and 3rd telling only; the 1st has the sentence on screen).
+  function onLive(stream: MediaStream) {
+    deaf();
+    stuck.current = false;
+    ahead.current = null;
+    if (k < 1) return;
+    try {
+      ears.current = new Ears(stream, audioCtx());
+    } catch {
+      return;
+    }
+    watcher.current = window.setInterval(() => {
+      const e = ears.current;
+      if (!e || stuck.current) return;
+      const q = e.quiet();
+      if (q < PREFETCH_S) ahead.current = null;
+      else if (!ahead.current && e.spoke) ahead.current = ask(e.clip(12));
+      if (q >= (e.spoke ? STUCK_S : START_S)) {
+        stuck.current = true;
+        setStopKey((x) => x + 1);
+      }
+    }, 250);
+  }
+
+  // Stuck: the recording is not judged; she says the clause, and the sentence is said again.
+  async function stepIn(wav: Blob) {
+    const pending = ahead.current ?? ask(ears.current?.spoke ? await toBase64(wav) : "");
+    deaf();
+    ahead.current = null;
+    const mine = turn.current;
+    setHelp("wait");
+    const h = await pending;
+    if (turn.current !== mine) return;
+    const line = h && h !== "wait" ? h : { say: s.ja.slice(0, (s.ja.search(/[、。]/) + 1) || s.ja.length) };
+    setHelp(line);
+    void speakClip(line.audio ? `data:audio/mpeg;base64,${line.audio}` : ttsUrl(line.say, SENSEI_VOICE));
+  }
 
   const listen = (v = voice) => {
     unlock();
@@ -121,6 +187,12 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
 
   async function onRecorded(wav: Blob) {
     setRec(false);
+    if (stuck.current) {
+      stuck.current = false;
+      return stepIn(wav);
+    }
+    deaf();
+    setHelp(null);
     const at = k;
     const mine = turn.current;
     setGot((g) => Object.assign([...g], { [at]: "wait" }));
@@ -147,6 +219,7 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
 
   function again() {
     turn.current++;
+    setHelp(null);
     void stopPause(0.3);
     setGot([]);
     setK(0);
@@ -249,6 +322,16 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
               </div>
             </div>
           )}
+          {help && (
+            <div className="help-card mg-help">
+              <div className="help-who">
+                <SenseiFace size={36} />
+                <b>森先生</b>
+              </div>
+              <div className={`help-say${help === "wait" ? " wait" : ""}`}>{help === "wait" ? "うん…" : help.say}</div>
+              {help !== "wait" && <div className="help-zh">接着这里，再从头说一遍</div>}
+            </div>
+          )}
           <div className="say-mic">
             <HoldButton
               compact
@@ -264,9 +347,15 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
                 renewAudio();
                 setRec(true);
               }}
+              onLive={onLive}
+              stopKey={stopKey}
               onRecorded={onRecorded}
               onError={(e) => {
-                if (e) setRec(false);
+                if (e) {
+                  setRec(false);
+                  stuck.current = false;
+                  deaf();
+                }
                 setError(e);
               }}
             />

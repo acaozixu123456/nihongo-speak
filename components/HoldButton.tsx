@@ -13,6 +13,10 @@ type Props = {
   // Seconds before it stops by itself (60 unless given).
   limit?: number;
   onStart?: () => void;
+  // The mic is capturing: its stream, to listen alongside (森先生's ears).
+  onLive?: (stream: MediaStream) => void;
+  // Changed while recording: the recording ends as if tapped (森先生 stepping in).
+  stopKey?: number;
   onRecorded: (wav: Blob) => void;
   onError: (message: string) => void;
 };
@@ -27,7 +31,7 @@ const LIMIT_S = 60;
 // really capturing, so nothing said before that is lost without warning.
 // iPhone sometimes loses the release (the mic permission sheet, a system gesture), so the release is
 // also caught on the whole window and recording state lives in refs, never in a stale render.
-export default function HoldButton({ label = "点一下说话", disabled, compact, limit = LIMIT_S, onStart, onRecorded, onError }: Props) {
+export default function HoldButton({ label = "点一下说话", disabled, compact, limit = LIMIT_S, onStart, onLive, stopKey, onRecorded, onError }: Props) {
   const recorder = useRef<Recorder | null>(null);
   const starting = useRef<Promise<void> | null>(null);
   const active = useRef(false);
@@ -37,8 +41,8 @@ export default function HoldButton({ label = "点一下说话", disabled, compac
   const [latched, setLatched] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const holding = useRef(false);
-  const cb = useRef({ onStart, onRecorded, onError });
-  cb.current = { onStart, onRecorded, onError };
+  const cb = useRef({ onStart, onLive, onRecorded, onError });
+  cb.current = { onStart, onLive, onRecorded, onError };
 
   async function finish() {
     if (!active.current) return;
@@ -86,7 +90,10 @@ export default function HoldButton({ label = "点一下说话", disabled, compac
       .then(() => rec.start())
       .then(() => {
         liveAt.current = Date.now();
-        if (active.current) setPhase("live");
+        if (active.current) {
+          setPhase("live");
+          if (rec.input) cb.current.onLive?.(rec.input);
+        }
       })
       .catch((err: unknown) => {
         active.current = false;
@@ -120,6 +127,11 @@ export default function HoldButton({ label = "点一下说话", disabled, compac
     }
     finish();
   }
+
+  useEffect(() => {
+    if (stopKey) void finish();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopKey]);
 
   // Catch the release anywhere.
   useEffect(() => {

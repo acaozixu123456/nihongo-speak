@@ -23,6 +23,15 @@ export function speak(ja: string) {
     .finally(() => setTalking(false));
 }
 
+// Her voice from a recording already in hand (a help line that came with its audio).
+export function speakClip(src: string): Promise<void> {
+  unlock();
+  setTalking(true);
+  return play(src, 1)
+    .catch(() => {})
+    .finally(() => setTalking(false));
+}
+
 // She breathes and blinks on her own; she talks while her voice plays, and nods (with smiling eyes)
 // when she has something good to say, or when she is tapped.
 export function SenseiFace({ size = 54, nod = false }: { size?: number; nod?: boolean }) {

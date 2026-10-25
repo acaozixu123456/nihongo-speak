@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import * as z from "zod/v4";
 import type { Scenario } from "@/content/scenarios";
+import { helpRules, type HelpCtx } from "@/lib/help-prompt";
 import { inJapanese, japaneseZh, variantOk, zhIsTranslation } from "@/lib/variant";
 
 // Only the role-play part of a scenario is needed here.
@@ -1133,4 +1134,18 @@ export async function fullCheck(a: { title: string; sentences: { ja: string; zh:
   checkStop(res.stop_reason);
   if (!res.parsed_output) throw new Error(`AI 返回格式不对（${res.stop_reason}）`);
   return res.parsed_output;
+}
+
+// 森先生's help from what Azure wrote down (lib/help-prompt.ts); raced against Gemini listening itself.
+const HelpSchema = z.object({ said: z.string(), say: z.string(), added: z.string(), next: z.string(), zh: z.string() });
+export async function retellHelp(said: string, c: HelpCtx) {
+  const res = await parse({
+    model: MODEL,
+    max_tokens: 600,
+    system: helpRules(c, "text"),
+    messages: [{ role: "user", content: said || "（まだ何も話していない）" }],
+    output_config: { format: zodOutputFormat(HelpSchema) },
+  });
+  if (!res.parsed_output) throw new Error(`help: ${res.stop_reason}`);
+  return res.parsed_output as z.infer<typeof HelpSchema>;
 }
