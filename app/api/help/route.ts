@@ -66,8 +66,10 @@ export async function POST(request: Request) {
           ])
         : { ...(await retellHelp("", ctx)), by: "haiku" };
   } catch (e) {
-    console.error("help:", e instanceof AggregateError ? e.errors.map(String).join(" / ") : e);
-    return NextResponse.json({ error: "先生没听清" }, { status: 502 });
+    const why = e instanceof AggregateError ? e.errors.map(String).join(" / ") : String(e);
+    console.error("help:", why);
+    // why: the first words of each failure, to tell a timeout from a refusal without the logs.
+    return NextResponse.json({ error: "先生没听清", why: why.slice(0, 400) }, { status: 502 });
   }
   const t1 = Date.now();
   // Both lines voiced at once: the second is needed only if the learner stays stuck, but then at once.
