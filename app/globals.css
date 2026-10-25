@@ -2252,3 +2252,29 @@ body:has(.mag) .nw-seg button.on { background: #2e2923; border-color: #2e2923; c
 .say-page .say-row i.g { background: var(--mg-sage); }
 .say-page .say-row i.r { background: var(--accent); }
 .say-page .sticky-cta { background: linear-gradient(rgba(246, 240, 228, 0), #f6f0e4 24%); }
+
+/* 森先生 stepping in while telling (三回話す): her card under the story card, her added words marked. */
+.help-call { display: flex; align-items: center; gap: 10px; margin: 14px 4px 0; padding: 0; border: none; background: none; font-size: 13px; color: var(--muted); text-align: left; cursor: pointer; }
+.help-card { margin-top: 14px; padding: 12px 16px 14px; border: 1px solid var(--line, #e6dfd2); border-radius: 16px; background: var(--card); box-shadow: 0 6px 20px rgba(90, 60, 30, 0.08); animation: s-say 0.45s cubic-bezier(.2, .8, .3, 1.2) both; }
+.help-who { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.help-who b { font-size: 13px; letter-spacing: 0.1em; }
+.help-say { font-family: var(--ja); font-size: 18px; font-weight: 700; line-height: 1.7; }
+.help-say.was { font-size: 14px; font-weight: 500; color: var(--muted); }
+.help-say.wait { color: var(--muted); font-weight: 500; }
+.help-say mark, .helped-ja mark { background: linear-gradient(transparent 56%, #f4e2b8 56%, #f4e2b8 92%, transparent 92%); color: var(--accent); }
+.help-zh { margin-top: 4px; font-size: 13px; color: var(--muted); }
+.helped { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.helped-row { padding: 10px 14px; border-radius: 14px; background: var(--card); border: 1px solid var(--line, #e6dfd2); display: flex; flex-direction: column; gap: 6px; }
+.helped-row > div, .helped-row > button { display: flex; align-items: baseline; gap: 8px; }
+.helped-row > button { padding: 0; border: none; background: none; text-align: left; color: inherit; cursor: pointer; }
+.helped-who { flex: none; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; padding: 1px 7px; border-radius: 4px; background: #ece5d8; color: var(--muted); }
+.helped-who.t { background: #f3e2d8; color: var(--accent); }
+.helped-mine { font-family: var(--ja); font-size: 14px; color: var(--muted); }
+.helped-ja { flex: 1; font-family: var(--ja); font-size: 16px; font-weight: 700; line-height: 1.6; }
+.helped-note { font-size: 12px; color: var(--muted); }
+.helped-self { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 14px; background: #e7eedf; border: 1px solid #c6d6bb; }
+.helped-tag { font-size: 12px; font-weight: 700; color: #5d7a55; letter-spacing: 0.06em; }
+.helped-self b { font-family: var(--ja); font-size: 17px; color: #3f5a38; }
+.helped-self small { font-size: 12px; color: #6c8064; }
+.say-page .mg-help { border-color: var(--mg-rule); background: var(--mg-card); }
+.say-page .mg-help .help-say { font-family: var(--serif); font-weight: 700; color: var(--mg-ink); }

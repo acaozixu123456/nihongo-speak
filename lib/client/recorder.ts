@@ -112,7 +112,11 @@ function downsample(input: Float32Array, from: number, to: number) {
   return out;
 }
 
-function encodeWav(samples: Float32Array, rate: number) {
+export function encodeWav(samples: Float32Array, rate: number) {
+  return new Blob([wavBytes(samples, rate)], { type: "audio/wav" });
+}
+
+export function wavBytes(samples: Float32Array, rate: number): ArrayBuffer {
   const buf = new ArrayBuffer(44 + samples.length * 2);
   const v = new DataView(buf);
   const str = (o: number, s: string) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
@@ -133,7 +137,7 @@ function encodeWav(samples: Float32Array, rate: number) {
     const s = Math.max(-1, Math.min(1, samples[i]));
     v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
   }
-  return new Blob([buf], { type: "audio/wav" });
+  return buf;
 }
 
 export type SttResult = {

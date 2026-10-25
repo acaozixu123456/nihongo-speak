@@ -38,6 +38,10 @@ import type { NewsArticle } from "@/lib/news-model";
 import { useHydrated } from "@/lib/client/hydrated";
 import { LIFE_TOPICS, latest, retellList, retellScore, topicLogs } from "@/lib/client/retell-history";
 import Note from "./Note";
+import { SenseiFace, speakClip, SENSEI_VOICE } from "./Sensei";
+import { Ears, joinWavs } from "@/lib/client/ears";
+import { audioCtx, renewAudio } from "@/lib/client/audio";
+import { preload } from "@/lib/client/player";
 
 // 三回話す: tell today's radio story three times, each time to a different person (so there is nothing
 // new to add, only saying it better), with the one thing to fix shown between the first and second time.
@@ -205,6 +209,106 @@ async function post<T>(body: unknown): Promise<T> {
   return data as T;
 }
 
+// 森先生 stepping in when the learner is stuck while telling (/api/help). Asked for once the learner has
+// been quiet PREFETCH_S, so it is ready when she should speak: after STUCK_S of quiet once they have said
+// something, START_S before they have. Like a real teacher she does less each telling: on the first she says
+// back what they were saying with the next two or three words ("…？") and, if they are still stuck, the
+// whole next sentence to repeat; on the second only the first step; on the third only 「うん、それで？」.
+// The mic is shut and the clock stopped while she speaks, so her voice isn't taken as theirs.
+const PREFETCH_S = 1.2;
+const STUCK_S = 3;
+const START_S = 5;
+const GO_ON = "うん、それで？";
+type HelpRes = { said: string; say: string; added: string; next: string; zh: string; audio?: { say: string; next: string } };
+// step 0: she is about to speak; 1: the line with the next words; 2: the whole next sentence.
+type HelpNow = HelpRes & { step: 0 | 1 | 2 };
+// A place she helped, kept for after the telling (round: which telling).
+type Helped = { round: number; said: string; say: string; added: string; next: string; zh: string };
+const clipUrl = (b64?: string) => (b64 ? `data:audio/mpeg;base64,${b64}` : "");
+const unDots = (t: string) => t.replace(/[…。？?]+$/, "");
+
+// Her line with the words she added marked.
+function Added({ text, added }: { text: string; added: string }) {
+  const at = added ? text.indexOf(added) : -1;
+  if (at < 0) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, at)}
+      <mark>{added}</mark>
+      {text.slice(at + added.length)}
+    </>
+  );
+}
+
+// Her card while telling: the line she is saying, her added words marked; the whole sentence under it on
+// step 2. Stays until her next line or the end of the telling (it never vanishes at a sound).
+function HelpCard({ h }: { h: HelpNow }) {
+  return (
+    <div className="help-card">
+      <div className="help-who">
+        <SenseiFace size={36} />
+        <b>森先生</b>
+      </div>
+      {h.step === 0 ? (
+        <div className="help-say wait">うん…</div>
+      ) : (
+        <>
+          <div className={`help-say${h.step === 2 ? " was" : ""}`}>
+            <Added text={h.say} added={h.step === 2 ? "" : h.added} />
+          </div>
+          {h.step === 2 && (
+            <div className="help-say">
+              <Added text={h.next} added={h.added} />
+            </div>
+          )}
+          <div className="help-zh">{h.step === 2 ? `${h.zh}　跟着说一遍就好` : h.next ? "接着往下说" : ""}</div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// After a telling: where she helped (up to two), what the learner said and what she said; and the places
+// she helped before that they said by themselves this time.
+function HelpedList({ items, self, onHear }: { items: Helped[]; self: Helped[]; onHear: (ja: string) => void }) {
+  items = items.filter((x, i) => items.findIndex((y) => (y.next || y.say) === (x.next || x.say)) === i);
+  if (!items.length && !self.length) return null;
+  return (
+    <div className="helped">
+      {self.slice(0, 2).map((x) => (
+        <div key={`s${x.say}`} className="helped-self">
+          <span className="helped-tag">✓ 自分で言えた</span>
+          <b>{unDots(x.say)}</b>
+          <small>上次森先生帮的地方，这次自己说出来了</small>
+        </div>
+      ))}
+      {items.length > 0 && (
+        <>
+          <span className="kicker">森先生が手伝ったところ</span>
+          {items.slice(0, 2).map((x) => (
+            <div key={x.say} className="helped-row">
+              {x.said && (
+                <div>
+                  <span className="helped-who">あなた</span>
+                  <span className="helped-mine">{x.said}…</span>
+                </div>
+              )}
+              <button onClick={() => onHear(x.next || x.say)}>
+                <span className="helped-who t">先生</span>
+                <span className="helped-ja">
+                  <Added text={x.next || unDots(x.say)} added={x.added} />
+                </span>
+                <Play />
+              </button>
+            </div>
+          ))}
+          <small className="helped-note">已存入フレーズ帳。下一遍到这里，先自己试</small>
+        </>
+      )}
+    </div>
+  );
+}
+
 // What the button says while the learner waits (writing down a telling takes ~15s).
 const BUSY: Record<string, string> = { listen: "聞き取り中…", fix: "直すところを探し中…", end: "まとめ中…" };
 
@@ -340,6 +444,25 @@ export default function Retell() {
   const [along, setAlong] = useState(false);
   // The answer to the fix stays hidden until the learner has tried to find it.
   const [shown, setShown] = useState(false);
+  // 森先生 while telling (see PREFETCH_S): what she is saying now, her help asked for ahead of a stall,
+  // the places she helped (every telling today), the recordings of this telling (one per stretch between
+  // her lines) and how long the clock has been stopped for her.
+  const [help, setHelp] = useState<HelpNow | null>(null);
+  const helpNow = useRef<HelpNow | null>(null);
+  const showHelp = (h: HelpNow | null) => {
+    helpNow.current = h;
+    setHelp(h);
+  };
+  const ears = useRef<Ears | null>(null);
+  const ahead = useRef<Promise<HelpRes | null> | null>(null);
+  const helping = useRef(false);
+  const live = useRef(false);
+  const helped = useRef<Helped[]>([]);
+  // Places she helped on an earlier telling that the learner then said by themselves.
+  const [selfSaid, setSelfSaid] = useState<Helped[]>([]);
+  const segs = useRef<Blob[]>([]);
+  const stoppedMs = useRef(0);
+  const stoppedAt = useRef(0);
   // Readings of each telling, asked for as soon as it is transcribed (index 3: the telling of the old story).
   const kana = useRef<Promise<string | undefined>[]>([]);
   // The keywords as renewed before each telling after the first (words already used well swapped for
@@ -361,6 +484,7 @@ export default function Retell() {
 
   useEffect(() => {
     void loadPause();
+    preload([ttsUrl(GO_ON, SENSEI_VOICE)]);
   }, []);
 
   useEffect(() => {
@@ -391,6 +515,8 @@ export default function Retell() {
       if (timer.current) clearInterval(timer.current);
       stopAudio();
       void stopPause(0);
+      live.current = false;
+      ears.current?.close();
       rec.current?.stop().catch(() => {});
     },
     [],
@@ -400,6 +526,9 @@ export default function Retell() {
   const listener = warming ? "yui" : LISTENERS[round];
   const limit = warming ? AGAIN_SECONDS : SECONDS[round];
   const shownTopic = warming ? again!.topic : topic;
+  // How much she helps on this telling: 0 both steps, 1 only the first, 2 only 「うん、それで？」.
+  const level = warming ? 1 : round;
+  const slot = warming ? 3 : round;
 
   // Reading → morae per second; undefined when no clean reading came back.
   async function rated(t: Take, slot: number) {
@@ -408,6 +537,8 @@ export default function Retell() {
 
   async function begin() {
     unlock();
+    // Her ears run on Web Audio, which iPhone only starts inside a tap.
+    renewAudio();
     stopAudio();
     setError("");
     setPhase("starting");
@@ -424,29 +555,144 @@ export default function Retell() {
       setError("麦克风打不开，请允许使用麦克风");
       return;
     }
+    segs.current = [];
+    stoppedMs.current = 0;
+    stoppedAt.current = 0;
+    helping.current = false;
+    ahead.current = null;
+    showHelp(null);
+    live.current = true;
+    listen(r);
     startedAt.current = Date.now();
     setLeft(limit);
     setPhase("talk");
     timer.current = window.setInterval(() => {
-      const l = limit - (Date.now() - startedAt.current) / 1000;
+      const now = Date.now();
+      const l = limit - (now - startedAt.current - stoppedMs.current - (stoppedAt.current ? now - stoppedAt.current : 0)) / 1000;
       setLeft(l);
       if (l <= 0) finish();
+      else watch();
     }, 250);
+  }
+
+  function listen(r: Recorder) {
+    ears.current?.close();
+    ears.current = null;
+    try {
+      if (r.input) ears.current = new Ears(r.input, audioCtx());
+    } catch {}
+  }
+
+  // Every quarter second while telling: ask for her help early in a silence, and have her step in once
+  // the learner is really stuck.
+  function watch() {
+    const e = ears.current;
+    if (!e || helping.current || !live.current) return;
+    const q = e.quiet();
+    const h = helpNow.current;
+    // She has said her first step and nothing has come since.
+    if (h && !e.spoke) {
+      if (h.step === 1 && level === 0 && h.next && q >= STUCK_S) void stepIn(2);
+      return;
+    }
+    if (q < PREFETCH_S) {
+      ahead.current = null;
+      return;
+    }
+    const wait = e.spoke ? STUCK_S : START_S;
+    if (level < 2 && !ahead.current && q >= Math.max(PREFETCH_S, wait - 2)) ahead.current = ask(e.spoke ? e.clip() : "");
+    if (q >= wait) void stepIn(1);
+  }
+
+  function ask(clip: string): Promise<HelpRes | null> {
+    const t = shownTopic!;
+    const keys = (warming ? t.keys : (keyed?.keys ?? topic!.keys)).map((k) => k.ja);
+    const before = helped.current.filter((x) => x.round === slot).map((x) => x.next).join("");
+    return fetch("/api/help", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ audio: clip, topic: `${t.ja}\n${t.about}`.slice(0, 300), keys, before }),
+    })
+      .then((r) => (r.ok ? (r.json() as Promise<HelpRes>) : null))
+      .catch(() => null);
+  }
+
+  // She speaks: the mic is shut and the clock stopped meanwhile, then the mic opens again.
+  // step 1 is a new help, step 2 the whole next sentence of the help on screen. Also from a tap on her.
+  async function stepIn(step: 1 | 2) {
+    const r = rec.current;
+    if (helping.current || !live.current || !r) return;
+    helping.current = true;
+    stoppedAt.current = Date.now();
+    const e = ears.current;
+    const pending = step === 1 && level < 2 ? (ahead.current ?? ask(e?.spoke ? e.clip() : "")) : null;
+    ahead.current = null;
+    e?.close();
+    ears.current = null;
+    rec.current = null;
+    try {
+      segs.current.push(await r.stop());
+    } catch {}
+    const h = helpNow.current;
+    if (step === 2 && h) {
+      showHelp({ ...h, step: 2 });
+      if (live.current) await speakClip(clipUrl(h.audio?.next) || ttsUrl(h.next, SENSEI_VOICE));
+    } else if (!pending) {
+      showHelp({ said: "", say: GO_ON, added: "", next: "", zh: "", step: 1 });
+      if (live.current) await speakClip(ttsUrl(GO_ON, SENSEI_VOICE));
+    } else {
+      showHelp({ said: "", say: "", added: "", next: "", zh: "", step: 0 });
+      const got = await pending;
+      // Without an answer: the next keyword, as a question.
+      const key = (keyed?.keys ?? shownTopic!.keys)[0]?.ja;
+      const res: HelpRes = got?.say ? got : { said: "", say: key ? `${key}は…？` : GO_ON, added: key ?? "", next: "", zh: "" };
+      if (got?.say) {
+        helped.current.push({ round: slot, said: got.said, say: got.say, added: got.added, next: got.next, zh: got.zh });
+        // Her sentence goes to フレーズ帳 (and so to 瞬間 and the review), like the stall's answer did.
+        if (got.next && got.zh && !hasCard(p, got.next)) toggleCard({ ja: got.next, zh: got.zh, voice: RADIO_VOICE.A, scenarioId: "retell" });
+      }
+      showHelp({ ...res, step: 1 });
+      if (live.current) await speakClip(clipUrl(res.audio?.say) || ttsUrl(res.say, SENSEI_VOICE));
+    }
+    if (!live.current) return;
+    const n = new Recorder();
+    rec.current = n;
+    try {
+      await n.start();
+    } catch {
+      rec.current = null;
+      helping.current = false;
+      void finish();
+      return;
+    }
+    if (!live.current) return void n.stop().catch(() => {});
+    listen(n);
+    stoppedMs.current += Date.now() - stoppedAt.current;
+    stoppedAt.current = 0;
+    helping.current = false;
   }
 
   async function finish() {
     if (timer.current) clearInterval(timer.current);
     timer.current = null;
+    if (!live.current) return;
+    live.current = false;
     const r = rec.current;
     rec.current = null;
-    if (!r) return;
+    ears.current?.close();
+    ears.current = null;
+    ahead.current = null;
+    stopAudio();
+    showHelp(null);
     const n = round;
     const old = warming;
     setPhase("between");
     setBusy("listen");
     let wav: Blob;
     try {
-      wav = await r.stop();
+      if (r) segs.current.push(await r.stop());
+      wav = await joinWavs(segs.current);
+      segs.current = [];
     } catch {
       setBusy("");
       setError("录音出错了，这一遍再说一次");
@@ -516,6 +762,13 @@ export default function Retell() {
       return;
     }
     texts.current[n] = text;
+    // Places she helped on an earlier telling, said this time without her.
+    const plainT = plain(text);
+    setSelfSaid(
+      helped.current.filter(
+        (x) => x.round < n && plain(x.added).length >= 2 && plainT.includes(plain(x.added)) && !helped.current.some((y) => y.round === n && y.added === x.added),
+      ),
+    );
     const next = takes.map((t, i) => (i === n ? take : t));
     setTakes(next);
     saidMarked.current[n] = heard ? marked(heard, flow) : text;
@@ -540,7 +793,8 @@ export default function Retell() {
       .catch(() => null);
     if (n === 0) {
       setBusy("fix");
-      const st = heard ? stallOf(heard, flow) : null;
+      // Where she helped, the learner has her words already: no second answer for the same stall.
+      const st = heard && !helped.current.some((x) => x.round === 0) ? stallOf(heard, flow) : null;
       firstWav.current = wav;
       try {
         const f = await post<RetellFix>({
@@ -710,6 +964,7 @@ export default function Retell() {
             </span>
           )}
         </div>
+        <HelpedList items={[]} self={selfSaid} onHear={hear} />
         {busy === "end" && <Note wait text="在看你的第三遍…" />}
         {end && (
           <>
@@ -837,6 +1092,15 @@ export default function Retell() {
         )}
       </div>
 
+      {talking &&
+        (help ? (
+          <HelpCard h={help} />
+        ) : (
+          <button className="help-call" onClick={() => void stepIn(1)}>
+            <SenseiFace size={32} />
+            <span>{round === 0 ? "说不出来就停一下，森先生会接" : ""}</span>
+          </button>
+        ))}
       {warming && !talking && !error && (
         <p className="muted retell-note">隔一天再讲一遍，记得更牢。只讲一遍，想起多少讲多少，然后再讲今天的。</p>
       )}
@@ -856,7 +1120,7 @@ export default function Retell() {
             ? uptake.length
               ? `上次的故事讲完了。昨天的说法用上了：${uptake.map((u) => `「${u}」`).join("")} ✓`
               : "上次的故事讲完了，现在讲今天的。"
-            : "不打分。卡住了就说「えっと」接着讲。"}
+            : "不打分。卡住了就停一下，森先生会接。"}
         </p>
       )}
 
@@ -869,6 +1133,7 @@ export default function Retell() {
             </div>
           )}
           {takes[1]?.good && <Good ja={takes[1].good} onHear={hear} />}
+          <HelpedList items={helped.current.filter((x) => x.round === 1)} self={selfSaid} onHear={hear} />
           {secondNote(takes[0], takes[1], texts.current[1], stall && fix?.stall.better ? fix.stall.better : fix?.fix.better, !!focus).map((l) => (
             <p key={l} className="small-text fb-note">
               {l}
@@ -888,6 +1153,7 @@ export default function Retell() {
                   {carried === "right" ? "✓ 上次那一点，这次说对了" : carried === "wrong" ? "△ 上次那一点还没改过来，明天再来" : "上次那一点这次没用到，明天接着留意"}
                 </p>
               )}
+              <HelpedList items={helped.current.filter((x) => x.round === 0)} self={[]} onHear={hear} />
               <Note text="下一遍只改这一处。" />
               {take0?.good && <Good ja={take0.good} onHear={hear} />}
               <div className="fix-card">

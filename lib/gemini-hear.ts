@@ -1,6 +1,7 @@
 import { people } from "@/content/calls";
 import { retellRead } from "@/lib/claude";
 import { vertexAccess } from "@/lib/vertex-tts";
+import { helpRules, type HelpCtx } from "@/lib/help-prompt";
 
 // 三回話す's ears: Gemini on Vertex AI (billed to the Google Cloud credit) writes down a telling word
 // for word, mistakes, restarts and えっと included, so the one fix is about what was really said and
@@ -190,4 +191,17 @@ export async function hearRuns(a: { clips: string[]; listener: string; topic: st
   const good = (read.good ?? "").trim();
   const ok = good && plain(good).length >= 3 && said.includes(plain(good)) && !a.avoid?.some((x) => plain(x) === plain(good));
   return { runs, reaction: read.reaction ?? "", good: ok ? good : "", ms: [t1 - t0, Date.now() - t1] };
+}
+
+export type Help = { said: string; say: string; added: string; next: string; zh: string };
+const helpSchema = {
+  type: "OBJECT",
+  properties: { said: { type: "STRING" }, say: { type: "STRING" }, added: { type: "STRING" }, next: { type: "STRING" }, zh: { type: "STRING" } },
+  required: ["said", "say", "added", "next", "zh"],
+};
+
+// 森先生's help, written straight from the learner's last seconds (one call: no separate writing down),
+// for the moment they get stuck. Must be quick, so no second try.
+export function helpFromAudio(clip: string, c: HelpCtx, timeoutMs = 7000): Promise<Help> {
+  return ask<Help>([{ text: helpRules(c, "audio") }, { inlineData: { mimeType: "audio/wav", data: clip } }], helpSchema, timeoutMs);
 }
