@@ -600,7 +600,7 @@ export default function Retell() {
       return;
     }
     const wait = e.spoke ? STUCK_S : START_S;
-    if (level < 2 && !ahead.current && q >= Math.max(PREFETCH_S, wait - 2)) ahead.current = ask(e.spoke ? e.clip(10) : "");
+    if (level < 2 && !ahead.current && q >= (e.spoke ? PREFETCH_S : wait - 2)) ahead.current = ask(e.spoke ? e.clip(10) : "");
     if (q >= wait) void stepIn(1);
   }
 
