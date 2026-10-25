@@ -2278,3 +2278,16 @@ body:has(.mag) .nw-seg button.on { background: #2e2923; border-color: #2e2923; c
 .helped-self small { font-size: 12px; color: #6c8064; }
 .say-page .mg-help { border-color: var(--mg-rule); background: var(--mg-card); }
 .say-page .mg-help .help-say { font-family: var(--serif); font-weight: 700; color: var(--mg-ink); }
+
+/* 点了就有反应: the tapped ▶ or sentence spins while its sound is fetched, then glows while it plays (lib/client/player.ts). */
+[data-audio="wait"] { cursor: progress; }
+/* Hidden a moment late, so a sound already kept starts without the label flickering. */
+[data-audio-small] { animation: aw-blank 0s 0.08s both; }
+[data-audio-small] > :not(.aw-spin) { animation: aw-gone 0s 0.08s both; }
+@keyframes aw-blank { to { color: transparent; } }
+@keyframes aw-gone { to { visibility: hidden; } }
+.aw-spin { --aw: #b5452e; position: absolute; top: 50%; right: 10px; width: 22px; height: 22px; margin-top: -11px; box-sizing: border-box; border-radius: 50%; border: 2.5px solid color-mix(in srgb, var(--aw) 22%, transparent); border-top-color: var(--aw); background: rgba(251, 250, 247, 0.85); animation: spin 0.7s linear infinite, aw-in 0.1s 0.08s both; pointer-events: none; visibility: visible; }
+[data-audio-small] > .aw-spin { inset: 0; margin: auto; width: 20px; height: 20px; background: none; }
+@keyframes aw-in { from { opacity: 0; } to { opacity: 1; } }
+[data-audio="play"] { animation: aw-play 1.2s ease-in-out infinite; }
+@keyframes aw-play { 0%, 100% { box-shadow: 0 0 0 2px rgba(181, 69, 46, 0.55); } 50% { box-shadow: 0 0 0 6px rgba(181, 69, 46, 0.18); } }
