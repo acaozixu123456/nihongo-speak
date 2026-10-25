@@ -1141,7 +1141,8 @@ const HelpSchema = z.object({ said: z.string(), say: z.string(), added: z.string
 export async function retellHelp(said: string, c: HelpCtx) {
   const res = await parse({
     model: MODEL,
-    max_tokens: 600,
+    // Room for the model's own thinking too: at 600 it stopped before the answer.
+    max_tokens: 2500,
     system: helpRules(c, "text"),
     messages: [{ role: "user", content: said || "（まだ何も話していない）" }],
     output_config: { format: zodOutputFormat(HelpSchema) },
