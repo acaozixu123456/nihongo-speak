@@ -1141,8 +1141,10 @@ const HelpSchema = z.object({ said: z.string(), say: z.string(), added: z.string
 export async function retellHelp(said: string, c: HelpCtx) {
   const res = await parse({
     model: MODEL,
-    // Room for the model's own thinking too: at 600 it stopped before the answer.
-    max_tokens: 2500,
+    max_tokens: 1000,
+    // Haiku 5.5 thinks by default (600 tokens ran out before the answer, ~6 s); she has to answer within a
+    // couple of seconds, and the line is short.
+    thinking: { type: "disabled" },
     system: helpRules(c, "text"),
     messages: [{ role: "user", content: said || "（まだ何も話していない）" }],
     output_config: { format: zodOutputFormat(HelpSchema) },
