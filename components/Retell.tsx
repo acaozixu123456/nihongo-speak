@@ -215,7 +215,7 @@ async function post<T>(body: unknown): Promise<T> {
 // back what they were saying with the next two or three words ("…？") and, if they are still stuck, the
 // whole next sentence to repeat; on the second only the first step; on the third only 「うん、それで？」.
 // The mic is shut and the clock stopped while she speaks, so her voice isn't taken as theirs.
-const PREFETCH_S = 1.2;
+const PREFETCH_S = 0.8;
 const STUCK_S = 3;
 const START_S = 5;
 const GO_ON = "うん、それで？";
@@ -600,7 +600,7 @@ export default function Retell() {
       return;
     }
     const wait = e.spoke ? STUCK_S : START_S;
-    if (level < 2 && !ahead.current && q >= Math.max(PREFETCH_S, wait - 2)) ahead.current = ask(e.spoke ? e.clip() : "");
+    if (level < 2 && !ahead.current && q >= (e.spoke ? PREFETCH_S : wait - 2)) ahead.current = ask(e.spoke ? e.clip(10) : "");
     if (q >= wait) void stepIn(1);
   }
 
