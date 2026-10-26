@@ -16,9 +16,9 @@ export function helpRules(c: HelpCtx, heard: "audio" | "text" | "lines") {
 ${heard === "audio" ? "録音は、詰まる直前までの学習者の発話（最後の十数秒）です。" : "文字起こしは、詰まる直前までの学習者の発話（最後の十数秒）です。"}${c.before ? `\nこれより前に話した内容：${c.before.slice(-300)}` : ""}
 ${c.keys.length ? `この話のキーワード：${c.keys.join("、")}\n` : ""}
 ${heard === "lines" ? "" : `- said：${heard === "audio" ? "録音で学習者が言ったことを、聞こえたとおり一字一句（間違い・言いかけ・「えっと」もそのまま）。何も話していなければ空文字。" : "文字起こしをそのまま。"}
-`}- say：学習者が言いかけていた文を、学習者自身の言葉を活かして自然に言い直したもの。直すのは一番大事な間違い一つだけ。先生の推測や新しい内容は足さず、学習者が言ったところまでで「…」で止める。30字以内。何も話していなければ、この話の最初の一言を2〜3語だけ言って「…」で止める。
+`}- say：学習者が言いかけていた文を、学習者自身の言葉を活かして自然に言い直したもの。直すのは一番大事な間違い一つだけ。学習者が言った部分は削らずに全部残し、先生の推測や新しい内容は足さず、学習者が言ったところまでで「…」で止める。30字以内。何も話していなければ、この話の最初の一言を2〜3語だけ言って「…」で止める。
 - sure：学習者の言いたいことがはっきり分かるか（yes / no）。言いかけが短い・あいまい・いくつかの意味に取れるなら no。
-- options：学習者が言いたかったと思われる一文。文の途中で詰まったなら、say の「…」の前までをそのまま頭に置き、その文を最後まで言い切る。文はもう言い終わっていて次が出てこないなら、学習者が次に言いたそうな一文（それまでの話の流れの続き）。学習者の言葉・言い方・それまでの話から推測し、記事やテーマの内容に合わせて話を先に進めたり、別の話題に飛んだりしない（テーマは背景として使うだけ）。sure が yes なら1つ、no なら意味がはっきり違う2〜3つを、ありそうな順に。学習者のレベル（N4〜N3の語彙と文法、学習者の使った言葉や文体）で、各40字以内。それぞれに自然な中国語訳（簡体字）を付ける。
+- options：学習者が言いたかったと思われる一文。文の途中で詰まったなら、say の「…」の前までをそのまま頭に置き、その文を最後まで言い切る。文はもう言い終わっていて次が出てこないなら、学習者が次に言いたそうな一文（それまでの話の流れの続き）。学習者の言葉・言い方・それまでの話から推測し、記事やテーマの内容に合わせて話を先に進めたり、別の話題に飛んだりしない（テーマは背景として使うだけ）。sure が yes なら1つ、no なら意味がはっきり違う2〜3つを、ありそうな順に。学習者のレベル（N4〜N3の語彙と文法、学習者の使った言葉や文体）で、各40字以内。どの候補も、学習者がもう言ったことより必ず先まで言う（言ったことを繰り返すだけの候補は出さない）。それぞれに自然な中国語訳（簡体字）を付ける。
 新しい内容や難しい言葉を足さない。${
     heard === "lines"
       ? "\n\n次の形だけを、この順に、ほかに何も書かずに出力する（OPT は1〜3行）：\nSAY: …\nSURE: yes\nOPT: 日本語の一文 | 中国語訳\nOPT: 日本語の一文 | 中国語訳"
@@ -28,11 +28,14 @@ ${heard === "lines" ? "" : `- said：${heard === "audio" ? "録音で学習者�
 
 // Each option with the words she added (what follows the learner's part), for the mark and for telling
 // later whether the learner said that part by themselves.
-export function withAdded(say: string, opts: { ja: string; zh: string }[]): HelpOpt[] {
+// A guess that only says back what the learner said is dropped.
+export function withAdded(say: string, opts: { ja: string; zh: string }[], said = ""): HelpOpt[] {
   const head = say.replace(/[…。？?、\s]+$/, "");
+  const bare = (t: string) => t.replace(/えっと|あの|[\s、。？?！!…「」]/g, "");
+  const known = [bare(say), bare(said)];
   return opts
     .map((o) => ({ ja: o.ja.trim(), zh: o.zh.trim() }))
-    .filter((o, i, all) => o.ja && all.findIndex((x) => x.ja === o.ja) === i)
+    .filter((o, i, all) => o.ja && !known.some((k) => k && k.length >= bare(o.ja).length && k.includes(bare(o.ja))) && all.findIndex((x) => x.ja === o.ja) === i)
     .slice(0, 3)
     .map((o) => {
       let n = 0;
