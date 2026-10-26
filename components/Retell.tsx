@@ -212,8 +212,10 @@ async function post<T>(body: unknown): Promise<T> {
 // 森先生 stepping in when the learner is stuck while telling (/api/help). Asked for once the learner has
 // been quiet PREFETCH_S, so it is ready when she should speak: after STUCK_S of quiet once they have said
 // something, START_S before they have. Like a real teacher she does less each telling: on the first she says
-// back what they were saying with the next two or three words ("…？") and, if they are still stuck, the
-// whole next sentence to repeat; on the second only the first step; on the third only 「うん、それで？」.
+// back what they were saying, then her guess at what they meant: when she can tell, the whole sentence if
+// they are still stuck; when she can't, two or three meanings to pick from (是这个意思吗？), and the one
+// picked is said for them to repeat. On the second telling only the picking; on the third only
+// 「うん、それで？」.
 // The mic is shut and the clock stopped while she speaks, so her voice isn't taken as theirs.
 const PREFETCH_S = 0.8;
 // Each phrase is written down once the learner pauses this long, while they go on telling.
@@ -221,21 +223,50 @@ const PHRASE_S = 0.5;
 const STUCK_S = 3;
 const START_S = 5;
 const GO_ON = "うん、それで？";
-// rest: when her line came streamed, the whole sentence (next, zh, its voice) still on its way.
-type HelpRes = { said: string; say: string; added: string; next: string; zh: string; audio?: { say: string; next: string }; rest?: Promise<void> };
-// step 0: she is about to speak; 1: the line with the next words; 2: the whole next sentence.
+// Her guesses at what the learner meant (opts, most likely first; sure: only one). next/zh/added/audio.next
+// are the one she says: the first, or the one the learner picked.
+type HelpOpt = { ja: string; zh: string; added: string; audio?: string };
+// rest: when her line came streamed, the guesses still on their way.
+type HelpRes = {
+  said: string;
+  say: string;
+  added: string;
+  next: string;
+  zh: string;
+  sure?: boolean;
+  opts?: HelpOpt[];
+  audio?: { say: string; next: string };
+  rest?: Promise<void>;
+};
+// step 0: she is about to speak; 1: her line (and the guesses to pick from); 2: the whole sentence.
 type HelpNow = HelpRes & { step: 0 | 1 | 2 };
+type HelpWire = { said?: string; say?: string; audio?: string; error?: string; sure?: boolean; opts?: HelpOpt[] };
+function fill(h: HelpRes, b: HelpWire) {
+  h.opts = b.opts ?? [];
+  h.sure = b.sure ?? h.opts.length < 2;
+  const o = h.opts[0];
+  h.next = o?.ja ?? "";
+  h.zh = o?.zh ?? "";
+  h.added = o?.added ?? "";
+  h.audio!.next = o?.audio ?? "";
+}
 // A place she helped, kept for after the telling (round: which telling).
 type Helped = { round: number; said: string; say: string; added: string; next: string; zh: string };
 // A streamed help (/api/help with what was said): one JSON line with her first line and its voice, then one
 // with the whole sentence; the first resolves, the second fills in the same object when it comes (rest).
 async function readHelp(res: Response): Promise<HelpRes> {
   if (!res.ok || !res.body) throw new Error(String(res.status));
-  if (!res.headers.get("content-type")?.includes("ndjson")) return (await res.json()) as HelpRes;
+  if (!res.headers.get("content-type")?.includes("ndjson")) {
+    const b = (await res.json()) as HelpWire;
+    if (!b.say) throw new Error(b.error ?? "no help");
+    const h: HelpRes = { said: b.said ?? "", say: b.say, added: "", next: "", zh: "", audio: { say: b.audio ?? "", next: "" } };
+    fill(h, b);
+    return h;
+  }
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let buf = "";
-  async function line(): Promise<Record<string, string> | null> {
+  async function line(): Promise<HelpWire | null> {
     for (;;) {
       const i = buf.indexOf("\n");
       if (i >= 0) {
@@ -250,14 +281,10 @@ async function readHelp(res: Response): Promise<HelpRes> {
   }
   const a = await line();
   if (!a || a.error || !a.say) throw new Error(a?.error ?? "no help");
-  const h: HelpRes = { said: a.said ?? "", say: a.say, added: a.added ?? "", next: "", zh: "", audio: { say: a.audio ?? "", next: "" } };
+  const h: HelpRes = { said: a.said ?? "", say: a.say, added: "", next: "", zh: "", audio: { say: a.audio ?? "", next: "" } };
   h.rest = line()
     .then((b) => {
-      if (!b || b.error) return;
-      h.next = b.next ?? "";
-      h.zh = b.zh ?? "";
-      h.added ||= b.added ?? "";
-      h.audio!.next = b.audio ?? "";
+      if (b && !b.error) fill(h, b);
     })
     .catch(() => {});
   return h;
@@ -279,9 +306,12 @@ function Added({ text, added }: { text: string; added: string }) {
   );
 }
 
-// Her card while telling: the line she is saying, her added words marked; the whole sentence under it on
-// step 2. Stays until her next line or the end of the telling (it never vanishes at a sound).
-function HelpCard({ h }: { h: HelpNow }) {
+// Her card while telling: the line she is saying; when she isn't sure what the learner meant, her guesses
+// to tap (是这个意思吗？); the whole sentence under it on step 2, her added words marked. Stays until her
+// next line or the end of the telling (it never vanishes at a sound).
+// tap: her one sure guess is also only said on a tap (later tellings, where she does less).
+function HelpCard({ h, onPick, tap }: { h: HelpNow; onPick?: (i: number) => void; tap?: boolean }) {
+  const ask = h.step === 1 && (h.opts?.length ?? 0) > 0 && (!h.sure || tap) && onPick;
   return (
     <div className="help-card">
       <div className="help-who">
@@ -292,15 +322,26 @@ function HelpCard({ h }: { h: HelpNow }) {
         <div className="help-say wait">うん…</div>
       ) : (
         <>
-          <div className={`help-say${h.step === 2 ? " was" : ""}`}>
-            <Added text={h.say} added={h.step === 2 ? "" : h.added} />
-          </div>
+          <div className={`help-say${h.step === 2 ? " was" : ""}`}>{h.say}</div>
+          {ask && (
+            <div className="help-opts">
+              <span className="help-q">{h.sure ? "想说的是这个吗？" : "是这个意思吗？"}</span>
+              {h.opts!.map((o, i) => (
+                <button key={o.ja} onClick={() => onPick(i)}>
+                  <span className="help-opt-ja">
+                    <Added text={o.ja} added={o.added} />
+                  </span>
+                  <small>{o.zh}</small>
+                </button>
+              ))}
+            </div>
+          )}
           {h.step === 2 && (
             <div className="help-say">
               <Added text={h.next} added={h.added} />
             </div>
           )}
-          <div className="help-zh">{h.step === 2 ? `${h.zh}　跟着说一遍就好` : h.next ? "接着往下说" : ""}</div>
+          {!ask && <div className="help-zh">{h.step === 2 ? `${h.zh}　跟着说一遍就好` : h.next ? "接着往下说" : ""}</div>}
         </>
       )}
     </div>
@@ -635,7 +676,7 @@ export default function Retell() {
     const h = helpNow.current;
     // She has said her first step and nothing has come since.
     if (h && !e.spoke) {
-      if (h.step === 1 && level === 0 && h.next && q >= STUCK_S) void stepIn(2);
+      if (h.step === 1 && level === 0 && h.next && h.sure && q >= STUCK_S) void stepIn(2);
       return;
     }
     if (q < PREFETCH_S) {
@@ -678,8 +719,9 @@ export default function Retell() {
   }
 
   // She speaks: the mic is shut and the clock stopped meanwhile, then the mic opens again.
-  // step 1 is a new help, step 2 the whole next sentence of the help on screen. Also from a tap on her.
-  async function stepIn(step: 1 | 2) {
+  // step 1 is a new help, step 2 the whole sentence of the help on screen (pick: the guess the learner
+  // tapped). Also from a tap on her.
+  async function stepIn(step: 1 | 2, pick?: number) {
     const r = rec.current;
     if (helping.current || !live.current || !r) return;
     helping.current = true;
@@ -693,7 +735,12 @@ export default function Retell() {
     try {
       segs.current.push(await r.stop());
     } catch {}
-    const h = helpNow.current;
+    let h = helpNow.current;
+    const o = pick !== undefined ? h?.opts?.[pick] : undefined;
+    if (h && o) {
+      h = { ...h, next: o.ja, zh: o.zh, added: o.added, audio: { say: h.audio?.say ?? "", next: o.audio ?? "" } };
+      keepHelp(h);
+    }
     if (step === 2 && h) {
       showHelp({ ...h, step: 2 });
       if (live.current) await speakClip(clipUrl(h.audio?.next) || ttsUrl(h.next, SENSEI_VOICE));
@@ -708,12 +755,11 @@ export default function Retell() {
       const res: HelpRes = got?.say ? got : { said: "", say: key ? `${key}は…？` : GO_ON, added: key ?? "", next: "", zh: "" };
       if (got?.say) {
         const keep = () => {
-          helped.current.push({ round: slot, said: got.said, say: got.say, added: got.added, next: got.next, zh: got.zh });
-          // Her sentence goes to フレーズ帳 (and so to 瞬間 and the review), like the stall's answer did.
-          if (got.next && got.zh && !hasCard(p, got.next)) toggleCard({ ja: got.next, zh: got.zh, voice: RADIO_VOICE.A, scenarioId: "retell" });
-          // The card shown before the whole sentence came: now with it (the step-2 check needs it).
+          // Unsure guesses are kept only once the learner picks one.
+          if (got.sure !== false) keepHelp(got);
+          // The card shown before the guesses came: now with them (the step-2 check needs them).
           const now = helpNow.current;
-          if (now && now.say === got.say) showHelp({ ...now, next: got.next, zh: got.zh, added: got.added, audio: got.audio });
+          if (now && now.say === got.say) showHelp({ ...now, next: got.next, zh: got.zh, added: got.added, sure: got.sure, opts: got.opts, audio: got.audio });
         };
         if (got.rest) void got.rest.then(keep);
         else keep();
@@ -737,6 +783,13 @@ export default function Retell() {
     stoppedMs.current += Date.now() - stoppedAt.current;
     stoppedAt.current = 0;
     helping.current = false;
+  }
+
+  // A place she helped, for after the telling; her sentence goes to フレーズ帳 (and so to 瞬間 and the review).
+  function keepHelp(h: HelpRes) {
+    if (!h.next || helped.current.some((x) => x.round === slot && x.next === h.next)) return;
+    helped.current.push({ round: slot, said: h.said, say: h.say, added: h.added, next: h.next, zh: h.zh });
+    if (h.zh && !hasCard(p, h.next)) toggleCard({ ja: h.next, zh: h.zh, voice: RADIO_VOICE.A, scenarioId: "retell" });
   }
 
   async function finish() {
@@ -1161,7 +1214,7 @@ export default function Retell() {
 
       {talking &&
         (help ? (
-          <HelpCard h={help} />
+          <HelpCard h={help} tap={level > 0} onPick={(i) => void stepIn(2, i)} />
         ) : (
           <button className="help-call" onClick={() => void stepIn(1)}>
             <SenseiFace size={32} />
