@@ -88,14 +88,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "先生没听清", why: why.slice(0, 400) }, { status: 502 });
   }
   const t1 = Date.now();
-  const [a, rest] = await Promise.all([voice(help.say).catch(() => ""), guesses(help.say, help.sure, help.options)]);
+  const [a, rest] = await Promise.all([voice(help.say).catch(() => ""), guesses(help.say, help.sure, help.options, help.said)]);
   return NextResponse.json({ said: help.said, say: help.say, by: help.by, audio: a, ...rest, ms: [t1 - t0, Date.now() - t1] });
 }
 
 // Her guesses at what the learner meant, each voiced (Azure, all at once: whichever they pick plays at
 // once). The first is also next/zh/added for what reads only those.
-async function guesses(say: string, sure: boolean, raw: { ja: string; zh: string }[]) {
-  const opts = withAdded(say, raw);
+async function guesses(say: string, sure: boolean, raw: { ja: string; zh: string }[], said = "") {
+  const opts = withAdded(say, raw, said);
   const voiced = await Promise.all(opts.map(async (o) => ({ ...o, audio: await voice(o.ja).catch(() => "") })));
   const first = voiced[0];
   return { sure: sure || voiced.length < 2, opts: voiced, next: first?.ja ?? "", zh: first?.zh ?? "", added: first?.added ?? "" };
@@ -124,7 +124,7 @@ function streamHelp(said: string, ctx: { topic: string; keys: string[]; before: 
           }
         }
         if (!say) throw new Error("no SAY line");
-        const rest = await guesses(say, sure, raw);
+        const rest = await guesses(say, sure, raw, said);
         await first;
         send({ ...rest, ms: Date.now() - t0 });
       } catch (e) {
