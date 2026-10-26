@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { recognize, synthesize } from "@/lib/azure";
 import { retellHelp, retellHelpLines } from "@/lib/claude";
 import { helpFromAudio, piece, type Help } from "@/lib/gemini-hear";
+import { withAdded } from "@/lib/help-prompt";
 import { byChars } from "@/lib/say-match";
 import { synthesizeVertex, vertexConfigured } from "@/lib/vertex-tts";
 
@@ -87,9 +88,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "先生没听清", why: why.slice(0, 400) }, { status: 502 });
   }
   const t1 = Date.now();
-  // Both lines voiced at once: the second is needed only if the learner stays stuck, but then at once.
-  const [a, n] = await Promise.all([voice(help.say).catch(() => ""), voice(help.next).catch(() => "")]);
-  return NextResponse.json({ ...help, audio: { say: a, next: n }, ms: [t1 - t0, Date.now() - t1] });
+  const [a, rest] = await Promise.all([voice(help.say).catch(() => ""), guesses(help.say, help.sure, help.options)]);
+  return NextResponse.json({ said: help.said, say: help.say, by: help.by, audio: a, ...rest, ms: [t1 - t0, Date.now() - t1] });
+}
+
+// Her guesses at what the learner meant, each voiced (Azure, all at once: whichever they pick plays at
+// once). The first is also next/zh/added for what reads only those.
+async function guesses(say: string, sure: boolean, raw: { ja: string; zh: string }[]) {
+  const opts = withAdded(say, raw);
+  const voiced = await Promise.all(opts.map(async (o) => ({ ...o, audio: await voice(o.ja).catch(() => "") })));
+  const first = voiced[0];
+  return { sure: sure || voiced.length < 2, opts: voiced, next: first?.ja ?? "", zh: first?.zh ?? "", added: first?.added ?? "" };
 }
 
 function streamHelp(said: string, ctx: { topic: string; keys: string[]; before: string }, t0: number) {
@@ -97,23 +106,27 @@ function streamHelp(said: string, ctx: { topic: string; keys: string[]; before: 
   const body = new ReadableStream({
     async start(out) {
       const send = (o: object) => out.enqueue(enc.encode(`${JSON.stringify(o)}\n`));
-      const got: Record<string, string> = {};
+      let say = "";
+      let sure = true;
+      const raw: { ja: string; zh: string }[] = [];
       let first: Promise<void> | null = null;
       try {
         for await (const { key, value } of retellHelpLines(said, ctx)) {
-          got[key] = value;
-          // ADDED follows SAY at once; voicing starts on SAY and the line goes out with ADDED.
-          if (key === "say" && value) {
-            const v = voice(value).catch(() => "");
-            first = Promise.resolve().then(async () => {
-              const audio = await v;
-              send({ said, say: value, added: got.added ?? "", audio, ms: Date.now() - t0 });
-            });
+          if (key === "say" && value && !say) {
+            say = value;
+            first = voice(value)
+              .catch(() => "")
+              .then((audio) => send({ said, say: value, audio, ms: Date.now() - t0 }));
+          } else if (key === "sure") sure = !/^no/i.test(value);
+          else if (key === "opt") {
+            const [ja, zh = ""] = value.split(/\s*[|｜]\s*/);
+            if (ja) raw.push({ ja, zh });
           }
         }
-        if (!got.say) throw new Error("no SAY line");
+        if (!say) throw new Error("no SAY line");
+        const rest = await guesses(say, sure, raw);
         await first;
-        send({ next: got.next ?? "", zh: got.zh ?? "", added: got.added ?? "", audio: got.next ? await voice(got.next).catch(() => "") : "", ms: Date.now() - t0 });
+        send({ ...rest, ms: Date.now() - t0 });
       } catch (e) {
         console.error("help stream:", e);
         send({ error: "先生没听清" });

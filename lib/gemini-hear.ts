@@ -193,11 +193,16 @@ export async function hearRuns(a: { clips: string[]; listener: string; topic: st
   return { runs, reaction: read.reaction ?? "", good: ok ? good : "", ms: [t1 - t0, Date.now() - t1] };
 }
 
-export type Help = { said: string; say: string; added: string; next: string; zh: string };
+export type Help = { said: string; say: string; sure: boolean; options: { ja: string; zh: string }[] };
 const helpSchema = {
   type: "OBJECT",
-  properties: { said: { type: "STRING" }, say: { type: "STRING" }, added: { type: "STRING" }, next: { type: "STRING" }, zh: { type: "STRING" } },
-  required: ["said", "say", "added", "next", "zh"],
+  properties: {
+    said: { type: "STRING" },
+    say: { type: "STRING" },
+    sure: { type: "BOOLEAN" },
+    options: { type: "ARRAY", items: { type: "OBJECT", properties: { ja: { type: "STRING" }, zh: { type: "STRING" } }, required: ["ja", "zh"] } },
+  },
+  required: ["said", "say", "sure", "options"],
 };
 
 // 森先生's help, written straight from the learner's last seconds (one call: no separate writing down),

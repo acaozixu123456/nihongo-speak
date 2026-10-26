@@ -1137,7 +1137,7 @@ export async function fullCheck(a: { title: string; sentences: { ja: string; zh:
 }
 
 // 森先生's help from what Azure wrote down (lib/help-prompt.ts); raced against Gemini listening itself.
-const HelpSchema = z.object({ said: z.string(), say: z.string(), added: z.string(), next: z.string(), zh: z.string() });
+const HelpSchema = z.object({ said: z.string(), say: z.string(), sure: z.boolean(), options: z.array(z.object({ ja: z.string(), zh: z.string() })) });
 export async function retellHelp(said: string, c: HelpCtx) {
   const res = await parse({
     model: MODEL,
@@ -1165,7 +1165,7 @@ export async function* retellHelpLines(said: string, c: HelpCtx): AsyncGenerator
   });
   let buf = "";
   const line = (l: string) => {
-    const m = /^\s*(SAY|ADDED|NEXT|ZH)\s*[:：]\s*(.*)$/.exec(l);
+    const m = /^\s*(SAY|SURE|OPT)\s*[:：]\s*(.*)$/.exec(l);
     return m ? { key: m[1].toLowerCase(), value: m[2].trim() } : null;
   };
   for await (const ev of stream) {
