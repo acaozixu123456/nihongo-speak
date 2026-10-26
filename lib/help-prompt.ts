@@ -31,7 +31,7 @@ ${heard === "lines" ? "" : `- said：${heard === "audio" ? "録音で学習者�
 // A guess that only says back what the learner said is dropped.
 export function withAdded(say: string, opts: { ja: string; zh: string }[], said = ""): HelpOpt[] {
   const head = say.replace(/[…。？?、\s]+$/, "");
-  const bare = (t: string) => t.replace(/[\s、。？?！!…「」えっと]/g, "");
+  const bare = (t: string) => t.replace(/えっと|あの|[\s、。？?！!…「」]/g, "");
   const known = [bare(say), bare(said)];
   return opts
     .map((o) => ({ ja: o.ja.trim(), zh: o.zh.trim() }))
