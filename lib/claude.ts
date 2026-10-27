@@ -1190,13 +1190,17 @@ export async function retellHelp(said: string, c: HelpCtx) {
 
 // The same help written as plain lines and streamed: each field as soon as its line is complete, so her
 // first line (SAY, written first) is voiced while the rest is still being written (~1 s sooner).
-export async function* retellHelpLines(said: string, c: HelpCtx): AsyncGenerator<{ key: string; value: string }> {
-  const stream = client.messages.stream({
-    ...smart(1500),
-    output_config: { effort: "low" },
-    system: helpRules(c, "lines"),
-    messages: [{ role: "user", content: said || "（まだ何も話していない）" }],
-  });
+// how: Opus in fast mode (the learner is waiting, ~2x the price, still cents a day), Opus as usual (fast
+// mode has its own rate limit), or Haiku (when Opus is busy: the account's concurrent requests ran out).
+export type HelpHow = "fast" | "opus" | "haiku";
+export async function* retellHelpLines(said: string, c: HelpCtx, how: HelpHow = "fast"): AsyncGenerator<{ key: string; value: string }> {
+  const base = { system: helpRules(c, "lines"), messages: [{ role: "user" as const, content: said || "（まだ何も話していない）" }] };
+  const stream =
+    how === "haiku"
+      ? client.messages.stream({ model: MODEL, max_tokens: 1000, thinking: { type: "disabled" }, ...base })
+      : how === "fast"
+        ? client.beta.messages.stream({ ...smart(1500), output_config: { effort: "low" }, speed: "fast", betas: ["fast-mode-2026-02-01"], ...base }, { maxRetries: 0 })
+        : client.messages.stream({ ...smart(1500), output_config: { effort: "low" }, ...base }, { maxRetries: 0 });
   let buf = "";
   const line = (l: string) => {
     const m = /^\s*(SAY|SURE|OPT)\s*[:：]\s*(.*)$/.exec(l);

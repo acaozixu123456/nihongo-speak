@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { recognize, synthesize } from "@/lib/azure";
-import { retellHelp, retellHelpLines } from "@/lib/claude";
+import { retellHelp, retellHelpLines, type HelpHow } from "@/lib/claude";
 import { helpFromAudio, piece, type Help } from "@/lib/gemini-hear";
 import { withAdded } from "@/lib/help-prompt";
 import { byChars } from "@/lib/say-match";
@@ -101,6 +101,25 @@ async function guesses(say: string, sure: boolean, raw: { ja: string; zh: string
   return { sure: sure || voiced.length < 2, opts: voiced, next: first?.ja ?? "", zh: first?.zh ?? "", added: first?.added ?? "" };
 }
 
+// Her lines from Opus in fast mode; if that fails before a line came (its own rate limit, or the account's
+// concurrent requests used up), from Opus as usual, then from Haiku.
+async function* helpLines(said: string, ctx: { topic: string; keys: string[]; before: string }) {
+  const tries: HelpHow[] = ["fast", "opus", "haiku"];
+  for (const [n, how] of tries.entries()) {
+    let any = false;
+    try {
+      for await (const l of retellHelpLines(said, ctx, how)) {
+        any = true;
+        yield l;
+      }
+      return;
+    } catch (e) {
+      if (any || n === tries.length - 1) throw e;
+      console.warn(`help ${how} failed, trying ${tries[n + 1]}:`, String(e).slice(0, 200));
+    }
+  }
+}
+
 function streamHelp(said: string, ctx: { topic: string; keys: string[]; before: string }, t0: number) {
   const enc = new TextEncoder();
   const body = new ReadableStream({
@@ -111,7 +130,7 @@ function streamHelp(said: string, ctx: { topic: string; keys: string[]; before: 
       const raw: { ja: string; zh: string }[] = [];
       let first: Promise<void> | null = null;
       try {
-        for await (const { key, value } of retellHelpLines(said, ctx)) {
+        for await (const { key, value } of helpLines(said, ctx)) {
           if (key === "say" && value && !say) {
             say = value;
             first = voice(value)
