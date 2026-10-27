@@ -9,8 +9,7 @@ import { play, stop, ttsUrl, unlock } from "@/lib/client/player";
 import { hasCard, markNews, toggleCard, useProgress } from "@/lib/client/progress";
 import { verdict } from "@/lib/client/fx";
 import { loadPause, startPause, stopPause } from "@/lib/client/bgm";
-import { audioCtx, renewAudio } from "@/lib/client/audio";
-import { Ears } from "@/lib/client/ears";
+import { renewAudio } from "@/lib/client/audio";
 import { SenseiFace, speakClip, SENSEI_VOICE } from "./Sensei";
 import HoldButton from "./HoldButton";
 import { Ruby } from "./News";
@@ -28,12 +27,8 @@ type Got = Check | "wait" | "fail";
 const SAYS = ["見ながら", "ヒントだけ", "何も見ないで"] as const;
 const SAYS_ZH = ["看着说一遍", "只看关键词", "只看中文"] as const;
 
-// 森先生 on the 2nd and 3rd telling: once the learner has been quiet STUCK_S after starting (START_S before
-// saying anything) the recording ends and she says the clause they were in, up to its next break; then they
-// say the sentence again from the start. Her line is asked for already at PREFETCH_S of quiet.
-const PREFETCH_S = 1.2;
-const STUCK_S = 3;
-const START_S = 5;
+// 森先生 on the 2nd and 3rd telling, when the learner calls her: the recording ends and she says the clause
+// they were in, up to its next break; then they say the sentence again from the start.
 type Help = { say: string; audio?: string } | "wait";
 
 const whole = (c: Check) => c.verdict === "good";
@@ -109,16 +104,8 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
   const turn = useRef(0);
   const [help, setHelp] = useState<Help | null>(null);
   const [stopKey, setStopKey] = useState(0);
-  const ears = useRef<Ears | null>(null);
-  const ahead = useRef<Promise<Help | null> | null>(null);
+  // Set when the learner calls 森先生 mid-sentence: the recording that ends then is hers to answer.
   const stuck = useRef(false);
-  const watcher = useRef<number | undefined>(undefined);
-  const deaf = () => {
-    window.clearInterval(watcher.current);
-    ears.current?.close();
-    ears.current = null;
-  };
-  useEffect(() => deaf, []);
 
   const ask = (audio: string): Promise<Help | null> =>
     fetch("/api/help", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sentence: s.ja, audio }) })
@@ -126,35 +113,16 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
       .then((h) => (h?.say ? h : null))
       .catch(() => null);
 
-  // The mic is open: listen alongside it (2nd and 3rd telling only; the 1st has the sentence on screen).
-  function onLive(stream: MediaStream) {
-    deaf();
-    stuck.current = false;
-    ahead.current = null;
-    if (k < 1) return;
-    try {
-      ears.current = new Ears(stream, audioCtx());
-    } catch {
-      return;
-    }
-    watcher.current = window.setInterval(() => {
-      const e = ears.current;
-      if (!e || stuck.current) return;
-      const q = e.quiet();
-      if (q < PREFETCH_S) ahead.current = null;
-      else if (!ahead.current && e.spoke) ahead.current = ask(e.clip(12));
-      if (q >= (e.spoke ? STUCK_S : START_S)) {
-        stuck.current = true;
-        setStopKey((x) => x + 1);
-      }
-    }, 250);
+  // 森先生，帮我一下 (2nd and 3rd telling; the 1st has the sentence on screen): the recording stops and
+  // goes to her instead of being judged.
+  function callHer() {
+    stuck.current = true;
+    setStopKey((x) => x + 1);
   }
 
   // Stuck: the recording is not judged; she says the clause, and the sentence is said again.
   async function stepIn(wav: Blob) {
-    const pending = ahead.current ?? ask(ears.current?.spoke ? await toBase64(wav) : "");
-    deaf();
-    ahead.current = null;
+    const pending = ask(await toBase64(wav));
     const mine = turn.current;
     setHelp("wait");
     const h = await pending;
@@ -191,7 +159,6 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
       stuck.current = false;
       return stepIn(wav);
     }
-    deaf();
     setHelp(null);
     const at = k;
     const mine = turn.current;
@@ -347,14 +314,12 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
                 renewAudio();
                 setRec(true);
               }}
-              onLive={onLive}
               stopKey={stopKey}
               onRecorded={onRecorded}
               onError={(e) => {
                 if (e) {
                   setRec(false);
                   stuck.current = false;
-                  deaf();
                 }
                 setError(e);
               }}
@@ -362,6 +327,13 @@ function Say({ a, from }: { a: NewsArticle; from: number }) {
             <div className="say-miclab">{rec ? "話しています" : "話す"}<small>{rec ? "说完点一下" : ""}</small></div>
             {error && <p className="error">{error}</p>}
           </div>
+          {rec && k >= 1 && (
+            <button className="help-call" onClick={callHer}>
+              <SenseiFace size={36} />
+              <b>森先生，帮我一下</b>
+              <small>随时点</small>
+            </button>
+          )}
         </>
       ) : (
         <>

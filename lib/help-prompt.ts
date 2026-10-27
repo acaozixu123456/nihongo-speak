@@ -3,7 +3,7 @@
 // guesses what they wanted to say. From their words, not from the article: the topic is only background.
 // When she can tell, one sentence (said if they stay stuck); when she can't, two or three different
 // meanings for the learner to pick from ("是这个意思吗？"), and only the one they pick is said.
-// Kept at the learner's level (N4-N3). The same rules for Gemini (listening to the clip itself) and Haiku
+// Kept at the learner's level (N4-N3). The same rules for Gemini (listening to the clip itself) and Opus
 // (reading what Azure wrote down).
 
 export type HelpCtx = { topic: string; keys: string[]; before?: string };

@@ -2254,7 +2254,9 @@ body:has(.mag) .nw-seg button.on { background: #2e2923; border-color: #2e2923; c
 .say-page .sticky-cta { background: linear-gradient(rgba(246, 240, 228, 0), #f6f0e4 24%); }
 
 /* 森先生 stepping in while telling (三回話す): her card under the story card, her added words marked. */
-.help-call { display: flex; align-items: center; gap: 10px; margin: 14px 4px 0; padding: 0; border: none; background: none; font-size: 13px; color: var(--muted); text-align: left; cursor: pointer; }
+.help-call { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 14px; padding: 10px 18px 10px 12px; border: 1.5px solid var(--ink, #221f1b); border-radius: 999px; background: var(--card); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.help-call b { font-size: 16px; }
+.help-call small { margin-left: auto; font-size: 12px; color: var(--muted); }
 .help-card { margin-top: 14px; padding: 12px 16px 14px; border: 1px solid var(--line, #e6dfd2); border-radius: 16px; background: var(--card); box-shadow: 0 6px 20px rgba(90, 60, 30, 0.08); animation: s-say 0.45s cubic-bezier(.2, .8, .3, 1.2) both; }
 .help-who { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .help-who b { font-size: 13px; letter-spacing: 0.1em; }

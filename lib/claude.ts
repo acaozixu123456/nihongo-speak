@@ -1176,15 +1176,13 @@ export async function fullCheck(a: { title: string; sentences: { ja: string; zh:
 // 森先生's help from what Azure wrote down (lib/help-prompt.ts); raced against Gemini listening itself.
 const HelpSchema = z.object({ said: z.string(), say: z.string(), sure: z.boolean(), options: z.array(z.object({ ja: z.string(), zh: z.string() })) });
 export async function retellHelp(said: string, c: HelpCtx) {
+  // Opus (the learner calls her, so a few seconds are fine, and it reads what they meant far better);
+  // low effort keeps its thinking short.
   const res = await parse({
-    model: MODEL,
-    max_tokens: 1000,
-    // Haiku 5.5 thinks by default (600 tokens ran out before the answer, ~6 s); she has to answer within a
-    // couple of seconds, and the line is short.
-    thinking: { type: "disabled" },
+    ...smart(1500),
     system: helpRules(c, "text"),
     messages: [{ role: "user", content: said || "（まだ何も話していない）" }],
-    output_config: { format: zodOutputFormat(HelpSchema) },
+    output_config: { effort: "low", format: zodOutputFormat(HelpSchema) },
   });
   if (!res.parsed_output) throw new Error(`help: ${res.stop_reason}`);
   return res.parsed_output as z.infer<typeof HelpSchema>;
@@ -1194,9 +1192,8 @@ export async function retellHelp(said: string, c: HelpCtx) {
 // first line (SAY, written first) is voiced while the rest is still being written (~1 s sooner).
 export async function* retellHelpLines(said: string, c: HelpCtx): AsyncGenerator<{ key: string; value: string }> {
   const stream = client.messages.stream({
-    model: MODEL,
-    max_tokens: 1000,
-    thinking: { type: "disabled" },
+    ...smart(1500),
+    output_config: { effort: "low" },
     system: helpRules(c, "lines"),
     messages: [{ role: "user", content: said || "（まだ何も話していない）" }],
   });
