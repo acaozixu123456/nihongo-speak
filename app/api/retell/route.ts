@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { retellEnd, retellFix, retellKana, retellKeys, retellUptake } from "@/lib/claude";
+import { retellEnd, retellFix, retellKana, retellKeys, retellReview, retellUptake } from "@/lib/claude";
 import { hearRuns } from "@/lib/gemini-hear";
 
 export const maxDuration = 60;
@@ -8,6 +8,7 @@ type Body =
   | { kind: "hear"; clips: string[]; listener: string; topic: string; avoid?: string[] }
   | { kind: "fix"; topic: string; said: string; known?: string[]; carry?: { focus_zh: string; better: string }; stall?: { before: string; after: string; secs: number } }
   | { kind: "uptake"; natural: string[]; said: string }
+  | { kind: "review"; topic: string; said: string; round: number }
   | { kind: "end"; topic: string; first: string; last: string; focus?: string }
   | { kind: "kana"; texts: string[] }
   | { kind: "keys"; topic: string; keys: { ja: string; kana?: string; runs?: number }[]; pool?: { ja: string; kana?: string }[]; said: string[] };
@@ -66,6 +67,10 @@ export async function POST(request: Request) {
           ? { before: st.before.slice(-80), after: st.after.slice(0, 80), secs: Math.round(st.secs * 10) / 10 }
           : undefined;
       return NextResponse.json(await retellFix({ topic: b.topic, said: b.said, known, carry, stall }));
+    }
+    if (b.kind === "review") {
+      if (!text(b.said, 3000)) return NextResponse.json({ error: "没有听到内容" }, { status: 400 });
+      return NextResponse.json(await retellReview({ topic: b.topic, said: b.said, round: Math.max(1, Math.min(3, Number(b.round) || 1)) }));
     }
     if (b.kind === "keys") {
       const words = (x: unknown, n: number) =>

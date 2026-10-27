@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { calls, people } from "@/content/calls";
-import type { RetellEnd, RetellFix, RetellKeys } from "@/lib/claude";
+import type { RetellEnd, RetellFix, RetellKeys, RetellReview } from "@/lib/claude";
 import type { Heard } from "@/lib/gemini-hear";
 import { play, progress, stop as stopAudio, ttsUrl, unlock } from "@/lib/client/player";
 import { loadPause, startPause, stopPause } from "@/lib/client/bgm";
@@ -478,6 +478,44 @@ const Play = () => (
 );
 
 // A Japanese line to hear: the text and a round play button.
+// Everything Opus found in one telling (after every telling): each place to fix, in the order said, with
+// what the learner said, the right way to say it (tap to hear), its translation and why; and what was good.
+type ReviewState = RetellReview | "wait" | "fail";
+function ReviewList({ r, onHear }: { r?: ReviewState; onHear: (ja: string) => void }) {
+  if (!r) return null;
+  if (r === "wait") return <Note wait text="森先生在看这一遍说的每一句…" />;
+  if (r === "fail") return null;
+  return (
+    <div className="review">
+      <div className="review-head">
+        <span className="kicker">这一遍的全部反馈</span>
+        <span className="review-n">{r.fixes.length ? `${r.fixes.length} 处可以改` : "没有要改的"}</span>
+      </div>
+      {r.good.map((g) => (
+        <button key={`g${g.ja}`} className="review-good" onClick={() => onHear(g.ja)}>
+          <span className="review-tag ok">✓ 好</span>
+          <span className="review-ja">{g.ja}</span>
+          <small>{g.why_zh}</small>
+        </button>
+      ))}
+      {r.fixes.map((f, i) => (
+        <div key={`${i}${f.you}`} className="review-fix">
+          <div className="review-top">
+            <span className="review-tag">{f.kind}</span>
+            <span className="review-you">{f.you}</span>
+          </div>
+          <button className="review-better" onClick={() => onHear(f.better)}>
+            <span className="review-ja">{f.better}</span>
+            <Play />
+          </button>
+          <small className="review-zh">{f.zh}</small>
+          <small className="review-why">{f.why_zh}</small>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Say({ ja, big, onHear }: { ja: string; big?: boolean; onHear: (ja: string) => void }) {
   return (
     <button className={`say ${big ? "big" : ""}`} onClick={() => onHear(ja)}>
@@ -539,6 +577,8 @@ export default function Retell() {
   const [takes, setTakes] = useState<(Take | null)[]>([null, null, null]);
   const [fix, setFix] = useState<RetellFix | null>(null);
   const [end, setEnd] = useState<RetellEnd | null>(null);
+  // The full review of each telling (0-2; 3: the retelling of an earlier story).
+  const [reviews, setReviews] = useState<Record<number, ReviewState>>({});
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const rec = useRef<Recorder | null>(null);
@@ -954,6 +994,14 @@ export default function Retell() {
     play(ttsUrl(reaction, voiceOf(who)), 1).catch(() => {});
     setSaid({ who, text: reaction });
     recordSpeech(sec);
+    {
+      const at = old ? 3 : n;
+      const t = shownTopic!;
+      setReviews((r) => ({ ...r, [at]: "wait" }));
+      post<RetellReview>({ kind: "review", topic: `${t.ja}\n${t.about}`.slice(0, 900), said: heard ? marked(heard, flow) : text, round: old ? 1 : n + 1 })
+        .then((v) => setReviews((r) => ({ ...r, [at]: v })))
+        .catch(() => setReviews((r) => ({ ...r, [at]: "fail" })));
+    }
     const span = flow.span || sec;
     const take: Take = {
       text,
@@ -1186,6 +1234,7 @@ export default function Retell() {
           )}
         </div>
         <HelpedList items={[]} self={selfSaid} onHear={hear} />
+        <ReviewList r={reviews[2]} onHear={hear} />
         {busy === "end" && <Note wait text="在看你的第三遍…" />}
         {end && (
           <>
@@ -1346,6 +1395,7 @@ export default function Retell() {
             : "不打分。卡住了就停一下，森先生会接。"}
         </p>
       )}
+      {!warming && round === 0 && !talking && againTake && <ReviewList r={reviews[3]} onHear={hear} />}
 
       {round === 2 && !talking && !busy && takes[1] && (
         <div className="retell-fix">
@@ -1362,6 +1412,7 @@ export default function Retell() {
               {l}
             </p>
           ))}
+          <ReviewList r={reviews[1]} onHear={hear} />
         </div>
       )}
 
@@ -1436,9 +1487,13 @@ export default function Retell() {
                   <p className="fix-zh">{fix.focus_zh}</p>
                 )}
               </div>
+              <ReviewList r={reviews[0]} onHear={hear} />
             </>
           ) : take0 ? (
-            <Note text="内容不用改，再讲一遍给下一个人。" />
+            <>
+              <Note text="内容不用改，再讲一遍给下一个人。" />
+              <ReviewList r={reviews[0]} onHear={hear} />
+            </>
           ) : null}
         </div>
       )}
