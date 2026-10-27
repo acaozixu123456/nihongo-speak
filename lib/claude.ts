@@ -639,6 +639,42 @@ ${a.carry ? `前の日から持ち越した注意点：${a.carry.focus_zh}（正
   );
 }
 
+// After every telling: everything worth telling the learner about it, not just the one point to work on
+// (the user asked for all of it, read by Opus). In the order said; slips of speech recognition, fillers
+// and restarts are not mistakes.
+const RetellReviewSchema = z.object({
+  fixes: z
+    .array(
+      z.object({
+        kind: z.enum(["文法", "用词", "说法", "读音"]).describe("文法：活用・助詞・時制など。用词：語の選び間違い。说法：通じるが不自然。读音：認識結果から明らかに発音・読み違い"),
+        you: z.string().describe("学習者が実際に言った一節（文字起こしのまま、その部分だけ短く）"),
+        better: z.string().describe("その一節の自然で正しい言い方（日本語、内容は変えない、N4〜N3の語彙で話し言葉）"),
+        zh: z.string().describe("better の中国語訳（簡体字）。訳だけ"),
+        why_zh: z.string().describe("何がなぜ違うか（簡体字の中国語、1文、25字以内）"),
+      }),
+    )
+    .describe("直したほうがいいところを全部、話した順に。一つにまとめず、別々の誤りは別々に。なければ空配列"),
+  good: z
+    .array(z.object({ ja: z.string().describe("上手に言えた一節（学習者の言葉のまま）"), why_zh: z.string().describe("何が良いか（簡体字の中国語、1文、20字以内）") }))
+    .describe("本当に良かった言い方を0〜3個。お世辞は不要"),
+});
+export type RetellReview = z.infer<typeof RetellReviewSchema>;
+
+export function retellReview(a: { topic: string; said: string; round: number }) {
+  return haikuFirst(
+    RetellReviewSchema,
+    `${COACH}
+学習者は聞いた話を、自分の言葉で人に話しました（同じ話を3回話すうちの${a.round}回目）。文字起こし（聞こえたとおりの逐語。（…2.1秒…）は黙ったところ）を最初から最後まで読み、直したほうがいいところを一つ残らず挙げてください。
+- 文法・用词・不自然な说法を、話した順に、別々に。
+- 音声認識の同音異字・句読点、えっと・言い直し・繰り返しは誤りにしない。
+- 話の中身や長さは評価しない。`,
+    `話のテーマ：${a.topic}
+${a.round}回目：${a.said}`,
+    4000,
+    "medium",
+  );
+}
+
 // After each telling: how each keyword on screen was used. A word goes only once it has been used
 // right and without a stall in two tellings in a row (counted across days, runs), and then a word the
 // learner hasn't reached for yet takes its place.
