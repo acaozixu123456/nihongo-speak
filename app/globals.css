@@ -2263,6 +2263,19 @@ body:has(.mag) .nw-seg button.on { background: #2e2923; border-color: #2e2923; c
 .help-say.wait { color: var(--muted); font-weight: 500; }
 .help-say mark, .helped-ja mark { background: linear-gradient(transparent 56%, #f4e2b8 56%, #f4e2b8 92%, transparent 92%); color: var(--accent); }
 .help-zh { margin-top: 4px; font-size: 13px; color: var(--muted); }
+.help-ring { position: relative; display: inline-flex; border-radius: 50%; }
+.help-ring::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 2px solid var(--accent); opacity: 0.5; animation: help-ring 1.1s ease-out infinite; }
+@keyframes help-ring { from { transform: scale(0.9); opacity: 0.6; } to { transform: scale(1.35); opacity: 0; } }
+.help-bar { margin-top: 10px; height: 3px; border-radius: 2px; background: var(--line, #e6dfd2); position: relative; overflow: hidden; }
+.help-bar::after { content: ""; position: absolute; inset: 0; background: var(--accent); transform-origin: left; animation: help-bar 1.1s linear both; }
+@keyframes help-bar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.help-lit { background: linear-gradient(transparent 52%, #f4e2b8 52%, #f4e2b8 94%, transparent 94%); }
+.help-dim { color: #b9ae9e; }
+.help-again { display: flex; gap: 8px; margin-top: 12px; }
+.help-again button { height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line, #e6dfd2); background: transparent; font: inherit; font-size: 14px; color: inherit; cursor: pointer; }
+.help-again button:first-child { flex: 1; border: 1.5px solid var(--ink, #221f1b); font-weight: 700; }
+.help-go { margin-top: 10px; width: 100%; }
+.today-big.paused { color: #c9bcaa; }
 .help-opts { display: grid; gap: 8px; margin-top: 10px; }
 .help-q { font-size: 13px; color: var(--muted); }
 .help-opts button { display: grid; gap: 2px; text-align: left; padding: 10px 14px; border: 1px solid var(--line, #e6dfd2); border-radius: 12px; background: #fffdf8; font: inherit; color: inherit; cursor: pointer; }

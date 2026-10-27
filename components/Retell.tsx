@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { calls, people } from "@/content/calls";
 import type { RetellEnd, RetellFix, RetellKeys } from "@/lib/claude";
 import type { Heard } from "@/lib/gemini-hear";
-import { play, stop as stopAudio, ttsUrl, unlock } from "@/lib/client/player";
+import { play, progress, stop as stopAudio, ttsUrl, unlock } from "@/lib/client/player";
 import { loadPause, startPause, stopPause } from "@/lib/client/bgm";
 import {
   dayKey,
@@ -41,6 +41,7 @@ import Note from "./Note";
 import { SenseiFace, speakClip, SENSEI_VOICE } from "./Sensei";
 import { Ears, joinWavs } from "@/lib/client/ears";
 import { audioCtx, renewAudio } from "@/lib/client/audio";
+import { chime } from "@/lib/client/fx";
 import { preload } from "@/lib/client/player";
 
 // 三回話す: tell today's radio story three times, each time to a different person (so there is nothing
@@ -239,7 +240,8 @@ type HelpRes = {
   rest?: Promise<void>;
 };
 // step 0: she is about to speak; 1: her line (and the guesses to pick from); 2: the whole sentence.
-type HelpNow = HelpRes & { step: 0 | 1 | 2 };
+// reading: the line her voice is on now (lit as she goes); turn: she has said it and waits for 接着说.
+type HelpNow = HelpRes & { step: 0 | 1 | 2; reading?: "say" | "next" | null; turn?: boolean };
 type HelpWire = { said?: string; say?: string; audio?: string; error?: string; sure?: boolean; opts?: HelpOpt[] };
 function fill(h: HelpRes, b: HelpWire) {
   h.opts = b.opts ?? [];
@@ -306,28 +308,59 @@ function Added({ text, added }: { text: string; added: string }) {
   );
 }
 
-// Her card while telling: the line she is saying; when she isn't sure what the learner meant, her guesses
-// to tap (是这个意思吗？); the whole sentence under it on step 2, her added words marked. Stays until her
-// next line or the end of the telling (it never vanishes at a sound).
-// tap: her one sure guess is also only said on a tap (later tellings, where she does less).
-function HelpCard({ h, onPick, tap }: { h: HelpNow; onPick?: (i: number) => void; tap?: boolean }) {
-  const ask = h.step === 1 && (h.opts?.length ?? 0) > 0 && (!h.sure || tap) && onPick;
+// Her line as she reads it: the part already said under the highlighter, the rest grey (from how far the
+// sound has got, by characters), so eyes can follow her voice.
+function Follow({ text }: { text: string }) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const { at, of } = progress();
+      // The last bit of her clip is silence: the line is lit by the time she stops.
+      if (of > 0) setN(Math.min(text.length, Math.ceil((text.length * at) / (of * 0.9))));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [text]);
+  return (
+    <>
+      <span className="help-lit">{text.slice(0, n)}</span>
+      <span className="help-dim">{text.slice(n)}</span>
+    </>
+  );
+}
+
+// Her card while telling. First only that she is coming (a chime, a ring on her face, the clock stopped),
+// then her line, slowly, lit as she reads it; when she isn't sure what the learner meant, her guesses to
+// tap (是这个意思吗？). Nothing goes away: her line stays to hear again (slower if asked), and the
+// telling goes on only when the learner taps 接着说 (a cough or a noise never restarts it).
+type CardActs = { again: (slow: boolean) => void; whole: () => void; pick: (i: number) => void; go: () => void };
+function HelpCard({ h, acts }: { h: HelpNow; acts: CardActs }) {
+  const ask = h.step === 1 && !h.sure && (h.opts?.length ?? 0) > 1;
+  const line = (which: "say" | "next", text: string, node: ReactNode) => (h.reading === which ? <Follow text={text} /> : node);
   return (
     <div className="help-card">
       <div className="help-who">
-        <SenseiFace size={36} />
+        <span className={h.step === 0 ? "help-ring" : ""}>
+          <SenseiFace size={36} />
+        </span>
         <b>森先生</b>
       </div>
       {h.step === 0 ? (
-        <div className="help-say wait">うん…</div>
+        <>
+          <div className="help-say">うん、手伝うね。</div>
+          <div className="help-zh">我来帮你，先停表</div>
+          <div className="help-bar" />
+        </>
       ) : (
         <>
-          <div className={`help-say${h.step === 2 ? " was" : ""}`}>{h.say}</div>
+          <div className={`help-say${h.step === 2 ? " was" : ""}`}>{line("say", h.say, h.say)}</div>
           {ask && (
             <div className="help-opts">
-              <span className="help-q">{h.sure ? "想说的是这个吗？" : "是这个意思吗？"}</span>
+              <span className="help-q">是这个意思吗？点一下，她就读</span>
               {h.opts!.map((o, i) => (
-                <button key={o.ja} onClick={() => onPick(i)}>
+                <button key={o.ja} onClick={() => acts.pick(i)}>
                   <span className="help-opt-ja">
                     <Added text={o.ja} added={o.added} />
                   </span>
@@ -337,11 +370,23 @@ function HelpCard({ h, onPick, tap }: { h: HelpNow; onPick?: (i: number) => void
             </div>
           )}
           {h.step === 2 && (
-            <div className="help-say">
-              <Added text={h.next} added={h.added} />
-            </div>
+            <>
+              <div className="help-say">{line("next", h.next, <Added text={h.next} added={h.added} />)}</div>
+              <div className="help-zh">{h.zh}</div>
+            </>
           )}
-          {!ask && <div className="help-zh">{h.step === 2 ? `${h.zh}　跟着说一遍就好` : h.next ? "接着往下说" : ""}</div>}
+          {h.turn && (
+            <>
+              <div className="help-again">
+                <button onClick={() => acts.again(false)}>↻ 再听一遍</button>
+                <button onClick={() => acts.again(true)}>慢</button>
+                {h.step === 1 && h.sure && h.next && <button onClick={acts.whole}>听整句</button>}
+              </div>
+              <button className="today-go help-go" onClick={acts.go}>
+                接着说
+              </button>
+            </>
+          )}
         </>
       )}
     </div>
@@ -536,6 +581,9 @@ export default function Retell() {
   const ears = useRef<Ears | null>(null);
   const ahead = useRef<Promise<HelpRes | null> | null>(null);
   const helping = useRef(false);
+  // Her saying it once more by herself; which of her lines is the latest (an older one ending does nothing).
+  const autoAgain = useRef<number | undefined>(undefined);
+  const saying = useRef(0);
   const live = useRef(false);
   const helped = useRef<Helped[]>([]);
   // Places she helped on an earlier telling that the learner then said by themselves.
@@ -675,17 +723,14 @@ export default function Retell() {
     if (e.fresh && q >= PHRASE_S && level < 2) phrases.current.push(hearPhrase(e.phrase()));
     const h = helpNow.current;
     // She has said her first step and nothing has come since.
-    if (h && !e.spoke) {
-      if (h.step === 1 && level === 0 && h.next && h.sure && q >= STUCK_S) void stepIn(2);
-      return;
-    }
+    if (h && !e.spoke) return;
     if (q < PREFETCH_S) {
       ahead.current = null;
       return;
     }
     const wait = e.spoke ? STUCK_S : START_S;
     if (level < 2 && !ahead.current && q >= (e.spoke ? PREFETCH_S : wait - 2)) ahead.current = ask(e.spoke ? e.clip(10) : "");
-    if (q >= wait) void stepIn(1);
+    if (q >= wait) void stepIn();
   }
 
   const helpPost = (body: object) =>
@@ -718,56 +763,107 @@ export default function Retell() {
     return go.catch(() => null);
   }
 
-  // She speaks: the mic is shut and the clock stopped meanwhile, then the mic opens again.
-  // step 1 is a new help, step 2 the whole sentence of the help on screen (pick: the guess the learner
-  // tapped). Also from a tap on her.
-  async function stepIn(step: 1 | 2, pick?: number) {
+  // The mic is shut and the clock stopped from the moment she steps in until the learner taps 接着说.
+  // First the chime and a second to notice her, then her line, slowly; then her line stays to hear again,
+  // and she says it once more by herself if nothing is tapped (on the first telling, when she knows what
+  // they meant, the whole sentence instead). Also from a tap on her.
+  async function stepIn() {
     const r = rec.current;
     if (helping.current || !live.current || !r) return;
     helping.current = true;
     stoppedAt.current = Date.now();
     const e = ears.current;
-    const pending = step === 1 && level < 2 ? (ahead.current ?? ask(e?.spoke ? e.clip() : "")) : null;
+    const pending = level < 2 ? (ahead.current ?? ask(e?.spoke ? e.clip() : "")) : null;
     ahead.current = null;
     e?.close();
     ears.current = null;
     rec.current = null;
-    try {
-      segs.current.push(await r.stop());
-    } catch {}
-    let h = helpNow.current;
-    const o = pick !== undefined ? h?.opts?.[pick] : undefined;
-    if (h && o) {
-      h = { ...h, next: o.ja, zh: o.zh, added: o.added, audio: { say: h.audio?.say ?? "", next: o.audio ?? "" } };
-      keepHelp(h);
-    }
-    if (step === 2 && h) {
-      showHelp({ ...h, step: 2 });
-      if (live.current) await speakClip(clipUrl(h.audio?.next) || ttsUrl(h.next, SENSEI_VOICE));
-    } else if (!pending) {
-      showHelp({ said: "", say: GO_ON, added: "", next: "", zh: "", step: 1 });
-      if (live.current) await speakClip(ttsUrl(GO_ON, SENSEI_VOICE));
-    } else {
-      showHelp({ said: "", say: "", added: "", next: "", zh: "", step: 0 });
-      const got = await pending;
-      // Without an answer: the next keyword, as a question.
-      const key = (keyed?.keys ?? shownTopic!.keys)[0]?.ja;
-      const res: HelpRes = got?.say ? got : { said: "", say: key ? `${key}は…？` : GO_ON, added: key ?? "", next: "", zh: "" };
-      if (got?.say) {
-        const keep = () => {
-          // Unsure guesses are kept only once the learner picks one.
-          if (got.sure !== false) keepHelp(got);
-          // The card shown before the guesses came: now with them (the step-2 check needs them).
-          const now = helpNow.current;
-          if (now && now.say === got.say) showHelp({ ...now, next: got.next, zh: got.zh, added: got.added, sure: got.sure, opts: got.opts, audio: got.audio });
-        };
-        if (got.rest) void got.rest.then(keep);
-        else keep();
-      }
-      showHelp({ ...res, step: 1 });
-      if (live.current) await speakClip(clipUrl(res.audio?.say) || ttsUrl(res.say, SENSEI_VOICE));
-    }
+    showHelp({ said: "", say: "", added: "", next: "", zh: "", step: 0 });
+    chime();
+    const [, got] = await Promise.all([
+      r.stop().then((w) => void segs.current.push(w)).catch(() => {}),
+      pending ?? Promise.resolve(null),
+      new Promise((ok) => setTimeout(ok, 1100)),
+    ]);
     if (!live.current) return;
+    // Without an answer: the next keyword, as a question.
+    const key = (keyed?.keys ?? shownTopic!.keys)[0]?.ja;
+    const res: HelpRes =
+      level >= 2 || !pending ? { said: "", say: GO_ON, added: "", next: "", zh: "" } : got?.say ? got : { said: "", say: key ? `${key}は…？` : GO_ON, added: key ?? "", next: "", zh: "" };
+    if (got?.say) {
+      const keep = () => {
+        // Unsure guesses are kept only once the learner picks one.
+        if (got.sure !== false) keepHelp(got);
+        // The card shown before the guesses came: now with them.
+        const now = helpNow.current;
+        if (now && now.say === got.say) showHelp({ ...now, next: got.next, zh: got.zh, added: got.added, sure: got.sure, opts: got.opts, audio: got.audio });
+      };
+      if (got.rest) void got.rest.then(keep);
+      else keep();
+    }
+    showHelp({ ...res, step: 1 });
+    await voiceLine("say");
+  }
+
+  // Her voice on one line of the card, lit as she reads; then her turn is over until something is tapped.
+  const SLOW = 0.88;
+  const SLOWER = 0.72;
+  async function voiceLine(which: "say" | "next", rate = SLOW, auto = true) {
+    const h = helpNow.current;
+    if (!h || !live.current) return;
+    window.clearTimeout(autoAgain.current);
+    const id = ++saying.current;
+    const text = which === "say" ? h.say : h.next;
+    const src = clipUrl(which === "say" ? h.audio?.say : h.audio?.next) || ttsUrl(text, SENSEI_VOICE);
+    showHelp({ ...h, reading: which });
+    await speakClip(src, rate);
+    if (id !== saying.current || !live.current || !helping.current) return;
+    const now = helpNow.current!;
+    showHelp({ ...now, reading: null, turn: true });
+    if (!auto) return;
+    // Nothing tapped for a while: once more, slower (the whole sentence, when she is sure and it's the first
+    // telling); when she asked which meaning, she waits for the pick.
+    autoAgain.current = window.setTimeout(() => {
+      const n = helpNow.current;
+      if (!n || !n.turn || n.reading || !helping.current || !live.current) return;
+      if (n.step === 1 && !n.sure && (n.opts?.length ?? 0) > 1) return;
+      if (n.step === 1 && n.sure && n.next && level === 0) void whole(false);
+      else void voiceLine(which, SLOWER, false);
+    }, 5000);
+  }
+
+  function hearAgain(slow: boolean) {
+    const h = helpNow.current;
+    if (!h || h.reading) return;
+    void voiceLine(h.step === 2 ? "next" : "say", slow ? SLOWER : SLOW, false);
+  }
+
+  function whole(tapped = true) {
+    const h = helpNow.current;
+    if (!h || !h.next || h.reading) return;
+    keepHelp(h);
+    showHelp({ ...h, step: 2 });
+    return voiceLine("next", SLOW, tapped);
+  }
+
+  function pickOpt(i: number) {
+    const h = helpNow.current;
+    const o = h?.opts?.[i];
+    if (!h || !o || h.reading) return;
+    const c: HelpNow = { ...h, next: o.ja, zh: o.zh, added: o.added, audio: { say: h.audio?.say ?? "", next: o.audio ?? "" }, step: 2 };
+    keepHelp(c);
+    showHelp(c);
+    void voiceLine("next", SLOW, false);
+  }
+
+  // 接着说: her voice stops, the mic opens again and the clock goes on. Her card stays.
+  async function goOn() {
+    if (!helping.current || !live.current || rec.current) return;
+    window.clearTimeout(autoAgain.current);
+    saying.current++;
+    stopAudio();
+    const h = helpNow.current;
+    if (h) showHelp({ ...h, reading: null, turn: false });
     const n = new Recorder();
     rec.current = n;
     try {
@@ -797,6 +893,8 @@ export default function Retell() {
     timer.current = null;
     if (!live.current) return;
     live.current = false;
+    window.clearTimeout(autoAgain.current);
+    saying.current++;
     const r = rec.current;
     rec.current = null;
     ears.current?.close();
@@ -1172,7 +1270,9 @@ export default function Retell() {
               </Link>
             )
           )}
-          {talking && <span className={`today-big ${left < 10 ? "hurry" : ""}`}>{clock(left)}</span>}
+          {talking && (
+            <span className={`today-big ${left < 10 ? "hurry" : ""}${help?.turn || help?.reading || help?.step === 0 ? " paused" : ""}`}>{clock(left)}</span>
+          )}
         </span>
         {keys.length > 0 && (
           <div className="retell-keys">
@@ -1214,9 +1314,9 @@ export default function Retell() {
 
       {talking &&
         (help ? (
-          <HelpCard h={help} tap={level > 0} onPick={(i) => void stepIn(2, i)} />
+          <HelpCard h={help} acts={{ again: hearAgain, whole: () => void whole(), pick: pickOpt, go: () => void goOn() }} />
         ) : (
-          <button className="help-call" onClick={() => void stepIn(1)}>
+          <button className="help-call" onClick={() => void stepIn()}>
             <SenseiFace size={32} />
             <span>{round === 0 ? "说不出来就停一下，森先生会接" : ""}</span>
           </button>

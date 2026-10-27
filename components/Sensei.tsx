@@ -24,10 +24,10 @@ export function speak(ja: string) {
 }
 
 // Her voice from a recording already in hand (a help line that came with its audio).
-export function speakClip(src: string): Promise<void> {
+export function speakClip(src: string, rate = 1): Promise<void> {
   unlock();
   setTalking(true);
-  return play(src, 1)
+  return play(src, rate)
     .catch(() => {})
     .finally(() => setTalking(false));
 }
