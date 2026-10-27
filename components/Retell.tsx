@@ -210,19 +210,14 @@ async function post<T>(body: unknown): Promise<T> {
   return data as T;
 }
 
-// 森先生 stepping in when the learner is stuck while telling (/api/help). Asked for once the learner has
-// been quiet PREFETCH_S, so it is ready when she should speak: after STUCK_S of quiet once they have said
-// something, START_S before they have. Like a real teacher she does less each telling: on the first she says
-// back what they were saying, then her guess at what they meant: when she can tell, the whole sentence if
-// they are still stuck; when she can't, two or three meanings to pick from (是这个意思吗？), and the one
-// picked is said for them to repeat. On the second telling only the picking; on the third only
-// 「うん、それで？」.
-// The mic is shut and the clock stopped while she speaks, so her voice isn't taken as theirs.
-const PREFETCH_S = 0.8;
-// Each phrase is written down once the learner pauses this long, while they go on telling.
+// 森先生 helping while the learner tells (/api/help), only when they call her (森先生，帮我一下): she
+// never steps in by herself (that came too soon or at the wrong moment). Like a real teacher she says back
+// what they were saying, then her guess at what they meant: when she can tell, the whole sentence; when she
+// can't, two or three meanings to pick from (是这个意思吗？), and the one picked is said for them to repeat.
+// The mic is shut and the clock stopped while she helps, so her voice isn't taken as theirs.
+// Each phrase is written down once the learner pauses this long, while they go on telling, so only her
+// line is left to write when they call her.
 const PHRASE_S = 0.5;
-const STUCK_S = 3;
-const START_S = 5;
 const GO_ON = "うん、それで？";
 // Her guesses at what the learner meant (opts, most likely first; sure: only one). next/zh/added/audio.next
 // are the one she says: the first, or the one the learner picked.
@@ -349,8 +344,8 @@ function HelpCard({ h, acts }: { h: HelpNow; acts: CardActs }) {
       </div>
       {h.step === 0 ? (
         <>
-          <div className="help-say">うん、手伝うね。</div>
-          <div className="help-zh">我来帮你，先停表</div>
+          <div className="help-say">うん、ちょっと待ってね。</div>
+          <div className="help-zh">在听你刚才说的…</div>
           <div className="help-bar" />
         </>
       ) : (
@@ -609,8 +604,7 @@ export default function Retell() {
   const [along, setAlong] = useState(false);
   // The answer to the fix stays hidden until the learner has tried to find it.
   const [shown, setShown] = useState(false);
-  // 森先生 while telling (see PREFETCH_S): what she is saying now, her help asked for ahead of a stall,
-  // the places she helped (every telling today), the recordings of this telling (one per stretch between
+  // 森先生 while telling (see PHRASE_S): what she is saying now, the places she helped (every telling today), the recordings of this telling (one per stretch between
   // her lines) and how long the clock has been stopped for her.
   const [help, setHelp] = useState<HelpNow | null>(null);
   const helpNow = useRef<HelpNow | null>(null);
@@ -619,7 +613,6 @@ export default function Retell() {
     setHelp(h);
   };
   const ears = useRef<Ears | null>(null);
-  const ahead = useRef<Promise<HelpRes | null> | null>(null);
   const helping = useRef(false);
   // Her saying it once more by herself; which of her lines is the latest (an older one ending does nothing).
   const autoAgain = useRef<number | undefined>(undefined);
@@ -696,8 +689,6 @@ export default function Retell() {
   const listener = warming ? "yui" : LISTENERS[round];
   const limit = warming ? AGAIN_SECONDS : SECONDS[round];
   const shownTopic = warming ? again!.topic : topic;
-  // How much she helps on this telling: 0 both steps, 1 only the first, 2 only 「うん、それで？」.
-  const level = warming ? 1 : round;
   const slot = warming ? 3 : round;
 
   // Reading → morae per second; undefined when no clean reading came back.
@@ -729,7 +720,6 @@ export default function Retell() {
     stoppedMs.current = 0;
     stoppedAt.current = 0;
     helping.current = false;
-    ahead.current = null;
     phrases.current = [];
     showHelp(null);
     live.current = true;
@@ -754,23 +744,11 @@ export default function Retell() {
     } catch {}
   }
 
-  // Every quarter second while telling: ask for her help early in a silence, and have her step in once
-  // the learner is really stuck.
+  // Every quarter second while telling: each phrase written down at its pause.
   function watch() {
     const e = ears.current;
     if (!e || helping.current || !live.current) return;
-    const q = e.quiet();
-    if (e.fresh && q >= PHRASE_S && level < 2) phrases.current.push(hearPhrase(e.phrase()));
-    const h = helpNow.current;
-    // She has said her first step and nothing has come since.
-    if (h && !e.spoke) return;
-    if (q < PREFETCH_S) {
-      ahead.current = null;
-      return;
-    }
-    const wait = e.spoke ? STUCK_S : START_S;
-    if (level < 2 && !ahead.current && q >= (e.spoke ? PREFETCH_S : wait - 2)) ahead.current = ask(e.spoke ? e.clip(10) : "");
-    if (q >= wait) void stepIn();
+    if (e.fresh && e.quiet() >= PHRASE_S) phrases.current.push(hearPhrase(e.phrase()));
   }
 
   const helpPost = (body: object) =>
@@ -818,8 +796,9 @@ export default function Retell() {
     helping.current = true;
     stoppedAt.current = Date.now();
     const e = ears.current;
-    const pending = level < 2 ? (ahead.current ?? ask(e?.spoke ? e.clip() : "")) : null;
-    ahead.current = null;
+    // What was said since the last phrase went down is written down now too.
+    if (e?.fresh) phrases.current.push(hearPhrase(e.phrase()));
+    const pending = ask(e?.spoke ? e.clip(12) : "");
     e?.close();
     ears.current = null;
     rec.current = null;
@@ -828,11 +807,11 @@ export default function Retell() {
     const [, got] = await Promise.all([
       r.stop().then((w) => void segs.current.push(w)).catch(() => {}),
       pending ?? Promise.resolve(null),
-      new Promise((ok) => setTimeout(ok, 1100)),
+      new Promise((ok) => setTimeout(ok, 800)),
     ]);
     if (!live.current) return;
     // Without an answer (or on the third telling): 「うん、それで？」.
-    const res: HelpRes = got?.say && level < 2 ? got : { said: "", say: GO_ON, added: "", next: "", zh: "" };
+    const res: HelpRes = got?.say ? got : { said: "", say: GO_ON, added: "", next: "", zh: "" };
     if (got?.say) {
       const keep = () => {
         // Unsure guesses are kept only once the learner picks one.
@@ -870,7 +849,7 @@ export default function Retell() {
       const n = helpNow.current;
       if (!n || !n.turn || n.reading || !helping.current || !live.current) return;
       if (n.step === 1 && !n.sure && (n.opts?.length ?? 0) > 1) return;
-      if (n.step === 1 && n.sure && n.next && level === 0) void whole(false);
+      if (n.step === 1 && n.sure && n.next) void whole(false);
       else void voiceLine(which, SLOWER, false);
     }, 5000);
   }
@@ -942,7 +921,6 @@ export default function Retell() {
     rec.current = null;
     ears.current?.close();
     ears.current = null;
-    ahead.current = null;
     stopAudio();
     showHelp(null);
     const n = round;
@@ -1364,15 +1342,15 @@ export default function Retell() {
         )}
       </div>
 
-      {talking &&
-        (help ? (
-          <HelpCard h={help} acts={{ again: hearAgain, whole: () => void whole(), pick: pickOpt, go: () => void goOn() }} />
-        ) : (
-          <button className="help-call" onClick={() => void stepIn()}>
-            <SenseiFace size={32} />
-            <span>{round === 0 ? "说不出来就停一下，森先生会接" : ""}</span>
-          </button>
-        ))}
+      {talking && help && <HelpCard h={help} acts={{ again: hearAgain, whole: () => void whole(), pick: pickOpt, go: () => void goOn() }} />}
+      {/* Her button, whenever the mic is on: she comes only when called. */}
+      {talking && (!help || (help.step > 0 && !help.turn && !help.reading)) && (
+        <button className="help-call" onClick={() => void stepIn()}>
+          <SenseiFace size={36} />
+          <b>森先生，帮我一下</b>
+          <small>随时点</small>
+        </button>
+      )}
       {warming && !talking && !error && (
         <p className="muted retell-note">隔一天再讲一遍，记得更牢。只讲一遍，想起多少讲多少，然后再讲今天的。</p>
       )}
@@ -1392,7 +1370,7 @@ export default function Retell() {
             ? uptake.length
               ? `上次的故事讲完了。昨天的说法用上了：${uptake.map((u) => `「${u}」`).join("")} ✓`
               : "上次的故事讲完了，现在讲今天的。"
-            : "不打分。卡住了就停一下，森先生会接。"}
+            : "不打分。说不出来时，点「森先生，帮我一下」。"}
         </p>
       )}
       {!warming && round === 0 && !talking && againTake && <ReviewList r={reviews[3]} onHear={hear} />}
