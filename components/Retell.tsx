@@ -738,8 +738,10 @@ export default function Retell() {
 
   function hearPhrase(clip: string): Promise<string | null> {
     if (!clip) return Promise.resolve("");
-    return helpPost({ hear: true, audio: clip })
-      .then((r) => (r as unknown as { text?: string }).text ?? "")
+    // Its own reader: the answer is {text}, not a help line.
+    return fetch("/api/help", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ hear: true, audio: clip }) })
+      .then((r) => (r.ok ? (r.json() as Promise<{ text?: string }>) : Promise.reject(new Error(String(r.status)))))
+      .then((r) => r.text ?? "")
       .catch(() => null);
   }
 
@@ -751,15 +753,18 @@ export default function Retell() {
     const before = helped.current.filter((x) => x.round === slot).map((x) => x.next).join("");
     const base = { topic: `${t.ja}\n${t.about}`.slice(0, 300), keys, before };
     const last = phrases.current.slice(-4);
-    const fromAudio = () => helpPost({ ...base, audio: clip }) as Promise<HelpRes>;
+    const fromText = (said: string) => helpPost({ ...base, said }) as Promise<HelpRes>;
+    // From the recording when the phrases couldn't all be written down; if that fails too, from what was
+    // written down (or from nothing): she always has a real line, never a guess at a keyword.
+    const fromAudio = (said: string) => (helpPost({ ...base, audio: clip }) as Promise<HelpRes>).catch(() => fromText(said));
     const go = clip && last.length
       ? Promise.all(last).then((texts) => {
           const said = texts.join("");
-          return texts.some((x) => x === null) || !said.trim() ? fromAudio() : (helpPost({ ...base, said }) as Promise<HelpRes>);
+          return texts.some((x) => x === null) || !said.trim() ? fromAudio(said) : fromText(said).catch(() => fromAudio(said));
         })
       : clip
-        ? fromAudio()
-        : (helpPost({ ...base, said: "" }) as Promise<HelpRes>);
+        ? fromAudio("")
+        : fromText("");
     return go.catch(() => null);
   }
 
@@ -786,10 +791,8 @@ export default function Retell() {
       new Promise((ok) => setTimeout(ok, 1100)),
     ]);
     if (!live.current) return;
-    // Without an answer: the next keyword, as a question.
-    const key = (keyed?.keys ?? shownTopic!.keys)[0]?.ja;
-    const res: HelpRes =
-      level >= 2 || !pending ? { said: "", say: GO_ON, added: "", next: "", zh: "" } : got?.say ? got : { said: "", say: key ? `${key}は…？` : GO_ON, added: key ?? "", next: "", zh: "" };
+    // Without an answer (or on the third telling): 「うん、それで？」.
+    const res: HelpRes = got?.say && level < 2 ? got : { said: "", say: GO_ON, added: "", next: "", zh: "" };
     if (got?.say) {
       const keep = () => {
         // Unsure guesses are kept only once the learner picks one.
