@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { ANSWER_VOICE as VOICE } from "@/content/kokoro-patterns";
 import { fixedParts, type KokoroItem, type KokoroSet } from "@/lib/kokoro-model";
-import { LAPS, keepSet, lapClips, loadSet, markLap, markSaid, markStuck, readStuck, savedSet, type KClip } from "@/lib/client/kokoro";
+import { LAPS, keepSet, lapClips, loadSet, markLap, markSaid, markStuck, newSet, readStuck, resetStuck, savedSet, type KClip } from "@/lib/client/kokoro";
 import { prepare, pruneCache, type Prepared } from "@/lib/client/moyu";
 import { SILENCE, play, stop as stopAudio, ttsUrl, unlock } from "@/lib/client/player";
 import { dayKey, recordMoyu, recordSpeech, wavSeconds } from "@/lib/client/progress";
@@ -29,6 +29,7 @@ export default function Kokoro() {
   const [zh, setZh] = useState(false);
   const [stuck, setStuck] = useState(() => readStuck());
   const [home, setHome] = useState<KokoroItem | null>(null);
+  const [making, setMaking] = useState(false);
   const audio = useRef<HTMLAudioElement>(null);
   const s = useRef({
     laps: [] as (Promise<Prepared> | null)[],
@@ -80,9 +81,10 @@ export default function Kokoro() {
     if (!set) return Promise.reject(new Error("no set"));
     let p = s.laps[n];
     if (!p) {
-      p = prepare(lapClips(set, n));
-      p.catch(() => (s.laps[n] = null));
-      s.laps[n] = p;
+      const made = prepare(lapClips(set, n));
+      // Not when the laps were let go meanwhile (another set came): that slot is the new set's.
+      made.catch(() => s.laps[n] === made && (s.laps[n] = null));
+      s.laps[n] = p = made;
     }
     return p;
   }
@@ -126,6 +128,33 @@ export default function Kokoro() {
     if (s.cur) s.laps = [];
     s.cur = null;
     playLap(from);
+  }
+
+  // After the three laps: the day's newest set if this phone hasn't had it yet, else one written now.
+  // Either way the questions gone through today go with it, so the sets after it leave them out.
+  async function more() {
+    if (!set || making) return;
+    const day = dayKey();
+    setMaking(true);
+    setError("");
+    try {
+      const heard = [...set.items.map((it) => it.q), ...(set.earlier ?? [])];
+      const saved = await loadSet(day).catch(() => null);
+      const next =
+        saved && saved.made > set.made ? { ...saved, earlier: [...new Set([...heard, ...(saved.earlier ?? [])])] } : await newSet(heard, day);
+      resetStuck(day);
+      keepSet(next);
+      // The old set's laps (one is made on open for もう一度) let go.
+      for (const p of s.laps) p?.then((x) => URL.revokeObjectURL(x.url), () => {});
+      s.laps = [];
+      if (s.cur) URL.revokeObjectURL(s.cur.url);
+      s.cur = null;
+      setStuck(readStuck(day));
+      setSet(next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "出题失败");
+    }
+    setMaking(false);
   }
 
   function close() {
@@ -364,9 +393,9 @@ export default function Kokoro() {
       <>
         <Link href="/listen" className="back" aria-label="戻る">←</Link>
         <Mast title="心で答える" date={date} weekday={weekday} />
-        {!set && !error && <div className="ko-wait" aria-label="作成中" />}
+        {((!set && !error) || making) && <div className="ko-wait" aria-label="作成中" />}
         {error && <p className="error">{error}</p>}
-        {groups.map((g) => (
+        {!making && groups.map((g) => (
           <section key={g.k}>
             <div className="ko-sec">
               <b>{g.k === "work" ? "仕事" : "生活"}</b>
@@ -381,9 +410,15 @@ export default function Kokoro() {
             ))}
           </section>
         ))}
-        {set && (
+        {set && !making && stuck.laps >= LAPS && (
+          <>
+            <button className="ko-go" onClick={more}>＋ 新しい質問</button>
+            <button className="ko-on" onClick={start}>▶ もう一度</button>
+          </>
+        )}
+        {set && !making && stuck.laps < LAPS && (
           <button className="ko-go" onClick={start}>
-            ▶ {stuck.laps >= LAPS ? "もう一度" : from ? `${from + 1}周目` : "聞く"}
+            ▶ {from ? `${from + 1}周目` : "聞く"}
           </button>
         )}
       </>
