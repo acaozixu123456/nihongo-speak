@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { makeSet, readSet, saveNotes } from "@/lib/kokoro";
+import { after, NextResponse } from "next/server";
+import { makeSet, readSet, saveNotes, warm } from "@/lib/kokoro";
 import { jstDay } from "@/lib/push";
 import { spend, tooMany } from "@/lib/quota";
 import { storageReady } from "@/lib/store";
@@ -38,7 +38,9 @@ export async function POST(request: Request) {
   try {
     if (!trial) await saveNotes(day, notes);
     if (!(await spend("kokoro"))) return tooMany();
-    return NextResponse.json(await makeSet(day, trial ? { try: notes } : {}));
+    const set = await makeSet(day, trial ? { try: notes } : {});
+    if (!trial) after(() => warm(set));
+    return NextResponse.json(set);
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: e instanceof Error ? e.message : "出题失败" }, { status: 502 });

@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { makeSet, readSet } from "@/lib/kokoro";
+import { after, NextResponse } from "next/server";
+import { makeSet, readSet, warm } from "@/lib/kokoro";
 import { jstDay } from "@/lib/push";
 import { storageReady } from "@/lib/store";
 
@@ -17,6 +17,7 @@ export async function GET(request: Request) {
   try {
     if (await readSet(day)) return NextResponse.json({ fresh: false, day });
     const set = await makeSet(day);
+    after(() => warm(set));
     return NextResponse.json({ fresh: true, items: set.items.length });
   } catch (e) {
     console.error(e);
