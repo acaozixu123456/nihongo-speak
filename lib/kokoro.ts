@@ -90,8 +90,21 @@ export async function makeSet(day: string): Promise<KokoroSet> {
       fits,
     });
   }
-  const good = items.filter((x) => x.fits);
-  const set: KokoroSet = { day, made: Date.now(), work: items.some((x) => x.kind === "work"), items: (good.length >= 4 ? good : items).slice(0, 6) };
+  // No 型 more than twice a day, whatever the model did.
+  const seen = new Map<string, number>();
+  const good = items.filter((x) => {
+    if (!x.fits) return false;
+    const over = x.forms.some((f) => (seen.get(f) ?? 0) >= 2);
+    if (!over) for (const f of x.forms) seen.set(f, (seen.get(f) ?? 0) + 1);
+    return !over;
+  });
+  // Six: four about work and two about life when there are work notes.
+  const from = good.length >= 4 ? good : items;
+  const work = from.filter((x) => x.kind === "work");
+  const life = from.filter((x) => x.kind === "life");
+  const nWork = Math.min(work.length, Math.max(4, 6 - life.length));
+  const chosen = [...work.slice(0, nWork), ...life.slice(0, 6 - nWork)];
+  const set: KokoroSet = { day, made: Date.now(), work: work.length > 0, items: chosen };
   await writeJson(setPath(day), set);
   return set;
 }
