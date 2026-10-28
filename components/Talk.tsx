@@ -210,15 +210,12 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
       {busy === "stt" && <p className="muted">识别中…</p>}
       {busy === "ai" && <p className="muted">对方正在回答…</p>}
       {finished && !feedback && (
-        <div className="card">
-          对话告一段落。点「结束并点评」看看哪里可以说得更自然。
-        </div>
+        <div className="card">对话告一段落</div>
       )}
 
       {hintOpen && (
         <div className="card">
           <strong>提示</strong>
-          <p className="muted">想说什么可以先用中文写下来；不写的话就给你几种可以接的话。</p>
           <input value={wantZh} onChange={(e) => setWantZh(e.target.value)} placeholder="想说的中文（可不填）" />
           <div className="row" style={{ marginTop: 8 }}>
             <button className="primary" onClick={getHint} disabled={!!busy}>

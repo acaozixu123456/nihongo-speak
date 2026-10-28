@@ -18,13 +18,12 @@ export default function Scenes({ tab: initial }: { tab?: BuildingId }) {
       <header className="page-mast">
         <div>
           <h1>场景对话</h1>
-          <p className="muted">每个场景三步：听 → 跟读 → 对话</p>
         </div>
       </header>
 
       <Link href="/new" className="redo">
         <span className="redo-t">重来一次</span>
-        <span className="redo-d">今天哪句话没说出来？说说发生了什么，或者拍张照片，AI 把它变成场景让你再练一次。</span>
+        <span className="redo-d">今天哪句话没说出来？</span>
         <span className="redo-go">开始 ›</span>
       </Link>
 

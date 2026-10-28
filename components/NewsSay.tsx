@@ -44,7 +44,7 @@ export function NewsSayPage({ id, from }: { id: string; from: number }) {
     return (
       <main className="page">
         <Link href="/" className="back">‹ 听</Link>
-        <p className="muted">{items.length ? "这条新闻已经不在了（只保留 14 天）" : "正在读取…"}</p>
+        <p className="muted">{items.length ? "这条新闻已经不在了" : "正在读取…"}</p>
       </main>
     );
   return <Say a={a} from={Math.min(Math.max(0, from), a.sentences.length - 1)} />;

@@ -1,5 +1,6 @@
 "use client";
 
+import Info from "./Info";
 import Link from "next/link";
 import { heardToday, stepDone } from "@/lib/client/route";
 import { useEffect, useRef, useState } from "react";
@@ -32,8 +33,10 @@ export function CallList() {
       <Link href="/speak" className="back">← 说</Link>
       <header className="page-mast">
         <div>
-          <h1>打电话</h1>
-          <p className="muted">只有声音，默认不显示文字。听不清就说「もう一度お願いします」。</p>
+          <h1>
+            打电话
+            <Info>只有声音，不显示文字。听不清就说「もう一度お願いします」。</Info>
+          </h1>
         </div>
       </header>
       {/* Grouped by direction instead of a 電/受 badge on every row. */}
@@ -51,9 +54,7 @@ export function CallList() {
               <Link key={c.id} href={`/call/${c.id}`} className="pl two">
                 <div className="pl-text">
                   <b>{c.title}</b>
-                  <span>
-                    {c.who} · {c.titleZh}
-                  </span>
+                  <span>{c.who}</span>
                 </div>
               </Link>
             ))}
@@ -276,7 +277,6 @@ export default function Call({ call, round }: { call: CallDef; round?: RoundProp
               ))}
             </div>
           )}
-          <p className="muted" style={{ textAlign: "center" }}>接通后只有声音。点下面的按钮说话，说完再点一下就发给对方。</p>
           <button className="primary call-go" onClick={pickUp}>
             {call.incoming ? "接听" : "拨打"}
           </button>
@@ -319,9 +319,6 @@ export default function Call({ call, round }: { call: CallDef; round?: RoundProp
               <div className="zh">{last.zh}</div>
             </div>
           )}
-          <p className="small-text" style={{ textAlign: "center" }}>
-            你说了 {said} 句 · 重听 {replays} 次 · 看字幕 {peeks} 次
-          </p>
           <div className="dock">
             <div className="dock-inner">
               <div className="row" style={{ flexWrap: "nowrap" }}>

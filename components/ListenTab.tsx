@@ -65,7 +65,7 @@ export default function ListenTab() {
           <div className="mg-go">▶ 聴く</div>
         </Link>
       ) : (
-        hydrated && <p className="muted">还没有新闻（每天晚上 21:00 自动更新）</p>
+        hydrated && <p className="muted">还没有新闻</p>
       )}
       {rest.length > 0 && (
         <>
@@ -97,7 +97,6 @@ export default function ListenTab() {
           {target ? (
             <Link href={newsEp ? `/ep/${newsEp.id}` : `/ep/new?news=${target.id}`} className="pl">
               <b>电台</b>
-              <span>ハルとケンが今朝のニュースを話す</span>
             </Link>
           ) : (
             <Link href={ep ? `/ep/${ep.id}` : "/episodes"} className="pl">
@@ -112,7 +111,6 @@ export default function ListenTab() {
           )}
           <Link href="/news" className="pl">
             <b>连着听</b>
-            <span>每篇两遍 · 第一遍不看字</span>
           </Link>
           <Link href="/moyu" className="pl">
             <b>只听</b>
