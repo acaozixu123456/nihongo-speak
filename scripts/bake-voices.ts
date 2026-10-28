@@ -19,7 +19,7 @@
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { calls } from "../content/calls";
-import { ANSWER_VOICE, ASK_VOICE, OPENERS, PATTERNS } from "../content/kokoro-patterns";
+import { ASK_VOICE, OPENERS } from "../content/kokoro-patterns";
 import { listenIntro, NARRATION, ZH_VOICE } from "../content/narration";
 import { scenarios } from "../content/scenarios";
 import { FLASH, FLASH_LITE, geminiConfigured, geminiVoice, synthesizeGemini, synthesizeGeminiBatch } from "../lib/gemini-tts";
@@ -48,8 +48,7 @@ for (const s of scenarios) {
 }
 for (const c of calls) add(c.talk.opening.ja, c.talk.aiVoice);
 for (const line of Object.values(NARRATION)) add(line, ZH_VOICE);
-// 心で答える: each 型's example and the lap openers, heard every day.
-for (const p of PATTERNS) add(p.ex, ANSWER_VOICE);
+// 心で答える: the lap openers, heard every day.
 for (const line of OPENERS) add(line, ASK_VOICE);
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
