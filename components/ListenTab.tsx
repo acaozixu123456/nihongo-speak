@@ -112,6 +112,9 @@ export default function ListenTab() {
           <Link href="/news" className="pl">
             <b>连着听</b>
           </Link>
+          <Link href="/kokoro" className="pl">
+            <b>心で答える</b>
+          </Link>
           <Link href="/moyu" className="pl">
             <b>只听</b>
           </Link>

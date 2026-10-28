@@ -2301,6 +2301,54 @@ body:has(.mag) .nw-seg button.on { background: #2e2923; border-color: #2e2923; c
 .review-zh, .review-why, .review-good small { font-size: 12px; color: var(--muted); line-height: 1.5; }
 .review-why { color: #8a5a40; }
 
+/* 心で答える: the work-time questions, in the magazine style. One focus per screen: the question, the help
+   for this lap, the countdown; the controls in a dark pill at the foot. */
+body:has(.ko) { background: #f6f0e4; }
+.ko { --mg-ink: #2e2923; --mg-ink2: #3f3830; --mg-rule: #ddd2bf; --mg-card: #fcf9f3; --mg-ochre: #c99a45; --mg-mark: #f4e2b8; --mg-sage: #5d7a55; color: var(--mg-ink); min-height: 100dvh; padding-bottom: 120px; }
+.ko-sec { display: flex; align-items: baseline; gap: 10px; margin: 22px 0 2px; }
+.ko-sec b { font-family: var(--serif); font-size: 15px; font-weight: 700; letter-spacing: 0.1em; }
+.ko-sec span { flex: 1; border-bottom: 1px solid var(--mg-rule); transform: translateY(-4px); }
+.ko-row { display: flex; align-items: baseline; gap: 10px; padding: 12px 0; border-bottom: 1px dotted var(--mg-rule); font-family: var(--ja); font-size: 15px; font-weight: 500; line-height: 1.5; }
+.ko-n { min-width: 22px; font-family: var(--serif); font-size: 12px; font-weight: 600; color: var(--mg-ochre); }
+.ko-ok { margin-left: auto; font-style: normal; font-weight: 700; color: var(--mg-sage); }
+.ko-go { display: flex; justify-content: center; align-items: center; gap: 8px; width: 100%; margin-top: 30px; padding: 14px; border: 0; border-radius: 999px; background: var(--accent-fill); color: #fff; font-family: var(--ja); font-size: 16px; font-weight: 700; letter-spacing: 0.08em; cursor: pointer; }
+.ko-say { width: auto; margin: 30px auto 0; padding: 14px 40px; }
+.ko-wait { width: 28px; height: 28px; margin: 60px auto; border-radius: 50%; border: 3px solid var(--mg-rule); border-top-color: var(--mg-ochre); animation: ko-spin 0.9s linear infinite; }
+@keyframes ko-spin { to { transform: rotate(360deg); } }
+
+.ko-top { display: flex; align-items: center; gap: 10px; padding-top: 4px; }
+.ko-x { width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; }
+.ko-no { flex: 1; font-family: var(--serif); font-size: 12px; font-weight: 600; letter-spacing: 0.1em; color: var(--muted); }
+.ko-pill { padding: 3px 10px; border-radius: 999px; background: var(--mg-ink); color: #f6f0e4; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; }
+.ko-pill.last { background: var(--mg-ochre); }
+.ko-pill.ans { background: var(--mg-sage); }
+.ko-dots { display: flex; gap: 4px; margin-top: 10px; }
+.ko-dots i { width: 16px; height: 3px; border-radius: 2px; background: var(--mg-rule); }
+.ko-dots i.d { background: var(--mg-ink2); }
+.ko-dots i.n { background: var(--mg-ochre); }
+.ko-q { margin: 22px 0 0; font-family: var(--serif); font-size: 22px; font-weight: 700; line-height: 1.55; letter-spacing: 0.02em; }
+.ko-q.small { font-size: 16px; font-weight: 600; color: var(--muted); }
+.ko-box { position: relative; margin-top: 26px; padding: 16px 14px 10px; border: 1px solid var(--mg-rule); border-radius: 6px; background: var(--mg-card); }
+.ko-box h4 { position: absolute; top: -10px; left: 12px; margin: 0; padding: 0 8px; background: #f6f0e4; font-family: var(--serif); font-size: 12px; font-weight: 700; letter-spacing: 0.2em; color: var(--mg-ink2); }
+.ko-pat { font-family: var(--ja); font-size: 16px; font-weight: 500; line-height: 2; }
+.ko-blank { display: inline-block; min-width: 54px; margin: 0 3px; border-bottom: 2px solid var(--mg-ochre); transform: translateY(-4px); }
+.ko-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.ko-chip { position: relative; padding: 6px 12px; border: 0; border-radius: 999px; background: #efe6d4; color: var(--mg-ink); font-family: var(--ja); font-size: 15px; font-weight: 500; cursor: pointer; }
+.ko-ring { --p: 100%; width: 96px; height: 96px; margin: 32px auto 0; border-radius: 50%; background: conic-gradient(var(--mg-ochre) 0 var(--p), #eadfca var(--p) 100%); display: grid; place-items: center; }
+.ko-ring span { width: 80px; height: 80px; border-radius: 50%; background: #f6f0e4; display: grid; place-items: center; font-family: var(--serif); font-size: 30px; font-weight: 700; }
+.ko-ans { margin: 22px 0 0; font-family: var(--serif); font-size: 19px; font-weight: 500; line-height: 2.05; color: var(--mg-ink2); }
+.ko-hl { background: linear-gradient(transparent 56%, var(--mg-mark) 56%, var(--mg-mark) 92%, transparent 92%); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.ko-info { position: relative; display: inline-grid; place-items: center; width: 22px; height: 22px; margin-left: 8px; padding: 0; border: 1px solid #b3a894; border-radius: 50%; background: none; color: #9a8f7f; font-family: var(--serif); font-size: 12px; font-weight: 600; vertical-align: middle; cursor: pointer; }
+.ko-tip { position: absolute; z-index: 5; top: calc(100% + 8px); right: -8px; width: max-content; max-width: 260px; padding: 6px 10px; border-radius: 6px; background: var(--mg-ink); color: #f6f0e4; font-family: var(--sans); font-size: 13px; font-weight: 400; line-height: 1.5; text-align: left; white-space: normal; }
+.ko-chip .ko-tip { right: auto; left: 0; }
+.ko-dock { position: fixed; left: 16px; right: 16px; bottom: calc(env(safe-area-inset-bottom) + 20px); max-width: 448px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; padding: 10px 18px; border-radius: 999px; background: var(--mg-ink); }
+.ko-dock button { padding: 0; border: 0; background: none; color: #f6f0e4; font-size: 15px; text-align: center; cursor: pointer; min-width: 56px; }
+.ko-dock small { display: block; font-size: 11px; opacity: 0.75; }
+.ko-dock .ko-play { width: 48px; height: 48px; min-width: 0; border-radius: 50%; background: #f6f0e4; color: var(--mg-ink); font-size: 16px; font-weight: 700; }
+.ko-stuck { display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 12px; padding: 14px; border: 1px solid var(--mg-ochre); border-radius: 8px; background: var(--mg-card); color: var(--mg-ink); font-family: var(--serif); font-size: 17px; font-weight: 700; line-height: 1.6; text-align: left; cursor: pointer; }
+.ko-stuck.dim { border-color: var(--mg-rule); opacity: 0.6; }
+.ko-stuck b { margin-left: auto; white-space: nowrap; font-family: var(--ja); font-size: 12px; color: var(--accent); }
+.ko .said { display: block; margin-top: 18px; }
 /* ⓘ + tooltip: extra info on a tap, never an always-on grey line */
 .info { position: relative; display: inline-flex; vertical-align: middle; margin-left: 6px; }
 .info-i { width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 1.5px solid var(--faint); background: none; color: var(--muted); font: italic 700 12px/1 Georgia, serif; display: grid; place-items: center; }
