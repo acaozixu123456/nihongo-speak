@@ -1218,3 +1218,41 @@ export async function* retellHelpLines(said: string, c: HelpCtx, how: HelpHow = 
   const got = line(buf);
   if (got) yield got;
 }
+
+// 心で答える: the day's questions about the learner's own work and life, each with the 型 (fixed sentence
+// patterns, content/kokoro-patterns.ts) its model answer is built on and the words it needs.
+const KokoroSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        kind: z.enum(["work", "life"]),
+        q: z.string().describe("森先生が学習者に聞く質問（日本語、短く自然な話し言葉、1文）"),
+        q_zh: z.string().describe("質問の中国語訳（簡体字）"),
+        forms: z.array(z.string()).describe("模範解答に使う型の id を1〜2個（一覧の id を一字も変えずに）"),
+        words: z.array(z.object({ ja: z.string(), zh: z.string().describe("中国語訳（簡体字、短く）") })).describe("答えるのに要る言葉を3〜4個（模範解答に出てくる語、辞書形）"),
+        answer: z.string().describe("模範解答（日本語、1〜2文、合わせて45字以内）。forms の型の ＿ 以外の部分をそのまま含める"),
+        answer_zh: z.string().describe("模範解答の中国語訳（簡体字）"),
+      }),
+    )
+    .describe("6問。仕事メモがあれば work 4問 + life 2問、なければ life 6問"),
+});
+export type KokoroDraft = z.infer<typeof KokoroSchema>["items"][number];
+
+export async function kokoroQuestions(context: string): Promise<KokoroDraft[]> {
+  const res = await parse({
+    ...smart(6000),
+    system: `あなたは日本語の先生、森先生です。学習者は日本に住んでIT企業で働いている中国人で、日本語は N4〜N3。
+学習者は仕事中にイヤホンで聞き、声を出さずに心の中で答えます。そのための質問を作ってください。
+- 質問は学習者自身の最近の仕事・生活について（同僚や上司が雑談や朝会で実際に聞くような質問）。「メモ」にある事実だけを使い、なければ一般的で誰にでも答えられる内容にする。
+- 1問目は易しく、後ろほど少し詳しく。同じ出来事を別の角度から聞く質問が続いてもよい（作業 → 原因 → 対応 → 予定）。
+- 模範解答は学習者の立場の一人称で、N3 までの文法、職場で自然な丁寧語。必ず forms の型を使い、型の ＿ 以外の部分（「とき、」「てしまいました」「原因は」など）は一字も変えずに入れる。
+- 型は「今週の型」で使用回数が少ないもの（3回未満）を優先し、新しい型は1日2個まで。同じ型を何日も繰り返して自動化するのが目的。
+- 固有名詞（会社名・顧客名・人名）、金額、社外秘らしい細部は出さず、「お客さん」「先輩」「バッチ」のように一般化する。システム ID やファイル名も言わない。
+- words はその答えを言うのに本当に必要な語だけ。`,
+    messages: [{ role: "user", content: context }],
+    output_config: { effort: "medium", format: zodOutputFormat(KokoroSchema) },
+  });
+  checkStop(res.stop_reason);
+  if (!res.parsed_output) throw new Error(`AI 返回格式不对（${res.stop_reason}）`);
+  return res.parsed_output.items;
+}

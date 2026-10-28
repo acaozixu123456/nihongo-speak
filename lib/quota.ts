@@ -13,6 +13,7 @@ export const DAILY = {
   earworm: 6, // new 洗脑歌 (~$0.6 each)
   cover: 10, // cover pictures (~$0.07 each)
   scenario: 15, // 重来一次 scenarios
+  kokoro: 6, // 心で答える question sets (Opus)
 } as const;
 export type Kind = keyof typeof DAILY;
 

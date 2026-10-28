@@ -114,6 +114,9 @@ export default function ListenTab() {
             <b>连着听</b>
             <span>每篇两遍 · 第一遍不看字</span>
           </Link>
+          <Link href="/kokoro" className="pl">
+            <b>心で答える</b>
+          </Link>
           <Link href="/moyu" className="pl">
             <b>只听</b>
           </Link>
