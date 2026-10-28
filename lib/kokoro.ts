@@ -4,7 +4,8 @@ import { kokoroQuestions } from "@/lib/claude";
 import { readNews } from "@/lib/news";
 import { addDays, type Progress } from "@/lib/progress-model";
 import { readState } from "@/lib/store";
-import { PATTERNS, patternById } from "@/content/kokoro-patterns";
+import { ANSWER_VOICE, ASK_VOICE, PATTERNS, patternById } from "@/content/kokoro-patterns";
+import { ttsUrl } from "@/lib/tts-url";
 import { fixedParts, type KokoroItem, type KokoroSet } from "@/lib/kokoro-model";
 
 // 心で答える: six questions a day about the learner's own work and life, answered in their head at work.
@@ -112,4 +113,26 @@ export async function makeSet(day: string, opts: { try?: string[] } = {}): Promi
   const set: KokoroSet = { day, made: Date.now(), work: work.length > 0, items: chosen };
   if (!opts.try) await writeJson(setPath(day), set);
   return set;
+}
+
+// Every line of the day's laps asked for once, right after the set is written. This runs in Tokyo,
+// so the CDN there has them all when the learner taps 聞く (a lap made from nothing took ~30 s).
+export async function warm(set: KokoroSet) {
+  const site = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  if (!site) return console.warn("kokoro warm: no VERCEL_PROJECT_PRODUCTION_URL");
+  const t = Date.now();
+  const urls = new Set(
+    set.items.flatMap((it) => [ttsUrl(it.q, ASK_VOICE), ...it.words.map((w) => ttsUrl(w.ja, ANSWER_VOICE)), ttsUrl(it.answer, ANSWER_VOICE)]),
+  );
+  const todo = [...urls].filter((u) => u.startsWith("/api/")).values();
+  let made = 0;
+  const worker = async () => {
+    for (const u of todo) {
+      const res = await fetch(`https://${site}${u}`).catch(() => null);
+      await res?.arrayBuffer().catch(() => {});
+      if (res?.ok && res.headers.get("x-vercel-cache") !== "HIT") made++;
+    }
+  };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  console.log(`kokoro warm: ${made} of ${urls.size} lines made in ${Date.now() - t} ms`);
 }
