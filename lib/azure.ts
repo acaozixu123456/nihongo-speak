@@ -134,7 +134,8 @@ async function stt(wav: ArrayBuffer, { key, region }: { key: string; region: str
     };
     headers["Pronunciation-Assessment"] = Buffer.from(JSON.stringify(params)).toString("base64");
   }
-  const url = `https://${region}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=ja-JP&format=detailed`;
+  // profanity=raw: masking turned plain Japanese into stars (よくその店 → よ**の店).
+  const url = `https://${region}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=ja-JP&format=detailed&profanity=raw`;
   const res = await fetch(url, { method: "POST", headers, body: wav });
   if (!res.ok) throw new Error(`Azure STT ${res.status}: ${await res.text()}`);
   return (await res.json()) as AzureResult;

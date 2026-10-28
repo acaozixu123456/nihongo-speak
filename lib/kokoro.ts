@@ -35,7 +35,7 @@ export async function saveNotes(day: string, notes: string[]) {
   await writeJson(NOTES, { days });
 }
 
-function context(day: string, notes: Notes | null, p: Progress, news: string[], used: Map<string, number>) {
+function context(day: string, notes: Notes | null, p: Progress, news: string[], used: Map<string, number>, asked: string[]) {
   const work = (notes?.days ?? []).filter((d) => d.day <= day && d.day >= addDays(day, -4));
   const week = addDays(day, -7);
   const tellings = (p.retells ?? [])
@@ -55,6 +55,9 @@ ${tellings.join("\n") || "（なし）"}
 今日のニュース（NHKやさしいことばニュースの見出し。生活の質問の話題にしてもよい）：
 ${news.map((t) => `- ${t}`).join("\n") || "（なし）"}
 
+この3日間に聞いた質問（同じ質問・同じ答えにしない。同じ出来事なら、その後や別の面を聞く。生活は別の話題に）：
+${asked.map((q) => `- ${q}`).join("\n") || "（なし）"}
+
 型の一覧（id：型 / 意味）と今週の使用回数：
 ${PATTERNS.map((x) => `- ${x.id}：${x.form} / ${x.zh}（今週 ${used.get(x.id) ?? 0} 回）`).join("\n")}`;
 }
@@ -73,7 +76,8 @@ export async function makeSet(day: string, opts: { try?: string[] } = {}): Promi
   for (const s of past) for (const it of s?.items ?? []) for (const f of it.forms) used.set(f, (used.get(f) ?? 0) + 1);
   const newest = news[0]?.day;
   const titles = news.filter((a) => a.day === newest).map((a) => a.title_ja);
-  const drafts = await kokoroQuestions(context(day, notes, progress, titles, used));
+  const asked = past.slice(0, 3).flatMap((x) => x?.items.map((it) => it.q) ?? []);
+  const drafts = await kokoroQuestions(context(day, notes, progress, titles, used, asked));
   const items: KokoroItem[] = [];
   for (const [i, d] of drafts.entries()) {
     const forms = d.forms.map(patternById).filter((x) => !!x);
