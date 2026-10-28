@@ -1,5 +1,6 @@
 "use client";
 
+import Info from "./Info";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { play, stop, ttsUrl, unlock } from "@/lib/client/player";
@@ -290,7 +291,6 @@ export default function Quick({ drill }: { drill?: string }) {
         <header className="page-mast">
           <div>
             <h1>常错的地方</h1>
-            <p className="muted">针对一个薄弱点的瞬间说</p>
           </div>
         </header>
         {!weakPoint ? (
@@ -346,15 +346,16 @@ export default function Quick({ drill }: { drill?: string }) {
         <Link href="/speak" className="back">← 说</Link>
         <header className="page-mast">
           <div>
-            <h1>马上说</h1>
-            <p className="muted">看中文，3 秒内开口</p>
+            <h1>
+              马上说
+              <Info>看中文，3 秒内用日语说出来。</Info>
+            </h1>
           </div>
         </header>
         <div className="card">
           {(t.quickMs !== null || mastered > 0) && (
             <p className="muted">
-              {t.quickMs !== null && `今天已经答了 ${t.quickSpoke} 题，平均 ${secs(t.quickMs)} 秒开口。`}
-              {mastered > 0 && `已经练熟 ${mastered} 句。`}
+              {[t.quickMs !== null && `今天 ${t.quickSpoke} 题 · 平均 ${secs(t.quickMs)} 秒`, mastered > 0 && `✓ 练熟 ${mastered} 句`].filter(Boolean).join(" · ")}
             </p>
           )}
           <div className="row" style={{ marginTop: 0 }}>
@@ -388,7 +389,6 @@ export default function Quick({ drill }: { drill?: string }) {
         <header className="page-mast">
           <div>
             <h1>马上说</h1>
-            <p className="muted">这一轮的结果</p>
           </div>
         </header>
         <div className="card">

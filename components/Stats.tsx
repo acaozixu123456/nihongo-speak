@@ -1,5 +1,6 @@
 "use client";
 
+import Info from "./Info";
 import Link from "next/link";
 import {
   dayKey,
@@ -48,7 +49,6 @@ export default function Stats() {
       <header className="page-mast">
         <div>
           <h1>记录</h1>
-          <p className="muted">开口时长、反应速度、发音的变化</p>
         </div>
       </header>
       <div className="me-card">
@@ -135,17 +135,22 @@ export default function Stats() {
         />
       </div>
 
-      <h2>发音分数（每周平均）</h2>
+      <h2>
+        发音分数（每周平均）
+        <Info>跟读和复习时 Azure 给的发音分，往上走 = 发音在进步。</Info>
+      </h2>
       <div className="card">
         <Line
           unit="分"
           min={40}
           data={ws.map((w, i) => ({ label: `${md(w.from)}–${md(w.to)}`, tick: i % 2 === 1 ? md(w.to) : undefined, value: w.pron }))}
         />
-        <div className="small-text">跟读和复习时 Azure 给的发音分。往上走说明发音在进步。</div>
       </div>
 
-      <h2>瞬间说：平均几秒开口（每周）</h2>
+      <h2>
+        瞬间说：平均几秒开口（每周）
+        <Info>看到中文到开始说日语用了几秒，往下走 = 开口更快。</Info>
+      </h2>
       <div className="card">
         <Line
           unit="秒"
@@ -155,7 +160,6 @@ export default function Stats() {
             value: w.quickMs === null ? null : Math.round(w.quickMs / 100) / 10,
           }))}
         />
-        <div className="small-text">看到中文到开始说日语用了几秒。往下走，说明开口越来越快了。</div>
       </div>
 
       <h2>开口时长（每周分钟）</h2>
@@ -167,20 +171,24 @@ export default function Stats() {
         />
       </div>
 
-      <h2>三回話す：第一遍每分钟能说多少字</h2>
+      <h2>
+        三回話す：第一遍每分钟能说多少字
+        <Info>每天换新话题时第一遍的语速，越说越快 = 真的进步了。</Info>
+      </h2>
       <div className="card">
         <Line
           unit="字/分"
           data={retells.map((r) => ({ label: md(r.date), tick: md(r.date), value: r.cpm[0] ?? 0 }))}
         />
-        <div className="small-text">每天换新话题、第一遍的语速。越说越快、需要改的地方越来越少，就是真的进步了。</div>
       </div>
 
       <h2>设置</h2>
       <div className="card">
-        <div style={{ fontWeight: 600, marginBottom: 4 }}>练习提醒</div>
+        <div style={{ fontWeight: 600, marginBottom: 4 }}>
+          练习提醒
+          <Info>当天已经练过就不会提醒。</Info>
+        </div>
         <Reminders />
-        <p className="small-text" style={{ marginBottom: 0 }}>当天已经练过就不会提醒。</p>
       </div>
       <div className="card">
         <div className="row spread">
@@ -189,7 +197,6 @@ export default function Stats() {
             {sync === "ok" ? "已同步" : sync === "syncing" ? "同步中…" : sync === "error" ? "同步失败，稍后自动重试" : "未开启"}
           </span>
         </div>
-        <p className="small-text" style={{ marginBottom: 0 }}>进度会自动备份到云端，清除浏览器数据后也能恢复。</p>
       </div>
       <div className="card">
         <div className="row spread">

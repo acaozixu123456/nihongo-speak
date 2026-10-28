@@ -33,7 +33,7 @@ export default function Bag() {
       )}
 
       {cards.length === 0 ? (
-        <p className="muted">还没有收藏。跟读或对话时点「收藏」，句子就会放在这里，之后按间隔提醒你复习。</p>
+        <p className="muted">还没有收藏的句子</p>
       ) : (
         <div className="list">
           {cards.map((c) => {

@@ -1,5 +1,6 @@
 "use client";
 
+import Info from "./Info";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
@@ -77,8 +78,10 @@ export default function NewScenario(props: { topic?: string; category?: "work" |
       <Link href="/scenes" className="back">← 场景对话</Link>
       <header className="page-mast">
         <div>
-          <h1>重来一次</h1>
-          <p className="muted">把今天没说出来的话，变成场景再练一次</p>
+          <h1>
+            重来一次
+            <Info>AI 把这个场合写成对话（包括你没说出来的那句），然后直接跟读、对话。场景留在「我的」里。</Info>
+          </h1>
         </div>
       </header>
       <div className="card">
@@ -118,9 +121,6 @@ export default function NewScenario(props: { topic?: string; category?: "work" |
         </button>
         {error && <p className="error">{error}</p>}
       </div>
-      <p className="small-text">
-        AI 会写出这个场合的对话（包括你当时没说出来的那句），配上读音、中文和配音，然后直接进入跟读和对话。场景会留在「场景 · 我的」里。
-      </p>
     </main>
   );
 }

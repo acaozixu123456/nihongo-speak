@@ -20,7 +20,7 @@ export function Floors({ id }: { id: BuildingId }) {
   const sel = picked ?? (firstOpen >= 0 ? firstOpen : 0);
 
   if (list.length === 0) {
-    return <p className="muted">还没有自己的场景。点上面的「重来一次」，AI 会把你遇到的情况写成场景放在这里。</p>;
+    return <p className="muted">还没有自己的场景</p>;
   }
 
   return (

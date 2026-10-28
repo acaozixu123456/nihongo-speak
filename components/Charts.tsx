@@ -90,7 +90,7 @@ export function Line({
 }) {
   const [sel, setSel] = useState<number | null>(null);
   const values = data.map((d) => d.value).filter((v): v is number => v !== null);
-  if (values.length === 0) return <p className="muted">还没有数据，练几次就有了。</p>;
+  if (values.length === 0) return <p className="muted">还没有数据</p>;
   const hi = niceMax(Math.max(...values));
   const lo = floor ?? 0;
   const innerW = W - PAD.left - PAD.right;

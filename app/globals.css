@@ -25,30 +25,6 @@
   --no: #c8442c; --no-bg: #fbe1da; --no-ink: #9c2f1b;
   color-scheme: light;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #141311;
-    --card: #1d1c19;
-    --soft: #272521;
-    --text: #ebe6dc;
-    --muted: #a39b8f;
-    --faint: #5c574f;
-    --line: #2c2a26;
-    --accent: #d4694f;
-    --accent-ink: #e07c63;
-    --accent-soft: #33221c;
-    --accent-fill: #b5452e;
-    --good: #7fa886;
-    --warn: #d0a24a;
-    --bad: #d4694f;
-    --glass: rgba(29, 28, 25, 0.82);
-    --shadow: 0 1px 1px rgba(0, 0, 0, 0.2), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
-    --ok: #6fb17d; --ok-bg: #1d2e20; --ok-ink: #9fd3a9;
-    --mid: #d9a640; --mid-bg: #33280f; --mid-ink: #ecc779;
-    --no: #e0664c; --no-bg: #3a1d17; --no-ink: #f2a08c;
-    color-scheme: dark;
-  }
-}
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 body {
@@ -1313,11 +1289,6 @@ a.me-card:active, a.tile:active { transform: scale(0.985); }
 .radio-row { display: flex; border-radius: 0; text-decoration: none; width: 100%; justify-content: space-between; align-items: center; padding: 14px 2px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--text); font-size: 15px; text-align: left; }
 .radio-row small { color: var(--muted); font-size: 12px; }
 .radio-row em { font-style: normal; color: var(--faint); font-size: 13px; }
-@media (prefers-color-scheme: dark) {
-  .radio-cover { background: linear-gradient(170deg, #3b2a24 0%, #4a3026 60%, #5b3a2a 100%); }
-  .radio-title { color: #f4e6d8; }
-  .radio-waves i { background: #f1d5bf; }
-}
 
 /* A new 趣味电台 episode being written (往期) */
 .ep-making { padding: 14px 2px 16px; border-top: 1px solid var(--line); }
@@ -2329,3 +2300,8 @@ body:has(.mag) .nw-seg button.on { background: #2e2923; border-color: #2e2923; c
 .review-good .review-ja { color: #4f7a45; }
 .review-zh, .review-why, .review-good small { font-size: 12px; color: var(--muted); line-height: 1.5; }
 .review-why { color: #8a5a40; }
+
+/* ⓘ + tooltip: extra info on a tap, never an always-on grey line */
+.info { position: relative; display: inline-flex; vertical-align: middle; margin-left: 6px; }
+.info-i { width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 1.5px solid var(--faint); background: none; color: var(--muted); font: italic 700 12px/1 Georgia, serif; display: grid; place-items: center; }
+.info-tip { position: absolute; z-index: 40; top: 26px; left: -40px; width: max-content; max-width: min(260px, 80vw); padding: 10px 12px; border-radius: 12px; background: var(--text); color: var(--bg); font: 400 13px/1.5 var(--sans); letter-spacing: 0; text-align: left; white-space: normal; box-shadow: var(--shadow); }

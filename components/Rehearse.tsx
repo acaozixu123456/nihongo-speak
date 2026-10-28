@@ -1,5 +1,6 @@
 "use client";
 
+import Info from "./Info";
 import Link from "next/link";
 import { useState } from "react";
 import Call from "./Call";
@@ -141,13 +142,15 @@ export default function Rehearse() {
   return (
     <main className="page">
       <Link href="/speak" className="back">← 说</Link>
-      <h1 className="ep-head">预演</h1>
+      <h1 className="ep-head">
+        预演
+        <Info>写下明天要说的事，AI 扮对方，今天先演三遍。真说完再回来，告诉它哪句没说出来。</Info>
+      </h1>
 
       {done && current ? (
         <div className="today rehearse">
           <span className="kicker">演完了</span>
           <span className="today-title">{current.titleZh}</span>
-          <span className="today-zh">真说完以后回来，告诉我哪句没说出来，我把它变成下次能用的话。</span>
           <Link href="/speak" className="today-go">返回</Link>
         </div>
       ) : debrief ? (
@@ -167,7 +170,7 @@ export default function Rehearse() {
               <span className="zh">{m.zh}</span>
             </button>
           ))}
-          {debrief.d.missed.length > 0 && <span className="today-zh">已放进フレーズ帳，瞬間 会再考你。</span>}
+          {debrief.d.missed.length > 0 && <span className="today-zh">✓ 已收藏</span>}
           <button className="today-go" onClick={() => setDebrief(null)}>准备下一个</button>
         </div>
       ) : pending ? (
@@ -188,7 +191,7 @@ export default function Rehearse() {
         </div>
       ) : (
         <div className="today rehearse">
-          <span className="kicker">明天要说的话，今天先演三遍</span>
+          <span className="kicker">明天要说的话</span>
           <textarea
             rows={3}
             value={ask}

@@ -117,9 +117,6 @@ export default function Listen({ scenario, active, onNext }: { scenario: Scenari
       {finished && (
         <div className="card">
           <strong>整段听完了</strong>
-          <p className="muted" style={{ margin: "4px 0 0" }}>
-            听不出的句子点开再听几遍。觉得差不多了，就开口跟着说。
-          </p>
           <button className="primary next-cta" onClick={onNext}>まねる →</button>
         </div>
       )}

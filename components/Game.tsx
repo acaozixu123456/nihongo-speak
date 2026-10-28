@@ -295,7 +295,6 @@ export default function Game({ id }: { id: string }) {
       <main className="page">
         {back}
         <h1 className="ep-head">今天没有要练的</h1>
-        <p className="muted">听完一期、练一练之后，学过的内容会按记忆曲线回到这里；说话时常错的点也会混进来。</p>
       </main>
     );
   }
@@ -325,7 +324,7 @@ export default function Game({ id }: { id: string }) {
         </div>
         {missed.length > 0 && (
           <>
-            <p className="note-head">这些明天会再练，也可以收藏进复习卡片：</p>
+            <p className="note-head">! 没答对</p>
             {missed.map((q) => (
               <div key={q.about} className="note">
                 <div className="note-main" onClick={() => say(spoken(q))}>

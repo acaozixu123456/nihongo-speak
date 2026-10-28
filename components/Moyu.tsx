@@ -232,7 +232,6 @@ export default function Moyu() {
       <header className="page-mast">
         <div>
           <h1>只听</h1>
-          <p className="muted">戴上耳机一直听，锁屏不停</p>
         </div>
       </header>
 

@@ -143,7 +143,6 @@ export default function Recap() {
           <span className="today-title">
             <span className="ja-serif">まだ空っぽ</span>
           </span>
-          <span className="today-zh">听一期电台、练一组，学过、练过的都会收到这里</span>
           <span className="today-go">开始</span>
         </Link>
       ) : (
