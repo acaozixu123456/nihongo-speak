@@ -1,5 +1,6 @@
 "use client";
 
+import Info from "./Info";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { play, preload, stop, ttsUrl, unlock } from "@/lib/client/player";
@@ -155,15 +156,14 @@ export default function Review() {
         <Link href="/me" className="back">← 老师</Link>
         <header className="page-mast">
           <div>
-            <h1>复习</h1>
-            <p className="muted">按 1、3、7、14 天的间隔再说一遍</p>
+            <h1>
+              复习
+              <Info>看中文，用日语说出来，再对照答案。句子按 1、3、7、14 天的间隔再出现。</Info>
+            </h1>
           </div>
         </header>
         <div className="card">
           <p style={{ marginTop: 0 }}>还没有收藏的句子。</p>
-          <p className="muted">
-            跟读或对话时点「收藏」，句子就会来到这里。之后按 1、3、7、14 天的间隔提醒你开口说一遍。
-          </p>
           <Link href="/scenes">去练习 →</Link>
         </div>
       </main>
@@ -176,8 +176,10 @@ export default function Review() {
         <Link href="/me" className="back">← 老师</Link>
         <header className="page-mast">
           <div>
-            <h1>复习</h1>
-            <p className="muted">按 1、3、7、14 天的间隔再说一遍</p>
+            <h1>
+              复习
+              <Info>看中文，用日语说出来，再对照答案。句子按 1、3、7、14 天的间隔再出现。</Info>
+            </h1>
           </div>
         </header>
         <div className="card flash">
@@ -185,13 +187,11 @@ export default function Review() {
             <>
               <div className="score-big">{due.length}</div>
               <p>句今天该复习了</p>
-              <p className="muted">看中文，用日语说出来，再对照答案。</p>
               <button className="primary next-cta" onClick={begin}>开始</button>
             </>
           ) : (
             <>
                             <p>今天没有要复习的了</p>
-              <p className="muted">已收藏 {p.cards.length} 句，到期的会自动出现。</p>
               <Link href="/quick">去练瞬间说 →</Link>
             </>
           )}
@@ -206,13 +206,14 @@ export default function Review() {
         <Link href="/me" className="back">← 老师</Link>
         <header className="page-mast">
           <div>
-            <h1>复习</h1>
-            <p className="muted">按 1、3、7、14 天的间隔再说一遍</p>
+            <h1>
+              复习
+              <Info>看中文，用日语说出来，再对照答案。句子按 1、3、7、14 天的间隔再出现。</Info>
+            </h1>
           </div>
         </header>
         <div className="card flash">
                     <p>今天的复习做完了</p>
-          {again > 0 && <p className="muted">有 {again} 次「再练」，明天还会再见到它们。</p>}
           {Object.keys(p.weak).length > 0 && (
             <p>
               <Link href="/weak">看 AI 找出的薄弱点 →</Link>

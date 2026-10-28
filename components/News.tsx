@@ -191,7 +191,7 @@ export function NewsArticlePage({ id }: { id: string }) {
     return (
       <main className="page">
         <Link href="/" className="back">‹ 听</Link>
-        <p className="muted">{items.length ? "这条新闻已经不在了（只保留 14 天）" : "正在读取…"}</p>
+        <p className="muted">{items.length ? "这条新闻已经不在了" : "正在读取…"}</p>
       </main>
     );
   return <Article a={a} />;
@@ -400,7 +400,7 @@ export function NewsPlay() {
     return (
       <main className="page">
         <Link href="/" className="back">‹ 听</Link>
-        <p className="muted">还没有新闻（每天晚上 21:00 自动更新）</p>
+        <p className="muted">还没有新闻</p>
       </main>
     );
   return <Play set={set} />;
@@ -487,7 +487,7 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
         <Link href="/" className="back">‹ 听</Link>
         <span className="muted">{newsDay(set.day)} {idle ? today.length : inBack ? "" : `${n + 1} / ${today.length}`}</span>
       </div>
-      <div className="kicker">{idle ? "2回ずつ · 1回目は文字なし" : inBack ? (second ? "聞き直す · 文字あり" : "聞き直す · 別の声で") : second ? "2回目 · 文字あり" : `1回目 · 文字なし${paceLabel(newsPace(a))}`}</div>
+      <div className="kicker">{idle ? "" : inBack ? (second ? "聞き直す · 文字あり" : "聞き直す · 別の声で") : second ? "2回目 · 文字あり" : `1回目 · 文字なし${paceLabel(newsPace(a))}`}</div>
       <h1 className="nw-title">{idle ? "新闻" : inBack ? "前に聞き取れなかった文" : <Ruby segs={a.title} />}</h1>
       <div className="nw-dots">
         {today.map((x, i) => (
@@ -507,7 +507,7 @@ function Play({ set }: { set: ReturnType<typeof listenSet> }) {
             <p className="nw-now" data-line={s.ja}>
               <Ruby segs={s.segs} fill={fillOf(s.segs, j.speech, j.sec, j.frac)} />
             </p>
-            {showZh ? <div className="nw-zh">{s.zh}</div> : <small className="muted nw-tap">点一下看中文</small>}
+            {showZh ? <div className="nw-zh">{s.zh}</div> : <small className="muted nw-tap">中文 ›</small>}
             {!inBack && (
               <button
                 className={`nw-chip nw-q${missOf(p, a).includes(sentence) ? " on" : ""}`}

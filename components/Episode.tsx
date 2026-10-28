@@ -567,7 +567,7 @@ export default function Episode({ id }: { id: string }) {
         <p className="making-note">
           <i />
           {[
-            fallbackN > 0 && `${fallbackN} 句当时 Gemini 没响应，临时用了备用声音，下次打开会重新做`,
+            fallbackN > 0 && `${fallbackN} 句用了备用声音`,
             failN > 0 && `${failN} 句没做出来，已跳过`,
           ]
             .filter(Boolean)
@@ -612,7 +612,7 @@ export default function Episode({ id }: { id: string }) {
           {tab === "script" && (
             <>
               <div className="row spread note-head">
-                <span>{ep.lines.length} 句 · 点一句跳过去，长按选中问 AI</span>
+                <span>{ep.lines.length} 句</span>
                 <button className="small ghost" onClick={() => setShowZh(!showZh)}>
                   {showZh ? "隐藏中文" : "显示中文"}
                 </button>
@@ -646,7 +646,6 @@ export default function Episode({ id }: { id: string }) {
 
           {tab === "phrases" && (
             <>
-              <p className="note-head">这几句已经放进复习，明天开始会让你说出来。</p>
               {ep.phrases.map((ph) => (
                 <div key={ph.ja} className="note" data-line={ph.ja}>
                   <div className="note-main" onClick={() => say(ph.ja)}>
@@ -661,7 +660,6 @@ export default function Episode({ id }: { id: string }) {
 
           {tab === "words" && (
             <>
-              <p className="note-head">点单词听发音，想记的点收藏进复习。</p>
               {(ep.words ?? []).map((w) => (
                 <div key={w.ja} className="note" data-line={w.ja}>
                   <div className="note-main" onClick={() => say(w.ja)}>
@@ -674,7 +672,6 @@ export default function Episode({ id }: { id: string }) {
                   <Star p={p} ja={w.ja} reading={w.kana} zh={w.zh} voice={RADIO_VOICE.A} scenarioId={scenarioId} />
                 </div>
               ))}
-              {!ep.words?.length && <p className="muted">这一期是旧版生成的，没有单词表。</p>}
             </>
           )}
 
@@ -691,7 +688,6 @@ export default function Episode({ id }: { id: string }) {
                   </div>
                 </div>
               ))}
-              {!ep.grammar?.length && <p className="muted">这一期是旧版生成的，没有语法整理。</p>}
             </>
           )}
 

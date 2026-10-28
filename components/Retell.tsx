@@ -353,7 +353,7 @@ function HelpCard({ h, acts }: { h: HelpNow; acts: CardActs }) {
           <div className={`help-say${h.step === 2 ? " was" : ""}`}>{line("say", h.say, h.say)}</div>
           {ask && (
             <div className="help-opts">
-              <span className="help-q">是这个意思吗？点一下，她就读</span>
+              <span className="help-q">是这个意思吗？</span>
               {h.opts!.map((o, i) => (
                 <button key={o.ja} onClick={() => acts.pick(i)}>
                   <span className="help-opt-ja">
@@ -399,7 +399,6 @@ function HelpedList({ items, self, onHear }: { items: Helped[]; self: Helped[]; 
         <div key={`s${x.say}`} className="helped-self">
           <span className="helped-tag">✓ 自分で言えた</span>
           <b>{unDots(x.say)}</b>
-          <small>上次森先生帮的地方，这次自己说出来了</small>
         </div>
       ))}
       {items.length > 0 && (
@@ -422,7 +421,7 @@ function HelpedList({ items, self, onHear }: { items: Helped[]; self: Helped[]; 
               </button>
             </div>
           ))}
-          <small className="helped-note">已存入フレーズ帳。下一遍到这里，先自己试</small>
+          <small className="helped-note">✓ 已收藏</small>
         </>
       )}
     </div>
@@ -435,17 +434,16 @@ const BUSY: Record<string, string> = { listen: "聞き取り中…", fix: "直�
 // After the second telling: one line on how it went against the first (mid-sentence stalls per
 // minute), and a tick when the words from the fix came out. Never a score, never a new point.
 const plain = (t: string) => t.replace(/[\s、。！？!?,.・「」]/g, "");
-function secondNote(a: Take | null, b: Take, text: string | undefined, better: string | undefined, focus: boolean): string[] {
+function secondNote(a: Take | null, b: Take, text: string | undefined, better: string | undefined): string[] {
   const out: string[] = [];
-  const last = focus ? "最后一遍，留意上面那一件事就好。" : "最后一遍，放松讲。";
   if (better && text && plain(text).includes(plain(better))) out.push(`✓ 「${better}」这遍用上了`);
   if (a?.stalls !== undefined && b.stalls !== undefined) {
     out.push(
       b.stalls < a.stalls
         ? `句子中间卡住少了：每分钟 ${a.stalls} → ${b.stalls} 次`
-        : `句子中间卡住：每分钟 ${a.stalls} → ${b.stalls} 次。${last}`,
+        : `句子中间卡住：每分钟 ${a.stalls} → ${b.stalls} 次`,
     );
-  } else out.push(`讲完了第二遍。${last}`);
+  }
   return out;
 }
 
@@ -1236,7 +1234,6 @@ export default function Retell() {
                 >
                   跟着说
                 </button>
-                <p className="muted retell-note">一句一句：先听，再跟着说，最后自己说。不打分。</p>
               </>
             )}
           </>
@@ -1315,7 +1312,7 @@ export default function Retell() {
             ))}
           </div>
         )}
-        {!warming && !talking && keyed && keyed.done.length > 0 && <span className="retell-done">✓ 连续两遍说得又对又顺：{keyed.done.join("・")}，换成新词</span>}
+        {!warming && !talking && keyed && keyed.done.length > 0 && <span className="retell-done">✓ 说熟了：{keyed.done.join("・")}</span>}
         {showStarters && (
           <div className="retell-starters">
             {shownT.starters.map((s) => (
@@ -1348,11 +1345,7 @@ export default function Retell() {
         <button className="help-call" onClick={() => void stepIn()}>
           <SenseiFace size={36} />
           <b>森先生，帮我一下</b>
-          <small>随时点</small>
         </button>
-      )}
-      {warming && !talking && !error && (
-        <p className="muted retell-note">隔一天再讲一遍，记得更牢。只讲一遍，想起多少讲多少，然后再讲今天的。</p>
       )}
       {!warming && !talking && !error && (busy === "listen" || busy === "fix") && (
         <WaitCard
@@ -1364,13 +1357,9 @@ export default function Retell() {
           pauses={[takes[0]?.perMin, takes[1]?.perMin, pausesNow]}
         />
       )}
-      {!warming && round === 0 && !talking && !error && !busy && (
+      {!warming && round === 0 && !talking && !error && !busy && againTake && (
         <p className="muted retell-note">
-          {againTake
-            ? uptake.length
-              ? `上次的故事讲完了。昨天的说法用上了：${uptake.map((u) => `「${u}」`).join("")} ✓`
-              : "上次的故事讲完了，现在讲今天的。"
-            : "不打分。说不出来时，点「森先生，帮我一下」。"}
+          {uptake.length ? `✓ 用上了：${uptake.map((u) => `「${u}」`).join("")}` : "✓ 上次的故事讲完了"}
         </p>
       )}
       {!warming && round === 0 && !talking && againTake && <ReviewList r={reviews[3]} onHear={hear} />}
@@ -1385,7 +1374,7 @@ export default function Retell() {
           )}
           {takes[1]?.good && <Good ja={takes[1].good} onHear={hear} />}
           <HelpedList items={helped.current.filter((x) => x.round === 1)} self={selfSaid} onHear={hear} />
-          {secondNote(takes[0], takes[1], texts.current[1], stall && fix?.stall.better ? fix.stall.better : fix?.fix.better, !!focus).map((l) => (
+          {secondNote(takes[0], takes[1], texts.current[1], stall && fix?.stall.better ? fix.stall.better : fix?.fix.better).map((l) => (
             <p key={l} className="small-text fb-note">
               {l}
             </p>
@@ -1402,11 +1391,10 @@ export default function Retell() {
             <>
               {carry && carried !== null && (
                 <p className="small-text fb-note">
-                  {carried === "right" ? "✓ 上次那一点，这次说对了" : carried === "wrong" ? "△ 上次那一点还没改过来，明天再来" : "上次那一点这次没用到，明天接着留意"}
+                  {carried === "right" ? "✓ 上次那一点，这次说对了" : carried === "wrong" ? "! 上次那一点还没改过来" : "上次那一点这次没用到"}
                 </p>
               )}
               <HelpedList items={helped.current.filter((x) => x.round === 0)} self={[]} onHear={hear} />
-              <Note text="下一遍只改这一处。" />
               {take0?.good && <Good ja={take0.good} onHear={hear} />}
               <div className="fix-card">
                 <div className="fix-head">
@@ -1469,13 +1457,11 @@ export default function Retell() {
             </>
           ) : take0 ? (
             <>
-              <Note text="内容不用改，再讲一遍给下一个人。" />
               <ReviewList r={reviews[0]} onHear={hear} />
             </>
           ) : null}
         </div>
       )}
-      {round === 2 && !talking && !busy && <Note text="最后一遍，时间短一点，挑最想说的讲。" />}
       {error && <p className="error">{error}</p>}
     </main>
   );

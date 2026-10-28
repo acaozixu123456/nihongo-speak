@@ -200,7 +200,7 @@ export default function Earworm({ ep, kicker = "趣味电台 · 洗脑歌", onEn
         <span className="ew-spin" />
         <div className="ew-text">
           <div className="ew-title">洗脑歌制作中</div>
-          <div className="muted">{DOING[job.step]}，大约 2 分钟。留在这页就会一直做下去，离开了下次打开接着做。</div>
+          <div className="muted">{DOING[job.step]} · 约 2 分钟</div>
           {error && <div className="error">{error}</div>}
         </div>
       </div>
@@ -229,7 +229,7 @@ export default function Earworm({ ep, kicker = "趣味电台 · 洗脑歌", onEn
         <span className="ew-text">
           <span className="ew-title">洗脑歌</span>
           <span className="muted">
-            {[...new Set(ready.lines!.map((l) => l.kw))].slice(0, 5).join("・")} 唱给你听
+            {[...new Set(ready.lines!.map((l) => l.kw))].slice(0, 5).join("・")}
           </span>
         </span>
       </button>

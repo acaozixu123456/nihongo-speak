@@ -12,7 +12,7 @@ export function WeakList() {
   if (list.length === 0) {
     return (
       <div className="today">
-        <span className="today-zh">{Object.keys(p.weak).length ? "现在没有明显的薄弱点。" : "还没有记录。多开口，AI 会把常错的点放到这里。"}</span>
+        <span className="today-zh">{Object.keys(p.weak).length ? "✓ 现在没有明显的薄弱点" : "还没有记录"}</span>
       </div>
     );
   }
@@ -44,7 +44,7 @@ export function WeakList() {
         </>
       )}
       <p className="muted" style={{ textAlign: "center" }}>
-        最常错的几个每天会混进练一练。{fixed > 0 ? `已经练好 ${fixed} 个。` : ""}
+        {fixed > 0 ? `✓ 已经练好 ${fixed} 个` : ""}
       </p>
     </>
   );
