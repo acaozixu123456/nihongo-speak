@@ -57,6 +57,18 @@ export async function loadSet(day = dayKey()): Promise<KokoroSet> {
   return data as KokoroSet;
 }
 
+// Another set, written now once the day's laps are done; the questions this phone went through are left out.
+export async function newSet(asked: string[], day = dayKey()): Promise<KokoroSet> {
+  const res = await fetch("/api/kokoro/more", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ day, asked }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "出题失败");
+  return data as KokoroSet;
+}
+
 export function keepSet(set: KokoroSet) {
   try {
     localStorage.setItem(SET_KEY, JSON.stringify(set));
@@ -79,6 +91,11 @@ function writeStuck(s: Stuck) {
   try {
     localStorage.setItem(STUCK_KEY, JSON.stringify(s));
   } catch {}
+}
+
+// A new set starts with nothing heard.
+export function resetStuck(day = dayKey()) {
+  writeStuck({ day, ids: {}, done: [], laps: 0 });
 }
 
 export function markStuck(id: string) {

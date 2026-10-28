@@ -13,7 +13,9 @@ export type KokoroItem = {
   fits: boolean;
 };
 
-export type KokoroSet = { day: string; made: number; work: boolean; items: KokoroItem[] };
+// earlier: the day's questions before this set (of the sets it replaced, and on a phone of those it
+// went through), kept out of the sets that follow.
+export type KokoroSet = { day: string; made: number; work: boolean; items: KokoroItem[]; earlier?: string[] };
 
 // The parts of a 型 said as they are: what's left between the blanks and the punctuation.
 export const fixedParts = (form: string) =>

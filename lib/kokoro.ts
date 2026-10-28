@@ -65,26 +65,33 @@ ${PATTERNS.map((x) => `- ${x.id}：${x.form} / ${x.zh}（今週 ${used.get(x.id)
 
 // The day's set, written once. Questions whose answer doesn't really use its 型 are dropped.
 // try: a trial set from the given notes ([] = none), neither kept nor read from the saved notes.
-export async function makeSet(day: string, opts: { try?: string[] } = {}): Promise<KokoroSet> {
+// more: the questions a phone went through before asking for another set after the laps (it may have
+// kept an older set than the one saved). A set written again the same day (this, or the morning
+// routine's) leaves out those and the day's earlier ones, and keeps them as its earlier.
+export async function makeSet(day: string, opts: { try?: string[]; more?: string[] } = {}): Promise<KokoroSet> {
   const lastWeek = Array.from({ length: 6 }, (_, i) => addDays(day, -(i + 1)));
-  const [notes, { progress }, news, ...past] = await Promise.all([
+  const [notes, { progress }, news, today, ...past] = await Promise.all([
     opts.try ? { days: opts.try.length ? [{ day, notes: opts.try }] : [] } : readJson<Notes>(NOTES),
     readState(),
     readNews().then((f) => f.items).catch(() => []),
+    opts.try ? null : readSet(day).catch(() => null),
     ...lastWeek.map((d) => readSet(d).catch(() => null)),
   ]);
   const used = new Map<string, number>();
-  for (const s of past) for (const it of s?.items ?? []) for (const f of it.forms) used.set(f, (used.get(f) ?? 0) + 1);
+  for (const s of [today, ...past]) for (const it of s?.items ?? []) for (const f of it.forms) used.set(f, (used.get(f) ?? 0) + 1);
   const newest = news[0]?.day;
   const titles = news.filter((a) => a.day === newest).map((a) => a.title_ja);
-  const asked = past.slice(0, 3).flatMap((x) => x?.items.map((it) => it.q) ?? []);
+  const heard = (s: KokoroSet | null) => [...(s?.items.map((it) => it.q) ?? []), ...(s?.earlier ?? [])];
+  const earlier = [...new Set([...(opts.more ?? []), ...heard(today)])];
+  const asked = [...earlier, ...past.slice(0, 3).flatMap(heard)];
   const drafts = await kokoroQuestions(context(day, notes, progress, titles, used, asked));
+  const made = Date.now();
   const items: KokoroItem[] = [];
   for (const [i, d] of drafts.entries()) {
     const forms = d.forms.map(patternById).filter((x) => !!x);
     const fits = forms.length > 0 && forms.every((f) => fixedParts(f.form).every((part) => d.answer.includes(part)));
     items.push({
-      id: `${day}-${i}`,
+      id: `${day}-${made.toString(36)}-${i}`,
       kind: d.kind,
       q: d.q,
       q_zh: d.q_zh,
@@ -110,13 +117,15 @@ export async function makeSet(day: string, opts: { try?: string[] } = {}): Promi
   const life = from.filter((x) => x.kind === "life");
   const nWork = Math.min(work.length, Math.max(4, 6 - life.length));
   const chosen = [...work.slice(0, nWork), ...life.slice(0, 6 - nWork)];
-  const set: KokoroSet = { day, made: Date.now(), work: work.length > 0, items: chosen };
+  const set: KokoroSet = { day, made, work: work.length > 0, items: chosen, ...(earlier.length ? { earlier } : {}) };
   if (!opts.try) await writeJson(setPath(day), set);
   return set;
 }
 
 // Every line of the day's laps asked for once, right after the set is written. This runs in Tokyo,
 // so the CDN there has them all when the learner taps 聞く (a lap made from nothing took ~30 s).
+// From the last line back: a phone making the lap at the same time (a set asked for after the laps)
+// goes from the first, so the two meet halfway.
 export async function warm(set: KokoroSet) {
   const site = process.env.VERCEL_PROJECT_PRODUCTION_URL;
   if (!site) return console.warn("kokoro warm: no VERCEL_PROJECT_PRODUCTION_URL");
@@ -124,7 +133,7 @@ export async function warm(set: KokoroSet) {
   const urls = new Set(
     set.items.flatMap((it) => [ttsUrl(it.q, ASK_VOICE), ...it.words.map((w) => ttsUrl(w.ja, ANSWER_VOICE)), ttsUrl(it.answer, ANSWER_VOICE)]),
   );
-  const todo = [...urls].filter((u) => u.startsWith("/api/")).values();
+  const todo = [...urls].filter((u) => u.startsWith("/api/")).reverse().values();
   let made = 0;
   const worker = async () => {
     for (const u of todo) {
