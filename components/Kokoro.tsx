@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Fragment, useEffect, useRef, useState } from "react";
+import { ANSWER_VOICE as VOICE } from "@/content/kokoro-patterns";
 import { fixedParts, type KokoroItem, type KokoroSet } from "@/lib/kokoro-model";
 import { LAPS, keepSet, lapClips, loadSet, markLap, markSaid, markStuck, readStuck, savedSet, type KClip } from "@/lib/client/kokoro";
 import { prepare, pruneCache, type Prepared } from "@/lib/client/moyu";
@@ -11,8 +12,6 @@ import { setAudioSession, transcribe } from "@/lib/client/recorder";
 import { useJudge } from "./AiJudge";
 import HoldButton from "./HoldButton";
 import { VerdictSheet, kindOf, type Kind } from "./Verdict";
-
-const VOICE = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-NanamiNeural";
 
 type Phase = "idle" | "loading" | "playing" | "paused";
 type Now = { clip: KClip; end: number };

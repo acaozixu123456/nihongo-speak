@@ -1,8 +1,7 @@
 "use client";
 
 import type { KokoroItem, KokoroSet } from "@/lib/kokoro-model";
-import { SENSEI_VOICE } from "@/components/Sensei";
-import { patternById } from "@/content/kokoro-patterns";
+import { ANSWER_VOICE, ASK_VOICE, OPENERS, patternById } from "@/content/kokoro-patterns";
 import { dayKey } from "./progress";
 import type { Clip, Part } from "./moyu";
 
@@ -11,7 +10,6 @@ import type { Clip, Part } from "./moyu";
 // only. After each a silence to answer in your head, then the model answer.
 
 export const LAPS = 3;
-const ANSWER = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-NanamiNeural";
 const SET_KEY = "nihongo-speak:kokoro";
 const STUCK_KEY = "nihongo-speak:kokoro-stuck";
 
@@ -27,20 +25,20 @@ const say = (voice: string, text: string, pauseMs = 300): Part => ({ voice, text
 
 // The 型 as heard: an everyday sentence built on each one.
 const patternParts = (forms: string[]): Part[] =>
-  forms.map((id) => patternById(id)?.ex).filter((ex): ex is string => !!ex).map((ex) => say(ANSWER, ex, 700));
+  forms.map((id) => patternById(id)?.ex).filter((ex): ex is string => !!ex).map((ex) => say(ANSWER_VOICE, ex, 700));
 
 // One lap as clips, three per question (ask, think, answer), so the screen knows which step is on.
 export function lapClips(set: KokoroSet, lap: number): KClip[] {
   const out: KClip[] = [];
   set.items.forEach((it, i) => {
     const show = it.q;
-    const open = i === 0 && lap > 0 ? [say(SENSEI_VOICE, lap === 1 ? "二周目。今度はことばだけ。" : "最後です。今度は一人で。", 700)] : [];
-    const ask: Part[] = [...open, say(SENSEI_VOICE, it.q, 700)];
+    const open = i === 0 && lap > 0 ? [say(ASK_VOICE, OPENERS[lap - 1], 700)] : [];
+    const ask: Part[] = [...open, say(ASK_VOICE, it.q, 700)];
     if (lap === 0) ask.push(...patternParts(it.forms));
-    if (lap < 2) ask.push(...it.words.map((w, n) => say(ANSWER, w.ja, n === it.words.length - 1 ? 500 : 250)));
+    if (lap < 2) ask.push(...it.words.map((w, n) => say(ANSWER_VOICE, w.ja, n === it.words.length - 1 ? 500 : 250)));
     out.push({ block: "quick", show, item: i, step: "ask", parts: ask });
     out.push({ block: "quick", show, item: i, step: "think", parts: [{ voice: "", pauseMs: thinkMs(it, lap) }] });
-    const answer: Part[] = lap === 0 ? [say(ANSWER, it.answer, 900), say(ANSWER, it.answer, 1500)] : [say(ANSWER, it.answer, 1500)];
+    const answer: Part[] = lap === 0 ? [say(ANSWER_VOICE, it.answer, 900), say(ANSWER_VOICE, it.answer, 1500)] : [say(ANSWER_VOICE, it.answer, 1500)];
     out.push({ block: "quick", show: it.answer, item: i, step: "answer", parts: answer });
   });
   return out;

@@ -29,3 +29,10 @@ export const PATTERNS: Pattern[] = [
 ];
 
 export const patternById = (id: string) => PATTERNS.find((p) => p.id === id);
+
+// Who speaks: 森先生's voice (SENSEI_VOICE) asks, the answer voice answers and says the examples.
+export const ASK_VOICE = "ja-JP-MoriNeural|ja-JP-MayuNeural";
+export const ANSWER_VOICE = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-NanamiNeural";
+
+// What 森先生 says before laps 2 and 3.
+export const OPENERS = ["二周目。今度はことばだけ。", "最後です。今度は一人で。"];
