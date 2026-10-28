@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { fixedParts, type KokoroItem, type KokoroSet } from "@/lib/kokoro-model";
-import { LAPS, lapClips, loadSet, markLap, markSaid, markStuck, readStuck, savedSet, type KClip } from "@/lib/client/kokoro";
+import { LAPS, keepSet, lapClips, loadSet, markLap, markSaid, markStuck, readStuck, savedSet, type KClip } from "@/lib/client/kokoro";
 import { prepare, pruneCache, type Prepared } from "@/lib/client/moyu";
 import { SILENCE, play, stop as stopAudio, ttsUrl, unlock } from "@/lib/client/player";
 import { dayKey, recordMoyu, recordSpeech, wavSeconds } from "@/lib/client/progress";
 import { setAudioSession, transcribe } from "@/lib/client/recorder";
 import { useJudge } from "./AiJudge";
 import HoldButton from "./HoldButton";
-import { VerdictSheet, kindByText, kindOf, type Kind } from "./Verdict";
+import { VerdictSheet, kindOf, type Kind } from "./Verdict";
 
 const VOICE = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-NanamiNeural";
 
@@ -46,7 +46,18 @@ export default function Kokoro() {
     const day = dayKey();
     const have = savedSet(day);
     if (have) setSet(have);
-    else loadSet(day).then(setSet, (e) => setError(e instanceof Error ? e.message : "出题失败"));
+    // The set may have been written again since this phone kept it (the morning routine came later): the
+    // newer one replaces it while nothing of today's has been heard.
+    loadSet(day).then(
+      (fresh) => {
+        const st = readStuck(day);
+        if (have && (fresh.made === have.made || st.laps > 0 || Object.keys(st.ids).length || s.cur)) return;
+        keepSet(fresh);
+        s.laps = [];
+        setSet(fresh);
+      },
+      (e) => !have && setError(e instanceof Error ? e.message : "出题失败"),
+    );
     return () => {
       flush();
       audio.current?.pause();
@@ -240,30 +251,27 @@ export default function Kokoro() {
     />
   );
 
+  let body: React.ReactNode;
   if (home && set) {
-    return (
-      <main className="ko">
-        <HomeSay
-          key={home.id}
-          item={home}
-          onNext={() => {
-            markSaid(home.id);
-            const st = readStuck();
-            setStuck(st);
-            setHome(set.items.find((it) => st.ids[it.id] && !st.done.includes(it.id)) ?? null);
-          }}
-        />
-      </main>
+    body = (
+      <HomeSay
+        key={home.id}
+        item={home}
+        onNext={() => {
+          markSaid(home.id);
+          const st = readStuck();
+          setStuck(st);
+          setHome(set.items.find((it) => st.ids[it.id] && !st.done.includes(it.id)) ?? null);
+        }}
+      />
     );
-  }
-
-  if (listening && set) {
+  } else if (listening && set) {
     const c = now?.clip;
     const it = c ? set.items[c.item] : null;
     const left = now ? Math.max(0, Math.ceil(now.end - t)) : 0;
     const think = c?.step === "think" && it ? (now!.end - t) / (now!.end - (s.cur?.starts[s.idx] ?? 0)) : 0;
-    return (
-      <main className="ko">
+    body = (
+      <>
         <div className="ko-top">
           <button className="ko-x" aria-label="閉じる" onClick={close}>×</button>
           <span className="ko-no">{c ? `${String(c.item + 1).padStart(2, "0")} / ${String(set.items.length).padStart(2, "0")}` : ""}</span>
@@ -332,14 +340,11 @@ export default function Kokoro() {
           </button>
           <button onClick={skip} aria-label="言えた">⏭<small>言えた</small></button>
         </div>
-        {audioEl}
-      </main>
+      </>
     );
-  }
-
-  if (toSay.length && set) {
-    return (
-      <main className="ko">
+  } else if (toSay.length && set) {
+    body = (
+      <>
         <Link href="/listen" className="back" aria-label="戻る">←</Link>
         <Mast title="帰り道" date={date} weekday={weekday} />
         {toSay.map((it, i) => (
@@ -349,39 +354,49 @@ export default function Kokoro() {
           </button>
         ))}
         <button className="ko-go ko-say" onClick={() => setHome(toSay[0])}>● 話す</button>
-        {audioEl}
-      </main>
+        {stuck.laps < LAPS && (
+          <button className="ko-on" onClick={start}>▶ {from + 1}周目</button>
+        )}
+      </>
+    );
+  } else {
+    const groups = set ? (["work", "life"] as const).map((k) => ({ k, items: set.items.filter((x) => x.kind === k) })).filter((g) => g.items.length) : [];
+    body = (
+      <>
+        <Link href="/listen" className="back" aria-label="戻る">←</Link>
+        <Mast title="心で答える" date={date} weekday={weekday} />
+        {!set && !error && <div className="ko-wait" aria-label="作成中" />}
+        {error && <p className="error">{error}</p>}
+        {groups.map((g) => (
+          <section key={g.k}>
+            <div className="ko-sec">
+              <b>{g.k === "work" ? "仕事" : "生活"}</b>
+              <span />
+            </div>
+            {g.items.map((it) => (
+              <div key={it.id} className="ko-row">
+                <span className="ko-n">{String(set!.items.indexOf(it) + 1).padStart(2, "0")}</span>
+                <span>{it.q}</span>
+                {stuck.done.includes(it.id) && <i className="ko-ok" aria-label="話した">✓</i>}
+              </div>
+            ))}
+          </section>
+        ))}
+        {set && (
+          <button className="ko-go" onClick={start}>
+            ▶ {stuck.laps >= LAPS ? "もう一度" : from ? `${from + 1}周目` : "聞く"}
+          </button>
+        )}
+      </>
     );
   }
 
-  const groups = set ? (["work", "life"] as const).map((k) => ({ k, items: set.items.filter((x) => x.kind === k) })).filter((g) => g.items.length) : [];
+  // One <audio> for the whole page, always first: iPhone lets only the element played from the tap on
+  // 聞く play later, so it must not be swapped for a new one when the screen changes.
   return (
     <main className="ko">
-      <Link href="/listen" className="back" aria-label="戻る">←</Link>
-      <Mast title="心で答える" date={date} weekday={weekday} />
-      {!set && !error && <div className="ko-wait" aria-label="作成中" />}
-      {error && <p className="error">{error}</p>}
-      {groups.map((g) => (
-        <section key={g.k}>
-          <div className="ko-sec">
-            <b>{g.k === "work" ? "仕事" : "生活"}</b>
-            <span />
-          </div>
-          {g.items.map((it) => (
-            <div key={it.id} className="ko-row">
-              <span className="ko-n">{String(set!.items.indexOf(it) + 1).padStart(2, "0")}</span>
-              <span>{it.q}</span>
-              {stuck.done.includes(it.id) && <i className="ko-ok" aria-label="話した">✓</i>}
-            </div>
-          ))}
-        </section>
-      ))}
-      {set && (
-        <button className="ko-go" onClick={start}>
-          ▶ {stuck.laps >= LAPS ? "もう一度" : from ? `${from + 1}周目` : "聞く"}
-        </button>
-      )}
       {audioEl}
+      {body}
     </main>
   );
 }
@@ -437,7 +452,8 @@ function HomeSay({ item, onNext }: { item: KokoroItem; onNext: () => void }) {
   const [heard, setHeard] = useState<string | null>(null);
   const [gave, setGave] = useState(false);
   const [zh, setZh] = useState(false);
-  const judge = useJudge(heard ? { zh: item.answer_zh, ja: item.answer, where: `質問：${item.q}`, said: heard } : null);
+  // Their own answer, not the model one: judged on answering the question in natural Japanese.
+  const judge = useJudge(heard ? { zh: item.answer_zh, ja: item.answer, said: heard, q: item.q, form: item.pattern.join(" ") } : null);
 
   useEffect(() => () => stopAudio(), []);
 
@@ -456,14 +472,16 @@ function HomeSay({ item, onNext }: { item: KokoroItem; onNext: () => void }) {
     }
   }
 
-  const hear = (rate = 1) => {
+  const hear = (text: string, rate = 1) => {
     unlock();
-    play(ttsUrl(item.answer, VOICE), rate).catch(() => {});
+    play(ttsUrl(text, VOICE), rate).catch(() => {});
   };
 
   let kind: Kind | null = null;
   if (gave) kind = "wrong";
-  else if (heard) kind = judge.data ? kindOf(judge.data.verdict) : judge.failed ? kindByText(heard, item.answer) : null;
+  else if (heard) kind = judge.data ? kindOf(judge.data.verdict) : judge.failed ? "close" : null;
+  // Nearly right: what they said, put right. Otherwise the model answer, as one way to say it.
+  const shown = kind === "close" && judge.data?.fixed ? judge.data.fixed : item.answer;
 
   return (
     <>
@@ -477,7 +495,7 @@ function HomeSay({ item, onNext }: { item: KokoroItem; onNext: () => void }) {
       {heard && <p className={`said said-${kind ?? "wait"}`}>{heard}</p>}
       {error && <p className="error">{error}</p>}
       {heard || gave ? (
-        <VerdictSheet kind={kind} quiet={gave} ja={item.answer} voice={VOICE} why={judge.data} onHear={() => hear(kind === "right" ? 1 : 0.85)} onNext={onNext} />
+        <VerdictSheet kind={kind} quiet={gave} ja={shown} voice={VOICE} why={judge.data} onHear={() => hear(shown, kind === "right" ? 1 : 0.85)} onNext={onNext} />
       ) : (
         <div className="dock" style={{ bottom: 0, zIndex: 20 }}>
           <div className="dock-inner">

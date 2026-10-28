@@ -2353,3 +2353,4 @@ body:has(.ko) { background: #f6f0e4; }
 .info { position: relative; display: inline-flex; vertical-align: middle; margin-left: 6px; }
 .info-i { width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 1.5px solid var(--faint); background: none; color: var(--muted); font: italic 700 12px/1 Georgia, serif; display: grid; place-items: center; }
 .info-tip { position: absolute; z-index: 40; top: 26px; left: -40px; width: max-content; max-width: min(260px, 80vw); padding: 10px 12px; border-radius: 12px; background: var(--text); color: var(--bg); font: 400 13px/1.5 var(--sans); letter-spacing: 0; text-align: left; white-space: normal; box-shadow: var(--shadow); }
+.ko-on { display: block; margin: 14px auto 0; padding: 8px 16px; border: 0; background: none; color: var(--muted); font-family: var(--ja); font-size: 14px; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; }

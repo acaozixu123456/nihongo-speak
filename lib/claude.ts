@@ -309,6 +309,50 @@ points は学習者の弱点を記録するために使います。同じ文法�
   return res.parsed_output;
 }
 
+// 心で答える, said out loud on the way home: a question about the learner's own work or life, answered in
+// their own words. The model answer is one example; what counts is answering it in natural Japanese.
+const FreeJudgeSchema = JudgeSchema.extend({
+  fixed: z.string().describe("学習者の発言を、内容はそのまま（模範解答の内容に変えずに）自然な日本語に直した全文。直す所がなければ発言のまま。off なら空文字"),
+});
+
+export async function judgeFreeAnswer(a: { q: string; form: string; ja: string; said: string; known?: string[] }) {
+  const once = async () => {
+    const res = await parse({
+      ...smart(4000),
+      system: `あなたは日本在住の社会人向けの日本語コーチです。学習者は中国人、レベルはN4〜N3。
+学習者は「質問」に、自分の本当のことを日本語で声に出して答えています。内容は模範解答と違ってよい（模範解答は答え方の一例）。
+- 質問に答えていて、その場面で意味が通じ、日本語として自然なら good。内容や言い方が模範解答と違うだけで減点しない。
+- 答えになっていて通じるが、文法・言葉に直したい所があれば ok。
+- 質問に答えていない・通じない・ほとんど言えていないなら off。
+- 「型」は今日練習した文型。使えていれば right_zh で触れる。使っていなくても減点しない。
+学習者の発言は音声認識の結果です。同音の漢字違い、句読点、小さな認識ミスは学習者の誤りとして扱わない。
+説明は中国語で、短く具体的に。fixes の better は学習者が言いたかった内容のまま直す。
+points は学習者の弱点を記録するために使います。型と、学習者の発言に出てきた文法・表現について。同じ文法・表現には毎回同じ tag を使ってください。${
+        a.known?.length ? `\n既に使った tag：${a.known.join("、")}\n当てはまるものがあれば、この表記をそのまま使う。` : ""
+      }`,
+      messages: [
+        {
+          role: "user",
+          content: `質問：${a.q}
+型：${a.form || "（なし）"}
+模範解答（一例）：${a.ja}
+学習者が言ったこと：${a.said}`,
+        },
+      ],
+      output_config: { effort: "low", format: zodOutputFormat(FreeJudgeSchema) },
+    });
+    checkStop(res.stop_reason);
+    if (!res.parsed_output) throw new Error(`AI 返回格式不对（${res.stop_reason}），请重试`);
+    return res.parsed_output;
+  };
+  try {
+    return await once();
+  } catch (e) {
+    console.error("free judge failed, retrying:", e);
+    return once();
+  }
+}
+
 // ---- Targeted drill for one weak point ----
 
 const DrillSchema = z.object({
@@ -1245,7 +1289,7 @@ export async function kokoroQuestions(context: string): Promise<KokoroDraft[]> {
 学習者は仕事中にイヤホンで聞き、声を出さずに心の中で答えます。そのための質問を作ってください。
 - 質問は学習者自身の最近の仕事・生活について（同僚や上司が雑談や朝会で実際に聞くような質問）。「メモ」にある事実だけを使い、なければ一般的で誰にでも答えられる内容にする。
 - 生活の質問は、生活メモがなければ通勤・食事・週末・天気や季節・体調・買い物など毎日の暮らしから。ニュースの話題は1日1問まで。
-- 1問目は易しく、後ろほど少し詳しく。同じ出来事を別の角度から聞く質問が続いてもよい（作業 → 原因 → 対応 → 予定）。
+- 1問目は易しく、後ろほど少し詳しく。同じ出来事を別の角度から聞く質問が続いてもよい（作業 → 原因 → 対応 → 予定）。ただし質問は一つだけ聞いても分かるように書く（前の質問を「その」「それ」で指さない。一部の質問は使われないことがある）。
 - 模範解答は学習者の立場の一人称で、N3 までの文法、職場で自然な丁寧語。必ず forms の型を使い、型の ＿ 以外の部分（「とき、」「てしまいました」「原因は」など）は一字も変えずに入れる。
 - 6問で4種類以上の型を使い、同じ型は1日2回まで。週の中では同じ型を何日か繰り返して自動化するのが目的なので、「今週の型」で使用回数が3回未満のものを優先する。
 - 型は意味が自然に合う質問にだけ使う（「てしまいました」は困ったこと・失敗だけ。「見つけてしまいました」のような無理な使い方はしない）。先に型を決め、その型で答えるのが一番自然な質問を作る。
