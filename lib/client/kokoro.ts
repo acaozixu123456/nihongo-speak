@@ -61,10 +61,13 @@ export async function loadSet(day = dayKey()): Promise<KokoroSet> {
   const res = await fetch(`/api/kokoro?day=${day}`);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error ?? "出题失败");
-  try {
-    localStorage.setItem(SET_KEY, JSON.stringify(data));
-  } catch {}
   return data as KokoroSet;
+}
+
+export function keepSet(set: KokoroSet) {
+  try {
+    localStorage.setItem(SET_KEY, JSON.stringify(set));
+  } catch {}
 }
 
 // ---- Questions the learner went back to (⏮): said out loud on the way home ----

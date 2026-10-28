@@ -60,10 +60,11 @@ ${PATTERNS.map((x) => `- ${x.id}：${x.form} / ${x.zh}（今週 ${used.get(x.id)
 }
 
 // The day's set, written once. Questions whose answer doesn't really use its 型 are dropped.
-export async function makeSet(day: string): Promise<KokoroSet> {
+// try: a trial set from the given notes ([] = none), neither kept nor read from the saved notes.
+export async function makeSet(day: string, opts: { try?: string[] } = {}): Promise<KokoroSet> {
   const lastWeek = Array.from({ length: 6 }, (_, i) => addDays(day, -(i + 1)));
   const [notes, { progress }, news, ...past] = await Promise.all([
-    readJson<Notes>(NOTES),
+    opts.try ? { days: opts.try.length ? [{ day, notes: opts.try }] : [] } : readJson<Notes>(NOTES),
     readState(),
     readNews().then((f) => f.items).catch(() => []),
     ...lastWeek.map((d) => readSet(d).catch(() => null)),
@@ -105,6 +106,6 @@ export async function makeSet(day: string): Promise<KokoroSet> {
   const nWork = Math.min(work.length, Math.max(4, 6 - life.length));
   const chosen = [...work.slice(0, nWork), ...life.slice(0, 6 - nWork)];
   const set: KokoroSet = { day, made: Date.now(), work: work.length > 0, items: chosen };
-  await writeJson(setPath(day), set);
+  if (!opts.try) await writeJson(setPath(day), set);
   return set;
 }

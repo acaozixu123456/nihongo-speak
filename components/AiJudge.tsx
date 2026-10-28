@@ -13,6 +13,7 @@ export type Judge = {
   fixes: { you_said: string; better: string; why_zh: string }[];
   others: { ja: string; zh: string }[];
   points: JudgedPoint[];
+  fixed?: string; // a free answer (心で答える): what they said, put right
 };
 
 // Answers already judged, so going back and forth on the same screen doesn't ask again.
@@ -20,7 +21,9 @@ const cache = new Map<string, Judge>();
 
 // Asks the AI coach about one spoken answer. Nothing is shown by itself: the page turns the verdict into its
 // 判定, and the details wait behind なぜ？ (JudgeWhy). Weak points are recorded either way.
-export function useJudge(args: { zh: string; ja: string; where?: string; said: string } | null) {
+// q: the learner answers this question in their own words (心で答える) instead of saying the zh; form is
+// the 型 practised with it.
+export function useJudge(args: { zh: string; ja: string; where?: string; said: string; q?: string; form?: string } | null) {
   const [data, setData] = useState<Judge | null>(null);
   const [failed, setFailed] = useState(false);
   const p = useProgress();
