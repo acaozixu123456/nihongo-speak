@@ -1,13 +1,13 @@
 "use client";
 
 import type { KokoroItem, KokoroSet } from "@/lib/kokoro-model";
-import { ANSWER_VOICE, ASK_VOICE, OPENERS, patternById } from "@/content/kokoro-patterns";
+import { ANSWER_VOICE, ASK_VOICE, OPENERS } from "@/content/kokoro-patterns";
 import { dayKey } from "./progress";
 import type { Clip, Part } from "./moyu";
 
 // 心で答える: the day's six questions heard three times, the help taken away a lap at a time —
-// lap 1 the question, an example of its 型 and the words; lap 2 the words only; lap 3 the question
-// only. After each a silence to answer in your head, then the model answer.
+// laps 1 and 2 the question and its words, lap 3 the question only. After each a silence to answer
+// in your head, then the model answer: twice in lap 1, once after that. The 型 is only on screen.
 
 export const LAPS = 3;
 const SET_KEY = "nihongo-speak:kokoro";
@@ -23,10 +23,6 @@ export type KClip = Clip & { item: number; step: "ask" | "think" | "answer" };
 
 const say = (voice: string, text: string, pauseMs = 300): Part => ({ voice, text, pauseMs });
 
-// The 型 as heard: an everyday sentence built on each one.
-const patternParts = (forms: string[]): Part[] =>
-  forms.map((id) => patternById(id)?.ex).filter((ex): ex is string => !!ex).map((ex) => say(ANSWER_VOICE, ex, 700));
-
 // One lap as clips, three per question (ask, think, answer), so the screen knows which step is on.
 export function lapClips(set: KokoroSet, lap: number): KClip[] {
   const out: KClip[] = [];
@@ -34,7 +30,6 @@ export function lapClips(set: KokoroSet, lap: number): KClip[] {
     const show = it.q;
     const open = i === 0 && lap > 0 ? [say(ASK_VOICE, OPENERS[lap - 1], 700)] : [];
     const ask: Part[] = [...open, say(ASK_VOICE, it.q, 700)];
-    if (lap === 0) ask.push(...patternParts(it.forms));
     if (lap < 2) ask.push(...it.words.map((w, n) => say(ANSWER_VOICE, w.ja, n === it.words.length - 1 ? 500 : 250)));
     out.push({ block: "quick", show, item: i, step: "ask", parts: ask });
     out.push({ block: "quick", show, item: i, step: "think", parts: [{ voice: "", pauseMs: thinkMs(it, lap) }] });
