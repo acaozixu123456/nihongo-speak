@@ -1,5 +1,6 @@
-// 心で答える: one question with its 型 (pattern lines, ＿ = what the learner fills in), the words it
-// needs and a model answer. fits: the answer really contains the 型's fixed parts.
+// 心で答える: one question with its 型 (pattern lines, ＿ = what the learner fills in) and a model
+// answer; answer_zh is what the learner is told to answer, in Chinese. fits: the answer really
+// contains the 型's fixed parts. (Sets kept from before also carry words, no longer used.)
 export type KokoroItem = {
   id: string;
   kind: "work" | "life";
@@ -7,7 +8,6 @@ export type KokoroItem = {
   q_zh: string;
   forms: string[];
   pattern: string[];
-  words: { ja: string; zh: string }[];
   answer: string;
   answer_zh: string;
   fits: boolean;

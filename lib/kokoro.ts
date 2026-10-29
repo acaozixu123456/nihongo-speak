@@ -4,7 +4,7 @@ import { kokoroQuestions } from "@/lib/claude";
 import { readNews } from "@/lib/news";
 import { addDays, type Progress } from "@/lib/progress-model";
 import { readState } from "@/lib/store";
-import { ANSWER_VOICE, ASK_VOICE, PATTERNS, patternById } from "@/content/kokoro-patterns";
+import { ANSWER_VOICE, ASK_VOICE, HINT_VOICE, PATTERNS, patternById } from "@/content/kokoro-patterns";
 import { ttsUrl } from "@/lib/tts-url";
 import { fixedParts, type KokoroItem, type KokoroSet } from "@/lib/kokoro-model";
 
@@ -97,7 +97,6 @@ export async function makeSet(day: string, opts: { try?: string[]; more?: string
       q_zh: d.q_zh,
       forms: forms.map((f) => f.id),
       pattern: forms.map((f) => f.form),
-      words: d.words.slice(0, 4),
       answer: d.answer,
       answer_zh: d.answer_zh,
       fits,
@@ -131,7 +130,7 @@ export async function warm(set: KokoroSet) {
   if (!site) return console.warn("kokoro warm: no VERCEL_PROJECT_PRODUCTION_URL");
   const t = Date.now();
   const urls = new Set(
-    set.items.flatMap((it) => [ttsUrl(it.q, ASK_VOICE), ...it.words.map((w) => ttsUrl(w.ja, ANSWER_VOICE)), ttsUrl(it.answer, ANSWER_VOICE)]),
+    set.items.flatMap((it) => [ttsUrl(it.q, ASK_VOICE), ttsUrl(it.answer_zh, HINT_VOICE), ttsUrl(it.answer, ANSWER_VOICE)]),
   );
   const todo = [...urls].filter((u) => u.startsWith("/api/")).reverse().values();
   let made = 0;

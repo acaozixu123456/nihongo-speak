@@ -1,3 +1,5 @@
+import { ZH_VOICE } from "@/content/narration";
+
 // 心で答える: the fixed sentence patterns (型) every answer is built from. A small set on purpose: the
 // same 型 comes back in different questions all week, so it becomes automatic. ＿ is what the
 // learner fills in; the rest is said as is.
@@ -28,8 +30,10 @@ export const PATTERNS: Pattern[] = [
 
 export const patternById = (id: string) => PATTERNS.find((p) => p.id === id);
 
-// Who speaks: 森先生's voice (SENSEI_VOICE) asks, the answer voice says the words and the answer.
+// Who speaks: 森先生's voice (SENSEI_VOICE) asks, 摸鱼模式's Chinese voice says what to answer (laps 1
+// and 2), the answer voice says the answer.
 export const ASK_VOICE = "ja-JP-MoriNeural|ja-JP-MayuNeural";
+export const HINT_VOICE = ZH_VOICE;
 export const ANSWER_VOICE = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-NanamiNeural";
 
 // What 森先生 says before laps 2 and 3.
