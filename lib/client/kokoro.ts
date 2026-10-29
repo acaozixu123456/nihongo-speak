@@ -1,13 +1,15 @@
 "use client";
 
 import type { KokoroItem, KokoroSet } from "@/lib/kokoro-model";
-import { ANSWER_VOICE, ASK_VOICE, OPENERS } from "@/content/kokoro-patterns";
+import { ANSWER_VOICE, ASK_VOICE, HINT_VOICE, OPENERS } from "@/content/kokoro-patterns";
 import { dayKey } from "./progress";
 import type { Clip, Part } from "./moyu";
 
-// 心で答える: the day's six questions heard three times, the help taken away a lap at a time —
-// laps 1 and 2 the question and its words, lap 3 the question only. After each a silence to answer
-// in your head, then the model answer: twice in lap 1, once after that. The 型 is only on screen.
+// 心で答える: the day's six questions heard three times, the help taken away a lap at a time. Laps 1
+// and 2: the question, then what to answer said in Chinese, so there is always something to say and
+// the work is saying it in Japanese (瞬間作文, like 摸鱼模式's quick block). Lap 3: the question only.
+// After each a silence to answer in your head, then the model answer: in lap 1 heard, said after it
+// and heard again; once after that. The 型 is only on screen, in lap 1.
 
 export const LAPS = 3;
 const SET_KEY = "nihongo-speak:kokoro";
@@ -23,6 +25,9 @@ export type KClip = Clip & { item: number; step: "ask" | "think" | "answer" };
 
 const say = (voice: string, text: string, pauseMs = 300): Part => ({ voice, text, pauseMs });
 
+// Time to say the model answer after it in lap 1, about as long as it takes to say.
+const repeatMs = (it: KokoroItem) => Math.min(6000, 1500 + it.answer.length * 120);
+
 // One lap as clips, three per question (ask, think, answer), so the screen knows which step is on.
 export function lapClips(set: KokoroSet, lap: number): KClip[] {
   const out: KClip[] = [];
@@ -30,10 +35,10 @@ export function lapClips(set: KokoroSet, lap: number): KClip[] {
     const show = it.q;
     const open = i === 0 && lap > 0 ? [say(ASK_VOICE, OPENERS[lap - 1], 700)] : [];
     const ask: Part[] = [...open, say(ASK_VOICE, it.q, 700)];
-    if (lap < 2) ask.push(...it.words.map((w, n) => say(ANSWER_VOICE, w.ja, n === it.words.length - 1 ? 500 : 250)));
+    if (lap < 2) ask.push(say(HINT_VOICE, it.answer_zh, 500));
     out.push({ block: "quick", show, item: i, step: "ask", parts: ask });
     out.push({ block: "quick", show, item: i, step: "think", parts: [{ voice: "", pauseMs: thinkMs(it, lap) }] });
-    const answer: Part[] = lap === 0 ? [say(ANSWER_VOICE, it.answer, 900), say(ANSWER_VOICE, it.answer, 1500)] : [say(ANSWER_VOICE, it.answer, 1500)];
+    const answer: Part[] = lap === 0 ? [say(ANSWER_VOICE, it.answer, repeatMs(it)), say(ANSWER_VOICE, it.answer, 1500)] : [say(ANSWER_VOICE, it.answer, 1500)];
     out.push({ block: "quick", show: it.answer, item: i, step: "answer", parts: answer });
   });
   return out;

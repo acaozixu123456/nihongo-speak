@@ -325,6 +325,7 @@ export default function Kokoro() {
                 {it.q}
                 <Info open={zh} onToggle={() => setZh(!zh)} text={it.q_zh} />
               </h1>
+              {lap < 2 && <Hint text={it.answer_zh} />}
               {lap === 0 && (
                 <div className="ko-box">
                   <h4>型</h4>
@@ -338,16 +339,6 @@ export default function Kokoro() {
                       ))}
                     </div>
                   ))}
-                </div>
-              )}
-              {lap < 2 && (
-                <div className="ko-box">
-                  <h4>ことば</h4>
-                  <div className="ko-chips">
-                    {it.words.map((w) => (
-                      <Chip key={w.ja} ja={w.ja} zh={w.zh} />
-                    ))}
-                  </div>
                 </div>
               )}
               {c.step === "think" && (
@@ -436,13 +427,15 @@ export default function Kokoro() {
 }
 
 // A word; tapped, its Chinese.
-function Chip({ ja, zh }: { ja: string; zh: string }) {
-  const [open, setOpen] = useState(false);
+// What to answer, in Chinese: the learner's work is saying it in Japanese.
+function Hint({ text }: { text: string }) {
   return (
-    <button className="ko-chip" aria-label={`${ja} ${zh}`} aria-expanded={open} onClick={() => setOpen(!open)}>
-      {ja}
-      {open && <span className="ko-tip">{zh}</span>}
-    </button>
+    <div className="ko-box">
+      <h4>中文</h4>
+      <p className="ko-zh" lang="zh-Hans">
+        {text}
+      </p>
+    </div>
   );
 }
 
@@ -526,6 +519,7 @@ function HomeSay({ item, onNext }: { item: KokoroItem; onNext: () => void }) {
         {item.q}
         <Info open={zh} onToggle={() => setZh(!zh)} text={item.q_zh} />
       </h1>
+      {!heard && !gave && <Hint text={item.answer_zh} />}
       {heard && <p className={`said said-${kind ?? "wait"}`}>{heard}</p>}
       {error && <p className="error">{error}</p>}
       {heard || gave ? (

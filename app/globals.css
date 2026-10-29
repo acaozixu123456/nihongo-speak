@@ -2332,15 +2332,13 @@ body:has(.ko) { background: #f6f0e4; }
 .ko-box h4 { position: absolute; top: -10px; left: 12px; margin: 0; padding: 0 8px; background: #f6f0e4; font-family: var(--serif); font-size: 12px; font-weight: 700; letter-spacing: 0.2em; color: var(--mg-ink2); }
 .ko-pat { font-family: var(--ja); font-size: 16px; font-weight: 500; line-height: 2; }
 .ko-blank { display: inline-block; min-width: 54px; margin: 0 3px; border-bottom: 2px solid var(--mg-ochre); transform: translateY(-4px); }
-.ko-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.ko-chip { position: relative; padding: 6px 12px; border: 0; border-radius: 999px; background: #efe6d4; color: var(--mg-ink); font-family: var(--ja); font-size: 15px; font-weight: 500; cursor: pointer; }
+.ko-zh { margin: 0; font-family: var(--sans); font-size: 17px; font-weight: 500; line-height: 1.7; color: var(--mg-ink); }
 .ko-ring { --p: 100%; width: 96px; height: 96px; margin: 32px auto 0; border-radius: 50%; background: conic-gradient(var(--mg-ochre) 0 var(--p), #eadfca var(--p) 100%); display: grid; place-items: center; }
 .ko-ring span { width: 80px; height: 80px; border-radius: 50%; background: #f6f0e4; display: grid; place-items: center; font-family: var(--serif); font-size: 30px; font-weight: 700; }
 .ko-ans { margin: 22px 0 0; font-family: var(--serif); font-size: 19px; font-weight: 500; line-height: 2.05; color: var(--mg-ink2); }
 .ko-hl { background: linear-gradient(transparent 56%, var(--mg-mark) 56%, var(--mg-mark) 92%, transparent 92%); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .ko-info { position: relative; display: inline-grid; place-items: center; width: 22px; height: 22px; margin-left: 8px; padding: 0; border: 1px solid #b3a894; border-radius: 50%; background: none; color: #9a8f7f; font-family: var(--serif); font-size: 12px; font-weight: 600; vertical-align: middle; cursor: pointer; }
 .ko-tip { position: absolute; z-index: 5; top: calc(100% + 8px); right: -8px; width: max-content; max-width: 260px; padding: 6px 10px; border-radius: 6px; background: var(--mg-ink); color: #f6f0e4; font-family: var(--sans); font-size: 13px; font-weight: 400; line-height: 1.5; text-align: left; white-space: normal; }
-.ko-chip .ko-tip { right: auto; left: 0; }
 .ko-dock { position: fixed; left: 16px; right: 16px; bottom: calc(env(safe-area-inset-bottom) + 20px); max-width: 448px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; padding: 10px 18px; border-radius: 999px; background: var(--mg-ink); }
 .ko-dock button { padding: 0; border: 0; background: none; color: #f6f0e4; font-size: 15px; text-align: center; cursor: pointer; min-width: 56px; }
 .ko-dock small { display: block; font-size: 11px; opacity: 0.75; }
