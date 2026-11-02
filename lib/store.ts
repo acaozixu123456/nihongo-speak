@@ -1,11 +1,10 @@
 import "server-only";
-import { BlobNotFoundError, get, put } from "@vercel/blob";
+import { getJson, kvReady, setJson } from "@/lib/kv";
 import { merge, normalize, type Progress } from "@/lib/progress-model";
 import type { PushSubscription } from "web-push";
 
-// One private JSON file in Vercel Blob holds everything the server keeps.
-// Connected stores authenticate with Vercel OIDC + BLOB_STORE_ID (or an older read-write token).
-// Without either the app still works, just without sync or reminders.
+// One JSON value in Redis (lib/kv.ts) holds the learner's progress and push reminders.
+// Without Redis set up the app still works, just without sync or reminders.
 
 export type Slot = "noon" | "evening";
 
@@ -16,27 +15,17 @@ export type State = {
 
 const PATH = "state.json";
 
-export const storageReady = () => !!(process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN);
+export const storageReady = kvReady;
 
 export async function readState(): Promise<State> {
-  // Only "no file yet" counts as empty; any other failure must not be mistaken for it,
-  // or the next write would wipe the saved state.
-  const res = await get(PATH, { access: "private", useCache: false }).catch((e: unknown) => {
-    if (e instanceof BlobNotFoundError) return null;
-    throw e;
-  });
-  if (!res || res.statusCode !== 200) return { progress: normalize(null) };
-  const data = (await new Response(res.stream).json()) as State;
-  return { ...data, progress: normalize(data.progress) };
+  // Only "not there yet" counts as empty; any other failure throws, or the next write would wipe
+  // the saved state.
+  const data = await getJson<State>(PATH);
+  return data ? { ...data, progress: normalize(data.progress) } : { progress: normalize(null) };
 }
 
 export async function writeState(state: State) {
-  await put(PATH, JSON.stringify(state), {
-    access: "private",
-    addRandomSuffix: false,
-    allowOverwrite: true,
-    contentType: "application/json",
-  });
+  await setJson(PATH, state);
 }
 
 export async function syncProgress(client: Progress) {

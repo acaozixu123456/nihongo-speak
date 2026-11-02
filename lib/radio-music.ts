@@ -1,9 +1,9 @@
 import "server-only";
-import { BlobNotFoundError, get, put } from "@vercel/blob";
+import { getBytes, setBytes } from "@/lib/kv";
 import { vertexAccess } from "@/lib/vertex-tts";
 
 // ゆるっと日本ラジオ's own music (a station jingle and a background loop for the talk) and the
-// 三回話す pause music, made once by Lyria 3 Pro (about 8 cents each, from the Google Cloud credit) and kept in Blob for good.
+// 三回話す pause music, made once by Lyria 3 Pro (about 8 cents each, from the Google Cloud credit) and kept in Redis for good.
 
 export const MUSIC = {
   jingle:
@@ -20,14 +20,7 @@ export type Music = keyof typeof MUSIC;
 
 const path = (kind: Music) => `radio/${kind}.mp3`;
 
-export async function readMusic(kind: Music) {
-  const res = await get(path(kind), { access: "private", useCache: false }).catch((e: unknown) => {
-    if (e instanceof BlobNotFoundError) return null;
-    throw e;
-  });
-  if (!res || res.statusCode !== 200) return null;
-  return Buffer.from(await new Response(res.stream).arrayBuffer());
-}
+export const readMusic = (kind: Music) => getBytes(path(kind));
 
 export async function makeMusic(kind: Music) {
   const { project, token } = await vertexAccess();
@@ -49,6 +42,6 @@ export async function makeMusic(kind: Music) {
   const data = reply.candidates?.[0]?.content?.parts?.find((p) => p.inlineData)?.inlineData?.data;
   if (!data) throw new Error("Lyria 没有返回音乐");
   const mp3 = Buffer.from(data, "base64");
-  await put(path(kind), mp3, { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: "audio/mpeg" });
+  await setBytes(path(kind), mp3);
   return mp3;
 }

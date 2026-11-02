@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { drawCover, readFile } from "@/lib/earworm";
+import { blobReady, drawCover, readFile } from "@/lib/earworm";
 import { spend, tooMany } from "@/lib/quota";
 import { OldRadioSchema } from "@/lib/radio";
-import { storageReady } from "@/lib/store";
 import { vertexConfigured } from "@/lib/vertex-tts";
 
 export const maxDuration = 180;
@@ -16,7 +15,7 @@ export async function POST(request: Request) {
   const id = typeof body.id === "string" ? body.id : "";
   const ep = OldRadioSchema.safeParse(body.episode);
   if (!ID.test(id) || !ep.success) return NextResponse.json({ error: "bad request" }, { status: 400 });
-  if (!storageReady() || !vertexConfigured()) return NextResponse.json({ error: "not set up" }, { status: 503 });
+  if (!blobReady() || !vertexConfigured()) return NextResponse.json({ error: "not set up" }, { status: 503 });
   try {
     if (!(await readFile(id, "cover.png")) && !(await spend("cover"))) return tooMany();
     const ok = await drawCover(id, ep.data);

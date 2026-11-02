@@ -1,23 +1,19 @@
 import "server-only";
-import { BlobNotFoundError, del, get, put } from "@vercel/blob";
+import { delKeys, getBytes, getJson, setBytes, setJson } from "@/lib/kv";
 import { newsNotes } from "@/lib/claude";
 import { addDays } from "@/lib/progress-model";
 import { NEWS_DAYS, newsVoice, type NewsArticle } from "@/lib/news-model";
 import { nhkArticle, nhkImage, nhkList, nhkSession, plain, spoken, spokenAll, withReadings } from "@/lib/nhk";
 
 // Every morning (cron, 8:30 JST) the newest NHKやさしいことばニュース articles are fetched, given our
-// notes and kept in one private Blob file the phone reads through /api/news. Their sentences are then
+// notes and kept in one Redis value the phone reads through /api/news. Their sentences are then
 // asked for once from our own /api/tts, so the CDN holds the voice before the train.
 
 const PATH = "news/articles.json";
 export type NewsFile = { made: number; items: NewsArticle[] };
 
 export async function readNews(): Promise<NewsFile> {
-  const res = await get(PATH, { access: "private", useCache: false }).catch((e: unknown) => {
-    if (e instanceof BlobNotFoundError) return null;
-    throw e;
-  });
-  return res?.statusCode === 200 ? ((await new Response(res.stream).json()) as NewsFile) : { made: 0, items: [] };
+  return (await getJson<NewsFile>(PATH)) ?? { made: 0, items: [] };
 }
 
 // NHK's picture for each article, kept as long as the article (it needs NHK's session, so the phone can't
@@ -25,12 +21,12 @@ export async function readNews(): Promise<NewsFile> {
 const imgPath = (id: string) => `news/img/${id}.jpg`;
 
 export async function readNewsImage(id: string): Promise<ArrayBuffer | null> {
-  const res = await get(imgPath(id), { access: "private" }).catch(() => null);
-  return res?.statusCode === 200 ? new Response(res.stream).arrayBuffer() : null;
+  const b = await getBytes(imgPath(id)).catch(() => null);
+  return b ? new Uint8Array(b).buffer : null;
 }
 
 async function writeNews(f: NewsFile) {
-  await put(PATH, JSON.stringify(f), { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: "application/json" });
+  await setJson(PATH, f);
 }
 
 // The articles of the last few days NHK put out that aren't kept yet, made one by one (a failed one is
@@ -97,13 +93,13 @@ export async function refreshNews(today: string, opts: { days?: number; redo?: b
       const u = !a.image && uri.get(a.id);
       const body = u ? await nhkImage(s, u) : null;
       if (!body) return;
-      await put(imgPath(a.id), Buffer.from(body), { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: "image/jpeg" });
+      await setBytes(imgPath(a.id), Buffer.from(body), NEWS_DAYS + 7);
       items[k] = { ...a, image: true };
       pics++;
     }),
   );
   const gone = read.items.filter((a) => a.image && !items.some((b) => b.id === a.id)).map((a) => imgPath(a.id));
-  if (gone.length) await del(gone).catch(() => {});
+  if (gone.length) await delKeys(gone).catch(() => {});
   if (added.length || pics || items.length !== read.items.length) await writeNews(next);
   return { added, failed, file: next };
 }
