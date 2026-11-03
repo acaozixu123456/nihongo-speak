@@ -340,6 +340,18 @@ export function recordMoyu(sec: number) {
   write(bumpStats(read(), (s) => ({ ...s, moyuSec: (s.moyuSec ?? 0) + sec })));
 }
 
+// 型ドリル: active seconds, and one speed-round reaction time (already scaled to a 12-character sentence).
+export function recordDrill(sec: number, ms?: number) {
+  if (!sec && ms === undefined) return;
+  write(
+    bumpStats(read(), (s) => ({
+      ...s,
+      drillSec: (s.drillSec ?? 0) + sec,
+      ...(ms === undefined ? {} : { drillMsSum: (s.drillMsSum ?? 0) + ms, drillMsN: (s.drillMsN ?? 0) + 1 }),
+    })),
+  );
+}
+
 // A sentence the learner asked to hear again: kept for today, to be said out loud after work.
 export function recordStuck(line: StuckLine) {
   write(
