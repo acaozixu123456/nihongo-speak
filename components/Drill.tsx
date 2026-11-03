@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { LEVELS, TIERS, TIER_NAME, tierOf, type DrillOp, type DrillStep, type Ladder } from "@/lib/drill-model";
 import { DRILL_PATH, PATH_ITEMS } from "@/content/drill-path";
-import { cleared, diff, fastMs, findSeed, judge, loadLadder, nextOnPath, openTier, readSeeds, saveSeed, type Seed } from "@/lib/client/drill";
+import { cleared, diff, fastMs, findSeed, judge, loadLadder, nextOnPath, readSeeds, saveSeed, type Seed } from "@/lib/client/drill";
 import { flowOf } from "@/lib/client/fluency";
 import { chime, confetti, verdict, type Kind } from "@/lib/client/fx";
 import { play, stop as stopAudio, ttsUrl, unlock } from "@/lib/client/player";
@@ -76,6 +76,7 @@ export default function Drill() {
       startLevels(l);
     } catch (e) {
       setError(e instanceof Error ? e.message : "出题失败");
+      setSeeds(readSeeds());
       setMode("home");
     }
   }
@@ -357,10 +358,7 @@ export default function Drill() {
             <>
               <button
                 className="dr-go dr-up-go"
-                onClick={() => {
-                  openTier(t.typed, tier + 1, Date.now());
-                  open(t.typed, false, tier + 1);
-                }}
+                onClick={() => open(t.typed, false, tier + 1)}
               >
                 ↑ {TIER_NAME[tier + 1]}
               </button>
@@ -418,7 +416,7 @@ export default function Drill() {
           <b>{step.op === "base" ? ladder.seed : step.cue}</b>
           <small lang="zh-Hans">{step.op === "base" ? step.zh : step.cue_zh}</small>
         </div>
-        {speed && !result && <div className="dr-clock" key={`${pos}-${queue.length}`} style={{ animationDuration: `${fastMs(step.ja)}ms` }} aria-hidden />}
+        {speed && !result && <div className="dr-clock" key={`${pos}-${queue.length}`} style={{ animationDuration: `${fastMs(step.ja, tierOf(ladder))}ms` }} aria-hidden />}
       </section>
 
       <section className={`dr-ans${result ? ` is-${result.kind}` : ""}`}>

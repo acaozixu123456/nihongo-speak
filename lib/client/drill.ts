@@ -108,23 +108,18 @@ export function saveSeed(l: Ladder, fast: number | null, at: number, typed = l.s
   const old = findSeed(list, typed) ?? findSeed(list, l.seed);
   const was = old?.tiers[tier];
   const same = was?.made === l.made;
+  const run = { fast: Math.max(same ? was!.fast : 0, fast ?? 0), total: l.steps.length, made: l.made };
+  // Every sentence of this tier fast: its 升级 opens, so the chip and the next-up card lead there.
+  const up = run.total > 0 && run.fast >= run.total ? tier + 1 : tier;
   const next: Seed = {
     seed: old?.seed ?? typed,
     meaning: l.meaning_zh,
-    tier: Math.max(old?.tier ?? 1, tier),
-    tiers: { ...(old?.tiers ?? {}), [tier]: { fast: Math.max(same ? was!.fast : 0, fast ?? 0), total: l.steps.length, made: l.made } },
+    tier: Math.min(TIERS, Math.max(old?.tier ?? 1, up)),
+    tiers: { ...(old?.tiers ?? {}), [tier]: run },
     plays: (old?.plays ?? 0) + (fast === null ? 1 : 0),
     last: at,
   };
   writeSeeds([next, ...list.filter((s) => s !== old)]);
-}
-
-// 升级: the next tier opened for this one.
-export function openTier(seed: string, tier: number, at: number) {
-  const list = readSeeds();
-  const old = findSeed(list, seed);
-  if (!old) return;
-  writeSeeds([{ ...old, tier: Math.min(TIERS, Math.max(old.tier, tier)), last: at }, ...list.filter((s) => s !== old)]);
 }
 
 // What to practise next from the list: the first never opened, else the first not yet fast all through.
