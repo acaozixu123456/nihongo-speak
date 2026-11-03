@@ -1,5 +1,5 @@
 import "server-only";
-import { BlobNotFoundError, get, put } from "@vercel/blob";
+import { getJson, setJson } from "@/lib/kv";
 import { teacherPlan } from "@/lib/claude";
 import { addDays, type Progress } from "@/lib/progress-model";
 import type { NewsArticle } from "@/lib/news-model";
@@ -7,7 +7,7 @@ import { readNews } from "@/lib/news";
 
 // 先生: once a night Opus reads the whole record and orders the weak points for the next day. The
 // app's own ranking (misses minus half the hits) can't tell a duplicate tag or a speech-recognition
-// slip from a real mistake; this can. Kept beside state.json and handed out with every sync.
+// slip from a real mistake; this can. Kept beside the state in Redis and handed out with every sync.
 
 export type Good = { before: string; after: string; mark: string; zh: string };
 export type Fix = { tag: string; said: string; better: string; mark: string; zh: string };
@@ -19,13 +19,7 @@ export type Teacher = { day: string; made: number; order: string[]; hide: string
 
 const PATH = "teacher.json";
 
-export async function readTeacher(): Promise<Teacher | null> {
-  const res = await get(PATH, { access: "private", useCache: false }).catch((e: unknown) => {
-    if (e instanceof BlobNotFoundError) return null;
-    throw e;
-  });
-  return res?.statusCode === 200 ? ((await new Response(res.stream).json()) as Teacher) : null;
-}
+export const readTeacher = () => getJson<Teacher>(PATH);
 
 // The record as the teacher reads it: every weak point with its latest mistakes, and the last week's
 // tellings in the learner's own words.
@@ -80,6 +74,6 @@ export async function teach(p: Progress, day: string, last: Teacher | null = nul
   const tag = plan.fix && tags.has(plan.fix.tag) ? plan.fix.tag : order[0];
   const fix = plan.fix?.better.trim() && tag ? marked({ ...plan.fix, tag }, plan.fix.better) : null;
   const t: Teacher = { day, made: Date.now(), order, hide, why_zh: plan.why_zh, note_zh: plan.note_zh, letter_ja: plan.letter_ja, good, fix, past, ...(news.some((a) => a.id === plan.news) && { news: plan.news }) };
-  await put(PATH, JSON.stringify(t), { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: "application/json" });
+  await setJson(PATH, t);
   return t;
 }

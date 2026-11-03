@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { readJob, step, view } from "@/lib/earworm";
+import { blobReady, readJob, step, view } from "@/lib/earworm";
 import { spend, tooMany } from "@/lib/quota";
 import { OldRadioSchema } from "@/lib/radio";
-import { storageReady } from "@/lib/store";
 import { vertexConfigured } from "@/lib/vertex-tts";
 
 export const maxDuration = 120;
@@ -14,7 +13,7 @@ const ID = /^[a-z0-9-]{1,40}$/i;
 export async function GET(request: Request) {
   const id = new URL(request.url).searchParams.get("id") ?? "";
   if (!ID.test(id)) return NextResponse.json({ error: "bad id" }, { status: 400 });
-  if (!storageReady()) return NextResponse.json({ error: "storage not set up" }, { status: 503 });
+  if (!blobReady()) return NextResponse.json({ error: "storage not set up" }, { status: 503 });
   return NextResponse.json({ job: view(await readJob(id)) });
 }
 
@@ -22,7 +21,7 @@ export async function POST(request: Request) {
   const body = (await request.json()) as { id?: unknown; episode?: unknown };
   const id = typeof body.id === "string" ? body.id : "";
   if (!ID.test(id)) return NextResponse.json({ error: "bad id" }, { status: 400 });
-  if (!storageReady() || !vertexConfigured()) return NextResponse.json({ error: "not set up" }, { status: 503 });
+  if (!blobReady() || !vertexConfigured()) return NextResponse.json({ error: "not set up" }, { status: 503 });
   const ep = body.episode ? OldRadioSchema.safeParse(body.episode) : null;
   try {
     // Only a new song counts against the day's allowance; the steps after it are bounded per song.

@@ -1,5 +1,5 @@
 import "server-only";
-import { BlobNotFoundError, get, put } from "@vercel/blob";
+import { getJson, setJson } from "@/lib/kv";
 import { kokoroQuestions } from "@/lib/claude";
 import { readNews } from "@/lib/news";
 import { addDays, type Progress } from "@/lib/progress-model";
@@ -11,21 +11,15 @@ import { fixedParts, type KokoroItem, type KokoroSet } from "@/lib/kokoro-model"
 // 心で答える: six questions a day about the learner's own work and life, answered in their head at work.
 // Work comes from short notes a Claude routine writes each weekday morning after reading their Google
 // Drive (the site itself can't reach it); life from what they told in 三回話す and the day's news.
-// Each day's set is kept in Blob, so every phone gets the same one.
+// Each day's set is kept in Redis, so every phone gets the same one.
 
 type Notes = { days: { day: string; notes: string[] }[] };
 const NOTES = "kokoro/work.json";
 const setPath = (day: string) => `kokoro/${day}.json`;
 
-async function readJson<T>(path: string): Promise<T | null> {
-  const res = await get(path, { access: "private", useCache: false }).catch((e: unknown) => {
-    if (e instanceof BlobNotFoundError) return null;
-    throw e;
-  });
-  return res?.statusCode === 200 ? ((await new Response(res.stream).json()) as T) : null;
-}
-const writeJson = (path: string, data: unknown) =>
-  put(path, JSON.stringify(data), { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: "application/json" });
+const readJson = getJson;
+// A day's set is read back for a week (what was asked lately), so it is kept a little longer.
+const writeJson = (path: string, data: unknown) => setJson(path, data, path === NOTES ? undefined : 10);
 
 export const readSet = (day: string) => readJson<KokoroSet>(setPath(day));
 
