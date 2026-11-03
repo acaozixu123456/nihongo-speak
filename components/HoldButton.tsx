@@ -180,6 +180,8 @@ export default function HoldButton({ label = "点一下说话", disabled, compac
       document.removeEventListener("visibilitychange", hide);
       if (active.current) {
         active.current = false;
+        // Gone mid-recording (the answer shown, the page left): the parent stops showing "listening".
+        cb.current.onPhase?.("idle");
         void starting.current?.then(() => recorder.current?.stop()).catch(() => {});
       }
     };
