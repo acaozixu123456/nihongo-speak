@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { LEVELS, type DrillOp, type DrillStep, type Ladder } from "@/lib/drill-model";
-import { STARTERS, diff, fastMs, judge, loadLadder, readSeeds, saveSeed, type Seed } from "@/lib/client/drill";
+import { LEVELS, TIERS, TIER_NAME, tierOf, type DrillOp, type DrillStep, type Ladder } from "@/lib/drill-model";
+import { DRILL_PATH, PATH_ITEMS } from "@/content/drill-path";
+import { cleared, diff, fastMs, findSeed, judge, loadLadder, nextOnPath, openTier, readSeeds, saveSeed, type Seed } from "@/lib/client/drill";
 import { flowOf } from "@/lib/client/fluency";
 import { chime, confetti, verdict, type Kind } from "@/lib/client/fx";
 import { play, stop as stopAudio, ttsUrl, unlock } from "@/lib/client/player";
@@ -19,7 +20,7 @@ type Result = { kind: Kind; heard: string; ms: number | null; peek?: boolean };
 type Run = { i: number; ok: boolean; ms: number | null };
 
 // Said right, from memory, and soon enough for its length.
-const fastRun = (l: Ladder, r: Run) => r.ok && r.ms !== null && r.ms <= fastMs(l.steps[r.i].ja);
+const fastRun = (l: Ladder, r: Run) => r.ok && r.ms !== null && r.ms <= fastMs(l.steps[r.i].ja, tierOf(l));
 
 const OP_MARK: Record<DrillOp, string> = { base: "●", sub: "⇄", form: "形", add: "＋" };
 
@@ -40,7 +41,7 @@ export default function Drill() {
   const [combo, setCombo] = useState(0);
   const [done, setDone] = useState(0); // steps said right in the levels
   const [lastRuns, setLastRuns] = useState<Run[]>([]);
-  const t = useRef({ shown: 0, live: 0, again: new Set<number>(), ok: new Set<number>(), runs: [] as Run[], card: 0, next: 0 as ReturnType<typeof setTimeout> | 0 }).current;
+  const t = useRef({ shown: 0, live: 0, again: new Set<number>(), ok: new Set<number>(), runs: [] as Run[], typed: "", card: 0, next: 0 as ReturnType<typeof setTimeout> | 0 }).current;
 
   useEffect(() => {
     setSeeds(readSeeds());
@@ -61,14 +62,16 @@ export default function Drill() {
     t.live = 0;
   }, [pos, queue, mode, t]);
 
-  async function open(seed: string, fresh = false) {
+  // A word or grammar point at its tier: the highest opened unless one is given (升级, or 新しい文 at this one).
+  async function open(seed: string, fresh = false, tier?: number) {
     const s = seed.trim();
     if (!s) return;
     unlock();
     setError("");
     setMode("loading");
+    t.typed = s;
     try {
-      const l = await loadLadder(s, fresh);
+      const l = await loadLadder(s, fresh, tier ?? findSeed(readSeeds(), s)?.tier ?? 1);
       setLadder(l);
       startLevels(l);
     } catch (e) {
@@ -195,14 +198,14 @@ export default function Drill() {
       const fast = r.filter((x) => fastRun(ladder, x)).length;
       setLastRuns(r);
       // A second speed round has only the slow ones: the rest were fast already.
-      saveSeed(ladder, fast + (ladder.steps.length - r.length), Date.now());
+      saveSeed(ladder, fast + (ladder.steps.length - r.length), Date.now(), t.typed);
       if (fast === r.length) confetti(70);
       setSeeds(readSeeds());
       setMode("done");
       return;
     }
     // A level done.
-    if (lv === LEVELS) saveSeed(ladder, null, Date.now());
+    if (lv === LEVELS) saveSeed(ladder, null, Date.now(), t.typed);
     chime(true);
     if (lv === LEVELS) confetti(40);
     setMode("up");
@@ -223,30 +226,13 @@ export default function Drill() {
 
   if (mode === "home" || mode === "loading") {
     const loading = mode === "loading";
+    const nextItem = nextOnPath(seeds);
+    // Typed by the learner, not on the list.
+    const own = seeds.filter((x) => !PATH_ITEMS.some((p) => findSeed([x], p.seed)));
     return (
       <main className="dr">
         <Link href="/speak" className="back" aria-label="戻る">←</Link>
         <h1 className="dr-title">型ドリル</h1>
-        <form
-          className="dr-input"
-          onSubmit={(e) => {
-            e.preventDefault();
-            open(text);
-          }}
-        >
-          <input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="食べる・〜てしまう"
-            aria-label="単語・文法"
-            maxLength={30}
-            enterKeyHint="go"
-            disabled={loading}
-          />
-          <button type="submit" disabled={loading || !text.trim()} aria-label="始める">
-            {loading ? <span className="dr-spin" /> : "▶"}
-          </button>
-        </form>
         {error && <p className="error">{error}</p>}
         {loading ? (
           <div className="dr-making" aria-label="作成中">
@@ -255,18 +241,59 @@ export default function Drill() {
             ))}
           </div>
         ) : (
-          <div className="dr-seeds">
-            {(seeds.length ? seeds : STARTERS.map((s) => ({ seed: s, meaning: "", plays: 0, fast: 0, total: 0, made: 0, last: 0 }))).map((s) => (
-              <button key={s.seed} className="dr-seed" onClick={() => open(s.seed)}>
-                <b>{s.seed}</b>
-                {s.fast > 0 && (
-                  <span className={s.fast >= s.total ? "full" : ""} aria-label={`スピード ${s.fast}/${s.total}`}>
-                    ⚡{s.fast}/{s.total}
-                  </span>
-                )}
+          <>
+            {nextItem && (
+              <button className="dr-next" onClick={() => open(nextItem.seed)}>
+                <span>
+                  <b>{nextItem.seed}</b>
+                  <small lang="zh-Hans">{nextItem.zh}</small>
+                </span>
+                <i aria-hidden>▶</i>
               </button>
+            )}
+            <form
+              className="dr-input"
+              onSubmit={(e) => {
+                e.preventDefault();
+                open(text);
+              }}
+            >
+              <input
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="食べる・〜てしまう"
+                aria-label="単語・文法"
+                maxLength={30}
+                enterKeyHint="go"
+                disabled={loading}
+              />
+              <button type="submit" disabled={loading || !text.trim()} aria-label="始める">
+                {loading ? <span className="dr-spin" /> : "▶"}
+              </button>
+            </form>
+            {own.length > 0 && (
+              <div className="dr-seeds">
+                {own.map((x) => (
+                  <Chip key={x.seed} seed={x.seed} rec={x} onOpen={() => open(x.seed)} />
+                ))}
+              </div>
+            )}
+            {DRILL_PATH.map((stage) => (
+              <section key={stage.name} className="dr-stage">
+                <h2>
+                  {stage.name}
+                  <span>
+                    {stage.items.filter((x) => cleared(findSeed(seeds, x.seed), 1)).length}/{stage.items.length}
+                  </span>
+                </h2>
+                <div className="dr-seeds">
+                  {stage.items.map((x) => (
+                    <Chip key={x.seed} seed={x.seed} rec={findSeed(seeds, x.seed)} onOpen={() => open(x.seed)} />
+                  ))}
+                </div>
+              </section>
             ))}
-          </div>
+          </>
         )}
       </main>
     );
@@ -289,10 +316,17 @@ export default function Drill() {
   if (mode === "done") {
     const fast = lastRuns.filter((r) => fastRun(ladder, r));
     const all = fast.length === lastRuns.length;
+    const tier = tierOf(ladder);
+    // Every sentence of this ladder fast (this round or one before it): the next tier opens.
+    const up = all && cleared(findSeed(seeds, t.typed), tier) && tier < TIERS;
+    const after = nextOnPath(seeds);
     return (
       <main className="dr">
         <button className="back" aria-label="戻る" onClick={home}>←</button>
-        <h1 className="dr-title">{ladder.seed}</h1>
+        <h1 className="dr-title">
+          {ladder.seed}
+          {tier > 1 && <span className="dr-tier">{TIER_NAME[tier]}</span>}
+        </h1>
         <div className={`dr-score${all ? " all" : ""}`}>
           <b>⚡ {fast.length}</b>
           <span>/ {lastRuns.length}</span>
@@ -314,12 +348,34 @@ export default function Drill() {
           })}
         </div>
         <div className="dr-foot">
-          {all ? (
-            <button className="dr-go" onClick={() => open(ladder.seed, true)}>＋ 新しい文</button>
+          {!all ? (
+            <>
+              <button className="dr-go" onClick={speedAgain}>⚡ もう一回</button>
+              <button className="ko-on" onClick={() => open(t.typed, true, tier)}>＋ 新しい文</button>
+            </>
+          ) : up ? (
+            <>
+              <button
+                className="dr-go dr-up-go"
+                onClick={() => {
+                  openTier(t.typed, tier + 1, Date.now());
+                  open(t.typed, false, tier + 1);
+                }}
+              >
+                ↑ {TIER_NAME[tier + 1]}
+              </button>
+              <button className="ko-on" onClick={() => open(t.typed, true, tier)}>＋ 新しい文</button>
+            </>
           ) : (
-            <button className="dr-go" onClick={speedAgain}>⚡ もう一回</button>
+            <>
+              {after && findSeed(seeds, after.seed) === undefined ? (
+                <button className="dr-go" onClick={() => open(after.seed)}>▶ {after.seed}</button>
+              ) : (
+                <button className="dr-go" onClick={() => open(t.typed, true, tier)}>＋ 新しい文</button>
+              )}
+              <button className="ko-on" onClick={home}>一覧</button>
+            </>
           )}
-          <button className="ko-on" onClick={all ? speedAgain : () => open(ladder.seed, true)}>{all ? "⚡ もう一回" : "＋ 新しい文"}</button>
         </div>
       </main>
     );
@@ -343,7 +399,13 @@ export default function Drill() {
           ))}
           <i className={speed ? "n bolt" : "bolt"}>⚡</i>
         </div>
-        {combo >= 2 ? <span className="dr-combo" key={combo}>{combo} 連</span> : <span className="dr-combo-sp" />}
+        {combo >= 2 ? (
+          <span className="dr-combo" key={combo}>{combo} 連</span>
+        ) : tierOf(ladder) > 1 ? (
+          <span className="dr-tier sm">{TIER_NAME[tierOf(ladder)]}</span>
+        ) : (
+          <span className="dr-combo-sp" />
+        )}
       </div>
       <div className="dr-bar" aria-hidden>
         <i style={{ width: `${Math.min(100, (count / Math.max(1, total)) * 100)}%` }} />
@@ -418,5 +480,23 @@ export default function Drill() {
         )}
       </div>
     </main>
+  );
+}
+
+// One word or grammar point on the list: ⚡ when every sentence of its current tier came fast, its
+// tier once 升级 is open.
+function Chip({ seed, rec, onOpen }: { seed: string; rec?: Seed; onOpen: () => void }) {
+  const run = rec?.tiers[rec.tier];
+  const full = cleared(rec);
+  return (
+    <button className={`dr-seed${rec ? " seen" : ""}${full ? " full" : ""}`} onClick={onOpen}>
+      <b>{seed}</b>
+      {rec && rec.tier > 1 && <em>{TIER_NAME[rec.tier]}</em>}
+      {run && run.fast > 0 ? (
+        <span aria-label={`スピード ${run.fast}/${run.total}`}>{full ? "⚡" : `⚡${run.fast}/${run.total}`}</span>
+      ) : rec ? (
+        <span className="mid" aria-label="練習した">✓</span>
+      ) : null}
+    </button>
   );
 }
