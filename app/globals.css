@@ -2352,3 +2352,10 @@ body:has(.ko) { background: #f6f0e4; }
 .info-i { width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 1.5px solid var(--faint); background: none; color: var(--muted); font: italic 700 12px/1 Georgia, serif; display: grid; place-items: center; }
 .info-tip { position: absolute; z-index: 40; top: 26px; left: -40px; width: max-content; max-width: min(260px, 80vw); padding: 10px 12px; border-radius: 12px; background: var(--text); color: var(--bg); font: 400 13px/1.5 var(--sans); letter-spacing: 0; text-align: left; white-space: normal; box-shadow: var(--shadow); }
 .ko-on { display: block; margin: 14px auto 0; padding: 8px 16px; border: 0; background: none; color: var(--muted); font-family: var(--ja); font-size: 14px; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; }
+/* 型ドリル */
+.ko-box.dr-small { margin-top: 18px; padding: 12px 12px 6px; }
+.ko-box.dr-small .ko-pat { font-size: 14px; }
+.ko-ans.dr-ja { font-size: 22px; font-weight: 700; color: var(--mg-ink); }
+.dr-done { margin: 26px 0 6px; font-family: var(--serif); font-size: 26px; font-weight: 700; color: var(--ok-ink); }
+.dr-done i { display: inline-grid; place-items: center; width: 34px; height: 34px; margin-right: 6px; border-radius: 50%; background: var(--ok-bg); color: var(--ok); font-style: normal; font-size: 20px; vertical-align: 3px; }
+.dr-zh { display: block; margin-top: 2px; font-family: var(--sans); font-size: 13px; font-weight: 400; color: var(--muted); }

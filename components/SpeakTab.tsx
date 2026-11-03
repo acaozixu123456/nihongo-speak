@@ -80,6 +80,9 @@ export default function SpeakTab() {
           <Link href="/quick" className="pl">
             <b>马上说</b>
           </Link>
+          <Link href="/drill" className="pl">
+            <b>型ドリル</b>
+          </Link>
           <Link href="/rehearse" className="pl">
             <b>预演</b>
             {report ? <em className="new">1</em> : null}
