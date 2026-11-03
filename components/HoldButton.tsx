@@ -5,6 +5,8 @@ import { flushSync } from "react-dom";
 import { Recorder } from "@/lib/client/recorder";
 import { stop as stopAudio, unlock } from "@/lib/client/player";
 
+export type MicPhase = "idle" | "starting" | "live";
+
 type Props = {
   label?: React.ReactNode;
   disabled?: boolean;
@@ -15,6 +17,8 @@ type Props = {
   onStart?: () => void;
   // The mic is capturing: its stream, to listen alongside (森先生's ears).
   onLive?: (stream: MediaStream) => void;
+  // Each change: pressed and opening the mic ("starting"), really capturing ("live"), or not.
+  onPhase?: (phase: MicPhase) => void;
   // Changed while recording: the recording ends as if tapped (森先生 stepping in).
   stopKey?: number;
   onRecorded: (wav: Blob) => void;
@@ -31,18 +35,22 @@ const LIMIT_S = 60;
 // really capturing, so nothing said before that is lost without warning.
 // iPhone sometimes loses the release (the mic permission sheet, a system gesture), so the release is
 // also caught on the whole window and recording state lives in refs, never in a stale render.
-export default function HoldButton({ label = "点一下说话", disabled, compact, limit = LIMIT_S, onStart, onLive, stopKey, onRecorded, onError }: Props) {
+export default function HoldButton({ label = "点一下说话", disabled, compact, limit = LIMIT_S, onStart, onLive, onPhase, stopKey, onRecorded, onError }: Props) {
   const recorder = useRef<Recorder | null>(null);
   const starting = useRef<Promise<void> | null>(null);
   const active = useRef(false);
   const pressedAt = useRef(0);
   const liveAt = useRef(0);
-  const [phase, setPhase] = useState<"idle" | "starting" | "live">("idle");
+  const [phase, setPhase] = useState<MicPhase>("idle");
   const [latched, setLatched] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const holding = useRef(false);
-  const cb = useRef({ onStart, onLive, onRecorded, onError });
-  cb.current = { onStart, onLive, onRecorded, onError };
+  const cb = useRef({ onStart, onLive, onPhase, onRecorded, onError });
+  cb.current = { onStart, onLive, onPhase, onRecorded, onError };
+
+  useEffect(() => {
+    cb.current.onPhase?.(phase);
+  }, [phase]);
 
   async function finish() {
     if (!active.current) return;

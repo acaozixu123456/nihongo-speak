@@ -4,14 +4,15 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { LEVELS, TIERS, TIER_NAME, tierOf, type DrillOp, type DrillStep, type Ladder } from "@/lib/drill-model";
 import { DRILL_PATH, PATH_ITEMS } from "@/content/drill-path";
-import { cleared, diff, fastMs, findSeed, judge, loadLadder, nextOnPath, readSeeds, saveSeed, type Seed } from "@/lib/client/drill";
+import { DAYS_TO_CLEAR, cleared, diff, fastDays, fastMs, findSeed, judge, loadLadder, nextOnPath, once, readSeeds, saveSeed, type Seed } from "@/lib/client/drill";
 import { flowOf } from "@/lib/client/fluency";
 import { chime, confetti, verdict, type Kind } from "@/lib/client/fx";
 import { play, stop as stopAudio, ttsUrl, unlock } from "@/lib/client/player";
 import { recordDrill, recordSpeech, useProgress, wavSeconds } from "@/lib/client/progress";
 import { transcribe } from "@/lib/client/recorder";
 import DrillTime from "./DrillTime";
-import HoldButton from "./HoldButton";
+import HoldButton, { type MicPhase } from "./HoldButton";
+import Info from "./Info";
 
 const VOICE = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-NanamiNeural";
 const SPEED = LEVELS + 1; // the level after the four: every sentence again, as fast as it comes
@@ -51,6 +52,7 @@ export default function Drill() {
   const t = useRef({ shown: 0, live: 0, again: new Set<number>(), ok: new Set<number>(), runs: [] as Run[], typed: "", card: 0, next: 0 as ReturnType<typeof setTimeout> | 0, act: 0, pend: 0, sess: 0 }).current;
   const progress = useProgress();
   const [sess, setSess] = useState(0); // seconds this word, for the done screen
+  const [mic, setMic] = useState<MicPhase>("idle");
 
   // Practice time: while a card or level-up is on screen, the page is in view and something happened
   // in the last 45 s. Saved every 15 s, and when leaving play or the page.
@@ -360,6 +362,7 @@ export default function Drill() {
     const tier = tierOf(ladder);
     // Every sentence of this ladder fast (this round or one before it): the next tier opens.
     const up = all && cleared(findSeed(seeds, t.typed), tier) && tier < TIERS;
+    const days = Math.min(DAYS_TO_CLEAR, fastDays(findSeed(seeds, t.typed), tier));
     const after = nextOnPath(seeds);
     return (
       <main className="dr">
@@ -373,6 +376,18 @@ export default function Drill() {
           <span>/ {lastRuns.length}</span>
           {sess > 0 && <em aria-label="練習時間">⏱ {clock(sess)}</em>}
         </div>
+        {all && tier < TIERS && (
+          <div className={`dr-days${up ? " met" : ""}`} aria-label={`定着 ${days}/${DAYS_TO_CLEAR}`}>
+            <span>定着</span>
+            {Array.from({ length: DAYS_TO_CLEAR }, (_, k) => (
+              <i key={k} className={k < days ? "on" : ""}>{k < days ? "⚡" : ""}</i>
+            ))}
+            {!up && <b>明日 ↑{TIER_NAME[tier + 1]}</b>}
+            <Info label="升级条件">
+              隔天再来一次，全部又快又对才升级。研究：同一天练到熟只是短期记忆，分开两天都能做到才算记住（Rawson &amp; Dunlosky，连续再学习）；难度保持在大约 85% 能答对时学得最快（Wilson 等 2019）。
+            </Info>
+          </div>
+        )}
         <div className="dr-list">
           {lastRuns.map((r) => {
             const s = ladder.steps[r.i];
@@ -487,8 +502,23 @@ export default function Drill() {
             {result.heard && result.kind !== "right" && <p className="dr-heard">{result.heard}</p>}
           </>
         ) : (
-          <div className="dr-blank" aria-hidden>
-            {busy ? <span className="dr-spin dark" /> : "？"}
+          <div className={`dr-blank${busy ? "" : ` mic-${mic}`}`} aria-live="polite">
+            {busy ? (
+              <span className="dr-spin dark" aria-label="判定中" />
+            ) : mic === "live" ? (
+              <>
+                <span className="dr-wave" aria-hidden>
+                  {[0, 1, 2, 3, 4].map((k) => (
+                    <i key={k} style={{ animationDelay: `${[0.2, 0, 0.35, 0.1, 0.25][k]}s` }} />
+                  ))}
+                </span>
+                <b>話して</b>
+              </>
+            ) : mic === "starting" ? (
+              <b>待って…</b>
+            ) : (
+              <span aria-hidden>？</span>
+            )}
           </div>
         )}
       </section>
@@ -512,6 +542,7 @@ export default function Drill() {
                   t.live = Date.now();
                   t.act = t.live;
                 }}
+                onPhase={setMic}
                 onRecorded={onRecorded}
                 onError={setError}
               />
@@ -528,12 +559,14 @@ export default function Drill() {
 function Chip({ seed, rec, onOpen }: { seed: string; rec?: Seed; onOpen: () => void }) {
   const run = rec?.tiers[rec.tier];
   const full = cleared(rec);
+  // Fast all through once: one more day to go.
+  const half = !full && once(rec);
   return (
-    <button className={`dr-seed${rec ? " seen" : ""}${full ? " full" : ""}`} onClick={onOpen}>
+    <button className={`dr-seed${rec ? " seen" : ""}${full ? " full" : ""}${half ? " half" : ""}`} onClick={onOpen}>
       <b>{seed}</b>
       {rec && rec.tier > 1 && <em>{TIER_NAME[rec.tier]}</em>}
       {run && run.fast > 0 ? (
-        <span aria-label={`スピード ${run.fast}/${run.total}`}>{full ? "⚡" : `⚡${run.fast}/${run.total}`}</span>
+        <span aria-label={half ? "定着 1/2" : `スピード ${run.fast}/${run.total}`}>{full ? "⚡" : half ? "⚡½" : `⚡${run.fast}/${run.total}`}</span>
       ) : rec ? (
         <span className="mid" aria-label="練習した">✓</span>
       ) : null}
