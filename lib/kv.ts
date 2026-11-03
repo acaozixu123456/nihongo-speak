@@ -49,6 +49,10 @@ export async function incr(key: string, days: number) {
   return n;
 }
 
+export async function decr(key: string) {
+  return call<number>(["DECR", key]);
+}
+
 export async function delKeys(keys: string[]) {
   if (keys.length) await call(["DEL", ...keys]);
 }
