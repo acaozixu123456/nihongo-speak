@@ -1,5 +1,5 @@
 import "server-only";
-import { incr } from "@/lib/kv";
+import { decr, incr } from "@/lib/kv";
 import { NextResponse } from "next/server";
 import { dayKey } from "@/lib/progress-model";
 import { storageReady } from "@/lib/store";
@@ -14,21 +14,31 @@ export const DAILY = {
   cover: 10, // cover pictures (~$0.07 each)
   scenario: 15, // 重来一次 scenarios
   kokoro: 10, // 心で答える question sets (Opus)
-  drill: 20, // 型ドリル ladders (Opus)
+  drill: 50, // 型ドリル ladders (Opus; 新しい文 and 升级 each make one)
 } as const;
 export type Kind = keyof typeof DAILY;
+
+const counter = (kind: Kind) =>
+  `quota/${dayKey(new Date(Date.now() + 9 * 3600_000 + new Date().getTimezoneOffset() * 60_000))}/${kind}`;
 
 // Counts one more of this kind today; false once today's allowance is used up.
 export async function spend(kind: Kind): Promise<boolean> {
   if (!storageReady()) return true;
-  const day = dayKey(new Date(Date.now() + 9 * 3600_000 + new Date().getTimezoneOffset() * 60_000));
   try {
-    if ((await incr(`quota/${day}/${kind}`, 2)) > DAILY[kind]) return false;
+    if ((await incr(counter(kind), 2)) > DAILY[kind]) return false;
   } catch (e) {
     // The count failing shouldn't stop the learner's own request.
     console.warn("quota", e);
   }
   return true;
+}
+
+// Gives back one counted by spend() when the generation failed, so errors don't use up the day.
+export async function refund(kind: Kind) {
+  if (!storageReady()) return;
+  try {
+    await decr(counter(kind));
+  } catch {}
 }
 
 export const tooMany = () => NextResponse.json({ error: "今天的生成次数用完了，明天再来" }, { status: 429 });
