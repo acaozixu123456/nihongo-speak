@@ -15,7 +15,11 @@ export async function makeLadder(seed: string, avoid: string[] = [], tier = 1): 
   tier = Math.min(TIERS, Math.max(1, Math.round(tier)));
   const memo = await aboutNow(jstDay()).catch(() => "（メモなし）");
   const context = avoid.length ? `${memo}\n\n前回のはしごの文（同じ文・同じ入れ替え語は使わない）：\n${avoid.map((a) => `- ${a}`).join("\n")}` : memo;
-  const draft = await drillLadder(seed, context, tier);
+  // A ladder cut off by its length is asked for once more.
+  const draft = await drillLadder(seed, context, tier).catch((e: unknown) => {
+    if (e instanceof Error && e.message.includes("max_tokens")) return drillLadder(seed, context, tier);
+    throw e;
+  });
   const steps: DrillStep[] = draft.steps
     .map((s) => ({ ...s, lv: Math.min(LEVELS, Math.max(1, Math.round(s.lv))), cue: s.cue.trim(), cue_zh: s.cue_zh.trim(), ja: s.ja.trim(), kana: s.kana.trim(), zh: s.zh.trim() }))
     .filter((s) => s.ja && s.cue);

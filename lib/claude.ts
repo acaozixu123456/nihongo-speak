@@ -1353,7 +1353,7 @@ const LADDER_TOP = 3;
 export async function drillLadder(seed: string, context: string, tier = 1): Promise<LadderDraft> {
   const rules = LADDER_TIERS[Math.min(LADDER_TOP, Math.max(1, tier))];
   const res = await parse({
-    ...smart(5000),
+    ...smart(9000),
     system: `あなたは日本語の先生、森先生です。学習者は日本に住んでIT企業で働いている中国人で、日本語は N4〜N3。
 学習者が入力した単語や文法で、パターン・ドリル（FSI式）の「はしご」を作ります。先生が手がかりを一つ出し、学習者はすぐ文を丸ごと声に出して言います。前の段の文から一か所だけ変えていくので、言う文はいつも前の文とほとんど同じで、変えたところだけ考えればいい。
 
@@ -1363,7 +1363,8 @@ ${rules}
 - どの段も、入力した語・文法を必ず含む。前の段の ja から変えるのは一か所だけ（cue に書いたところ）。ほかは一字も変えない。
 - 語彙は N5〜N4 の毎日使う語を中心に（升级では仕事でよく使う N3 の語も可）。ja は一般的な表記で書く（友達、ご飯、時間など）。
 - cue は短く、入れる語句そのもの。form の段の cue は形の名前ではなく、新しい文の動詞の終わりをそのまま書く（食べます → cue「〜ません」→ 食べません）。cue_zh は何をするかを短く、入れる語も中国語で（换成 面包、加上 和朋友一起、改成否定、改成过去）。
-- 固有名詞（会社名・人名）は出さない。
+- 固有名詞（会社名・人名）、社内の略語やシステム名（IF、STG など）は出さない。
+- add で「〜の」を名詞の前に重ねない（「先週の売上のエラーの詳細」のようにしない）。足すのは時・場所・相手・理由・目的など、文の別の部分。
 - kana は ja の読みを全部ひらがなで書く（カタカナ語もひらがな）。`,
     messages: [{ role: "user", content: context }],
     output_config: { effort: "medium", format: zodOutputFormat(LadderSchema) },
