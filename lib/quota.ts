@@ -1,11 +1,11 @@
 import "server-only";
-import { BlobNotFoundError, get, put } from "@vercel/blob";
+import { incr } from "@/lib/kv";
 import { NextResponse } from "next/server";
 import { dayKey } from "@/lib/progress-model";
 import { storageReady } from "@/lib/store";
 
 // The site has no login, so anyone who finds a paid route could run it in a loop. Each costly kind
-// of request gets a daily allowance well above what one learner uses (counted in Blob, per JST day),
+// of request gets a daily allowance well above what one learner uses (counted in Redis, per JST day),
 // so a script can't run up more than a few dollars before tomorrow.
 export const DAILY = {
   radio: 10, // 趣味电台 episodes (Gemini / Haiku script)
@@ -18,25 +18,12 @@ export const DAILY = {
 } as const;
 export type Kind = keyof typeof DAILY;
 
-// Counts one more of this kind today; false once today's allowance is used up. Two requests at
-// the same moment can both count as one, which is fine for a ceiling this loose.
+// Counts one more of this kind today; false once today's allowance is used up.
 export async function spend(kind: Kind): Promise<boolean> {
   if (!storageReady()) return true;
-  const path = `quota/${dayKey(new Date(Date.now() + 9 * 3600_000 + new Date().getTimezoneOffset() * 60_000))}.json`;
+  const day = dayKey(new Date(Date.now() + 9 * 3600_000 + new Date().getTimezoneOffset() * 60_000));
   try {
-    const res = await get(path, { access: "private", useCache: false }).catch((e: unknown) => {
-      if (e instanceof BlobNotFoundError) return null;
-      throw e;
-    });
-    const used = (res?.statusCode === 200 ? await new Response(res.stream).json() : {}) as Partial<Record<Kind, number>>;
-    const n = used[kind] ?? 0;
-    if (n >= DAILY[kind]) return false;
-    await put(path, JSON.stringify({ ...used, [kind]: n + 1 }), {
-      access: "private",
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      contentType: "application/json",
-    });
+    if ((await incr(`quota/${day}/${kind}`, 2)) > DAILY[kind]) return false;
   } catch (e) {
     // The count failing shouldn't stop the learner's own request.
     console.warn("quota", e);
@@ -46,7 +33,7 @@ export async function spend(kind: Kind): Promise<boolean> {
 
 export const tooMany = () => NextResponse.json({ error: "今天的生成次数用完了，明天再来" }, { status: 429 });
 
-// Rough per-instance ceiling for requests too frequent to count in Blob (speech): at most `n` in
+// Rough per-instance ceiling for requests too frequent to count in Redis (speech): at most `n` in
 // any `ms` window on one server instance.
 const windows = new Map<string, number[]>();
 export function burst(key: string, n: number, ms: number): boolean {

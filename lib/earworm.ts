@@ -87,6 +87,9 @@ export const view = (j: Job | null) =>
     error: j.error,
   };
 
+// Songs and pictures are too big for the Redis free plan (lib/kv.ts), so they stay in Blob.
+export const blobReady = () => !!(process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN);
+
 const path = (id: string, file: string) => `earworm/${id}/${file}`;
 
 export async function readFile(id: string, file: string) {
