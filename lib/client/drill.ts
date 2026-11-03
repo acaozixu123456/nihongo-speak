@@ -4,6 +4,7 @@ import { bare, closeness, type Kind } from "./fx";
 import type { SttResult } from "./recorder";
 import { TIERS, seedKey, tierOf, type DrillStep, type Ladder } from "@/lib/drill-model";
 import { PATH_ITEMS } from "@/content/drill-path";
+import { dayKey } from "@/lib/progress-model";
 
 // 型ドリル on the phone: the ladder asked for, what was said judged at once (no AI wait), and the words
 // practised kept with how fast they came by the end.
@@ -57,9 +58,10 @@ export const fastMs = (ja: string, tier = 1) => Math.round((2000 + 60 * ja.lengt
 
 // ---- Words practised ----
 
-// Per word or grammar point: the highest tier opened (升级), and for each tier its ladder and the best
-// number said fast in a speed round on it (a new ladder starts over).
-export type TierRun = { fast: number; total: number; made: number };
+// Per word or grammar point: the highest tier opened (升级), and for each tier its ladder, the best
+// number said fast in a speed round on it (a new ladder starts over), and the days a whole speed round
+// at this tier came fast (any of its ladders).
+export type TierRun = { fast: number; total: number; made: number; days?: string[] };
 export type Seed = { seed: string; meaning: string; tier: number; tiers: Record<number, TierRun>; plays: number; last: number };
 const KEY = "nihongo-speak:drill-seeds";
 
@@ -94,10 +96,24 @@ function writeSeeds(list: Seed[]) {
 
 export const findSeed = (list: Seed[], seed: string) => list.find((s) => seedKey(s.seed) === seedKey(seed));
 
-// Every sentence of this tier's ladder said fast at least once: its 升级 is open.
-export const cleared = (s: Seed | undefined, tier = s?.tier ?? 1) => {
+// Every sentence of this tier's ladder said fast at least once.
+export const once = (s: Seed | undefined, tier = s?.tier ?? 1) => {
   const r = s?.tiers[tier];
   return !!r && r.total > 0 && r.fast >= r.total;
+};
+
+// Days a whole speed round at this tier has to come fast before 升级: on one day it can still be
+// short-term memory; on a second, separate day it has stuck (successive relearning).
+export const DAYS_TO_CLEAR = 2;
+export const fastDays = (s: Seed | undefined, tier = s?.tier ?? 1) => s?.tiers[tier]?.days?.length ?? 0;
+
+// Fast all through on two separate days: its 升级 is open.
+export const cleared = (s: Seed | undefined, tier = s?.tier ?? 1) => once(s, tier) && fastDays(s, tier) >= DAYS_TO_CLEAR;
+
+// Fast all through on an earlier day, not yet on a second: due for the check today.
+export const dueAgain = (s: Seed | undefined, today = dayKey()) => {
+  const days = s?.tiers[s.tier]?.days ?? [];
+  return !!s && days.length > 0 && days.length < DAYS_TO_CLEAR && days[days.length - 1] < today;
 };
 
 // After a round. fast: how many were said fast in the speed round (null: the levels only).
@@ -108,9 +124,13 @@ export function saveSeed(l: Ladder, fast: number | null, at: number, typed = l.s
   const old = findSeed(list, typed) ?? findSeed(list, l.seed);
   const was = old?.tiers[tier];
   const same = was?.made === l.made;
-  const run = { fast: Math.max(same ? was!.fast : 0, fast ?? 0), total: l.steps.length, made: l.made };
-  // Every sentence of this tier fast: its 升级 opens, so the chip and the next-up card lead there.
-  const up = run.total > 0 && run.fast >= run.total ? tier + 1 : tier;
+  const today = dayKey();
+  const days = [...(was?.days ?? [])];
+  // This session's speed round came fast all through: today counts.
+  if (fast !== null && fast >= l.steps.length && !days.includes(today)) days.push(today);
+  const run = { fast: Math.max(same ? was!.fast : 0, fast ?? 0), total: l.steps.length, made: l.made, days: days.slice(-5) };
+  // Fast all through on two days: its 升级 opens, so the chip and the next-up card lead there.
+  const up = run.total > 0 && run.fast >= run.total && run.days.length >= DAYS_TO_CLEAR ? tier + 1 : tier;
   const next: Seed = {
     seed: old?.seed ?? typed,
     meaning: l.meaning_zh,
@@ -122,7 +142,13 @@ export function saveSeed(l: Ladder, fast: number | null, at: number, typed = l.s
   writeSeeds([next, ...list.filter((s) => s !== old)]);
 }
 
-// What to practise next from the list: the first never opened, else the first not yet fast all through.
+// What to practise next from the list: one fast on an earlier day and due for its second check, else the
+// first never opened, else the first not yet cleared.
 export function nextOnPath(list: Seed[]) {
-  return PATH_ITEMS.find((p) => !findSeed(list, p.seed)) ?? PATH_ITEMS.find((p) => !cleared(findSeed(list, p.seed))) ?? null;
+  return (
+    PATH_ITEMS.find((p) => dueAgain(findSeed(list, p.seed))) ??
+    PATH_ITEMS.find((p) => !findSeed(list, p.seed)) ??
+    PATH_ITEMS.find((p) => !cleared(findSeed(list, p.seed))) ??
+    null
+  );
 }
