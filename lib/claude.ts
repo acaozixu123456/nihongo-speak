@@ -1304,38 +1304,49 @@ export async function kokoroQuestions(context: string): Promise<KokoroDraft[]> {
   return res.parsed_output.items;
 }
 
-// ---- 型ドリル: one 型, many sentences, said out loud at once from Chinese ----
+// ---- 型ドリル: a word or grammar point the learner typed, built up step by step (FSI pattern drill) ----
 
-const PatternDrillSchema = z.object({
-  items: z
+const LadderSchema = z.object({
+  seed: z.string().describe("学習者が入力した語や文法を、練習で使う形に整えたもの（例：食べる、〜てしまう）"),
+  meaning_zh: z.string().describe("その語・文法の意味（簡体字、10字以内）"),
+  steps: z
     .array(
       z.object({
-        ja: z.string().describe("日本語の1文（30字以内）。型の ＿ 以外の部分を一字も変えずに含める"),
-        zh: z.string().describe("学習者が聞いてすぐ日本語で言う中国語（簡体字）。ja の内容を全部、同じ順で、短く自然に"),
+        lv: z.number().int().min(1).max(4).describe("1〜4"),
+        op: z.enum(["base", "sub", "form", "add"]).describe("base=最初の文 sub=一語を入れ替える form=形を変える add=語句を足す"),
+        cue: z.string().describe("カードに出す短い手がかり（日本語）。sub/add は入れる語句そのもの（パン、毎朝、友達と）、form は新しい文の動詞の終わり（〜ます、〜ません、〜ました、〜たいです、〜ています）、base は入力した語"),
+        cue_zh: z.string().describe("手がかりの中国語（簡体字、10字以内）。例：换成 面包／改成过去式／加上 每天早上"),
+        ja: z.string().describe("この段の答えの日本語の文（前の段の文から一か所だけ変える）"),
+        kana: z.string().describe("ja の読みを全部ひらがなで（句読点なし）"),
+        zh: z.string().describe("ja の中国語訳（簡体字、自然で短く）"),
       }),
     )
-    .describe("14文（使うのは12文、残りは予備）。易しい順"),
+    .describe("16段。lv1 4段、lv2 4段、lv3 4段、lv4 4段"),
 });
-export type DrillDraft = z.infer<typeof PatternDrillSchema>["items"][number];
+export type LadderDraft = z.infer<typeof LadderSchema>;
 
-export async function drillSentences(context: string, form: string, meaning: string): Promise<DrillDraft[]> {
+export async function drillLadder(seed: string, context: string): Promise<LadderDraft> {
   const res = await parse({
-    ...smart(4000),
+    ...smart(5000),
     system: `あなたは日本語の先生、森先生です。学習者は日本に住んでIT企業で働いている中国人で、日本語は N4〜N3。
-型ドリル（パターン・ドリル）を作ります。中国語の文が流れ、学習者はそれをすぐ声に出して日本語で言い、模範の日本語を聞いてもう一度言います。一つの型を十数回、間を置かずに使って、考えなくても口から出るようにするのが目的です。
-今日の型：${form}（${meaning}）
-- 全部の文でこの型を使い、型の ＿ 以外の部分は一字も変えずに入れる。型の意味が自然に合う場面だけに使う。
-- 1〜5文目は ＿ に短い語句を入れるだけの短い文。6〜10文目は時・場所・相手など一つ足す。11〜14文目は職場や雑談でそのまま言える少し長い文。どれも30字以内。
-- ＿ に入る中身は文ごとに違う場面にする（同じ動詞や名詞を続けない）。
-- 中身は学習者自身の最近の仕事と生活から（下のメモ）。メモにない出来事や因果関係は作らない。足りなければ通勤・食事・週末・天気・体調・買い物・会議・テスト・資料作りなど、誰にでも言える毎日のこと。
-- 学習者の立場の一人称で、職場で自然な丁寧語。型のほかは N4 の易しい文法と、仕事や生活でよく使う語だけ。
-- 固有名詞（会社名・顧客名・人名）、金額、システム ID は出さず、「お客さん」「先輩」「バッチ」のように一般化する。
-- zh は学習者が聞いてそのまま日本語にする文。ja の内容は全部入れ、ない内容は足さない。日本語の語順に近い、自然で短い中国語。
-- 読み方が二つあって文で変わる語（紅葉、一日、市場、人気、開く など）は ja ではひらがなで書く。`,
+学習者が入力した単語や文法で、パターン・ドリル（FSI式）の「はしご」を作ります。先生が手がかりを一つ出し、学習者はすぐ文を丸ごと声に出して言います。前の段の文から一か所だけ変えていくので、言う文はいつも前の文とほとんど同じで、変えたところだけ考えればいい。とても易しく始めて、少しずつ難しくします。学習者が「難しい」と感じないことが一番大事です。
+
+入力：${seed}
+
+- 1段目（lv1, base）：入力した語・文法を使った一番短くて自然な句か文。動詞なら目的語を一つだけ付けた辞書形（食べる → ご飯を食べる）。名詞なら「〜を＋動詞」や「〜です」の一番短い形。文法なら一番易しい動詞で作った一番短い文（〜てしまう → 忘れてしまった）。
+- lv1 の残り3段：同じくらい短い文のまま、一語を入れ替える（ご飯を食べる → パンを食べる → りんごを食べる）。10字前後まで。
+- lv2（4段）：sub と add で一つずつ広げる。「を」以外の助詞も一つ入れる（家で、友達と、会社で）。15字前後まで。
+- lv3（4段）：form。前の段の文の動詞の形を一つずつ変える（〜ます、〜ません、〜ました、〜たいです、〜ています、〜てください など易しいもの）。入力が文法なら、その文法の中の動詞や前の語を変える。
+- lv4（4段）：add と sub。時・理由（〜ので、〜から）・頻度などを足して、職場や生活でそのまま言える文に。25字以内。下の学習者のメモにある仕事や生活の場面を使ってよい（メモにない出来事は作らない）。
+- どの段も、入力した語・文法を必ず含む。前の段の ja から変えるのは一か所だけ（cue に書いたところ）。ほかは一字も変えない。
+- 語彙は N5〜N4 の毎日使う語だけ。文体は lv1〜lv2 は必ず辞書形（普通形）。lv3 の最初の段で ます形 にして、以降は ます形 のまま。ja は一般的な表記で書く（友達、ご飯、時間など）。
+- cue は短く、入れる語句そのもの。form の段の cue は形の名前ではなく、新しい文の動詞の終わりをそのまま書く（食べます → cue「〜ません」→ 食べません）。cue_zh は何をするかを短く、入れる語も中国語で（换成 面包、加上 和朋友一起、改成否定、改成过去）。
+- 固有名詞（会社名・人名）は出さない。
+- kana は ja の読みを全部ひらがなで書く（カタカナ語もひらがな）。`,
     messages: [{ role: "user", content: context }],
-    output_config: { effort: "low", format: zodOutputFormat(PatternDrillSchema) },
+    output_config: { effort: "medium", format: zodOutputFormat(LadderSchema) },
   });
   checkStop(res.stop_reason);
   if (!res.parsed_output) throw new Error(`AI 返回格式不对（${res.stop_reason}）`);
-  return res.parsed_output.items;
+  return res.parsed_output;
 }

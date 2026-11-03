@@ -1,42 +1,30 @@
 import "server-only";
-import { drillSentences } from "@/lib/claude";
+import { drillLadder } from "@/lib/claude";
 import { aboutNow } from "@/lib/kokoro";
 import { getJson, setJson } from "@/lib/kv";
-import { ANSWER_VOICE, HINT_VOICE, patternById } from "@/content/kokoro-patterns";
-import { fixedParts } from "@/lib/kokoro-model";
-import { DRILL_SIZE, type Drill } from "@/lib/drill-model";
-import { ttsUrl } from "@/lib/tts-url";
+import { jstDay } from "@/lib/push";
+import { LEVELS, seedKey, type DrillStep, type Ladder } from "@/lib/drill-model";
 
-// A 型's drill for the day, written once and kept in Redis for two days, so it's the same on every phone.
-const path = (day: string, form: string) => `drill/${day}-${form}.json`;
+// A ladder for a word or grammar point, kept a month so もう一度 gets the same one; 新しい文 makes another.
+const path = (seed: string) => `drill/ladder/${seedKey(seed)}`;
 
-export const readDrill = (day: string, form: string) => getJson<Drill>(path(day, form));
+export const readLadder = (seed: string) => getJson<Ladder>(path(seed));
 
-export async function makeDrill(day: string, form: string): Promise<Drill> {
-  const p = patternById(form);
-  if (!p) throw new Error("没有这个型");
-  const drafts = await drillSentences(await aboutNow(day), p.form, p.zh);
-  const parts = fixedParts(p.form);
-  // Sentences that dropped part of the 型 are left out; the spares make up for them.
-  const fit = drafts.filter((d) => d.ja.trim() && d.zh.trim() && parts.every((x) => d.ja.includes(x)));
-  const items = (fit.length >= 8 ? fit : drafts).slice(0, DRILL_SIZE).map((d) => ({ ja: d.ja.trim(), zh: d.zh.trim() }));
-  const drill: Drill = { day, made: Date.now(), form, pattern: p.form, zh: p.zh, items };
-  await setJson(path(day, form), drill, 2);
-  return drill;
-}
-
-// Every line asked for once from Tokyo right after the drill is written, so the CDN there has them
-// when the phone makes the round (as 心で答える's warm). From the last line back, so the two meet.
-export async function warmDrill(d: Drill) {
-  const site = process.env.VERCEL_PROJECT_PRODUCTION_URL;
-  if (!site) return;
-  const urls = [...new Set(d.items.flatMap((it) => [ttsUrl(it.zh, HINT_VOICE), ttsUrl(it.ja, ANSWER_VOICE)]))].filter((u) => u.startsWith("/api/")).reverse();
-  const todo = urls.values();
-  const worker = async () => {
-    for (const u of todo) {
-      const res = await fetch(`https://${site}${u}`).catch(() => null);
-      await res?.arrayBuffer().catch(() => {});
-    }
-  };
-  await Promise.all([worker(), worker(), worker(), worker()]);
+// avoid: the sentences of the ladder it replaces (新しい文), not to be used again.
+export async function makeLadder(seed: string, avoid: string[] = []): Promise<Ladder> {
+  const memo = await aboutNow(jstDay()).catch(() => "（メモなし）");
+  const context = avoid.length ? `${memo}\n\n前回のはしごの文（同じ文・同じ入れ替え語は使わない）：\n${avoid.map((a) => `- ${a}`).join("\n")}` : memo;
+  const draft = await drillLadder(seed, context);
+  const steps: DrillStep[] = draft.steps
+    .map((s) => ({ ...s, lv: Math.min(LEVELS, Math.max(1, Math.round(s.lv))), cue: s.cue.trim(), cue_zh: s.cue_zh.trim(), ja: s.ja.trim(), kana: s.kana.trim(), zh: s.zh.trim() }))
+    .filter((s) => s.ja && s.cue);
+  if (steps.length < 8) throw new Error("出题失败，再试一次");
+  // Levels in order, whatever order they came in.
+  steps.sort((a, b) => a.lv - b.lv);
+  steps[0] = { ...steps[0], op: "base" };
+  const ladder: Ladder = { seed: draft.seed.trim() || seed, meaning_zh: draft.meaning_zh.trim(), made: Date.now(), steps };
+  await setJson(path(seed), ladder, 30);
+  // Opened again from its chip by the tidied name: the same ladder.
+  if (seedKey(ladder.seed) !== seedKey(seed)) await setJson(path(ladder.seed), ladder, 30);
+  return ladder;
 }
