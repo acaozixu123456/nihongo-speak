@@ -2396,7 +2396,6 @@ body:has(.ko) { background: #f6f0e4; }
 .dr-op { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--op); color: #fff; font-size: 17px; font-weight: 800; flex: none; }
 .dr-cue b { font-family: var(--ja); font-size: 24px; font-weight: 800; color: var(--op); }
 .dr-cue small { flex-basis: 100%; padding-left: 46px; font-size: 13px; color: var(--muted); }
-.dr-zhcue { margin: 6px 0 0; font-family: var(--sans); font-size: 21px; font-weight: 600; line-height: 1.6; }
 .dr-clock { height: 4px; margin-top: 16px; border-radius: 2px; background: var(--op); transform-origin: left; animation: dr-clock 3s linear forwards; }
 @keyframes dr-clock { from { transform: scaleX(1); } to { transform: scaleX(0); background: var(--faint); } }
 .dr-ans { margin-top: 22px; min-height: 130px; }

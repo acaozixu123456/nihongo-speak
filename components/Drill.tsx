@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { LEVELS, type DrillOp, type DrillStep, type Ladder } from "@/lib/drill-model";
-import { FAST_MS, STARTERS, diff, judge, loadLadder, readSeeds, saveSeed, type Seed } from "@/lib/client/drill";
+import { STARTERS, diff, fastMs, judge, loadLadder, readSeeds, saveSeed, type Seed } from "@/lib/client/drill";
+import { flowOf } from "@/lib/client/fluency";
 import { chime, confetti, verdict, type Kind } from "@/lib/client/fx";
 import { play, stop as stopAudio, ttsUrl, unlock } from "@/lib/client/player";
 import { recordSpeech, wavSeconds } from "@/lib/client/progress";
@@ -17,7 +18,10 @@ type Mode = "home" | "loading" | "play" | "up" | "done";
 type Result = { kind: Kind; heard: string; ms: number | null; peek?: boolean };
 type Run = { i: number; ok: boolean; ms: number | null };
 
-const OP_MARK: Record<DrillOp, string> = { base: "●", sub: "⇄", form: "↻", add: "＋" };
+// Said right, from memory, and soon enough for its length.
+const fastRun = (l: Ladder, r: Run) => r.ok && r.ms !== null && r.ms <= fastMs(l.steps[r.i].ja);
+
+const OP_MARK: Record<DrillOp, string> = { base: "●", sub: "⇄", form: "形", add: "＋" };
 
 // 型ドリル: type a word or grammar point; 森先生 gives one change at a time (swap a word, change the
 // form, say more) and the whole sentence is said out loud at once, four levels from two words up. Then
@@ -36,11 +40,12 @@ export default function Drill() {
   const [combo, setCombo] = useState(0);
   const [done, setDone] = useState(0); // steps said right in the levels
   const [lastRuns, setLastRuns] = useState<Run[]>([]);
-  const t = useRef({ shown: 0, started: 0, again: new Set<number>(), runs: [] as Run[], card: 0, next: 0 as ReturnType<typeof setTimeout> | 0 }).current;
+  const t = useRef({ shown: 0, live: 0, again: new Set<number>(), ok: new Set<number>(), runs: [] as Run[], card: 0, next: 0 as ReturnType<typeof setTimeout> | 0 }).current;
 
   useEffect(() => {
     setSeeds(readSeeds());
     return () => {
+      t.card++;
       stopAudio();
       if (t.next) clearTimeout(t.next);
     };
@@ -53,7 +58,7 @@ export default function Drill() {
   // A new card: the clock starts for how soon speaking begins.
   useEffect(() => {
     t.shown = Date.now();
-    t.started = 0;
+    t.live = 0;
   }, [pos, queue, mode, t]);
 
   async function open(seed: string, fresh = false) {
@@ -76,6 +81,7 @@ export default function Drill() {
 
   function startLevels(l: Ladder) {
     t.again.clear();
+    t.ok.clear();
     setCombo(0);
     setDone(0);
     t.runs = [];
@@ -95,7 +101,7 @@ export default function Drill() {
   // The speed round again, with only what wasn't fast yet.
   function speedAgain() {
     if (!ladder) return;
-    const slow = lastRuns.filter((r) => !r.ok || r.ms === null || r.ms > FAST_MS).map((r) => r.i);
+    const slow = lastRuns.filter((r) => !fastRun(ladder, r)).map((r) => r.i);
     setLv(SPEED);
     setQueue(slow.length ? slow : ladder.steps.map((_, x) => x));
     t.runs = [];
@@ -110,17 +116,23 @@ export default function Drill() {
 
   async function onRecorded(wav: Blob) {
     if (!step) return;
-    const ms = t.started ? t.started - t.shown : null;
+    const card = t.card;
+    const live = t.live;
     setBusy(true);
     setError("");
     try {
+      // How soon after the card the voice began: the mic going live plus where speech starts in it.
+      const flow = await flowOf(wav).catch(() => null);
+      const ms = live && flow?.runs.length ? Math.max(0, Math.round(live + flow.runs[0][0] * 1000 - t.shown)) : null;
       const r = await transcribe(wav, step.ja);
+      // Left (×) or moved on while it was being checked: this result is for a card no longer shown.
+      if (card !== t.card) return;
       recordSpeech(wavSeconds(wav), r.scores?.pron);
       if (!r.text) {
         setError("聞き取れませんでした");
         return;
       }
-      show(judge(r, step), r.text, ms);
+      show(judge(r, step, i > 0 ? ladder?.steps[i - 1] : undefined), r.text, ms);
     } catch {
       setError("聞き取れませんでした");
     } finally {
@@ -139,9 +151,14 @@ export default function Drill() {
     setResult({ kind, heard, ms, peek: peeked });
     setCombo((c) => (kind === "right" ? c + 1 : 0));
     if (lv === SPEED) {
-      t.runs = [...t.runs.filter((x) => x.i !== i), { i, ok: kind === "right", ms: kind === "right" ? ms : null }];
+      // Said again after a miss or the answer: right, but not from memory, so no time.
+      const first = !t.runs.some((x) => x.i === i);
+      t.runs = [...t.runs.filter((x) => x.i !== i), { i, ok: kind === "right", ms: kind === "right" && first ? ms : null }];
     } else if (kind === "right") {
-      if (!t.again.has(i)) setDone((d) => d + 1);
+      if (!t.ok.has(i)) {
+        t.ok.add(i);
+        setDone((d) => d + 1);
+      }
     } else if (!t.again.has(i)) {
       // Missed: comes back at the end of this level.
       t.again.add(i);
@@ -159,7 +176,7 @@ export default function Drill() {
     stopAudio();
     setResult(null);
     t.shown = Date.now();
-    t.started = 0;
+    t.live = 0;
   }
 
   function next() {
@@ -175,7 +192,7 @@ export default function Drill() {
     }
     if (lv === SPEED) {
       const r = t.runs;
-      const fast = r.filter((x) => x.ok && x.ms !== null && x.ms <= FAST_MS).length;
+      const fast = r.filter((x) => fastRun(ladder, x)).length;
       setLastRuns(r);
       // A second speed round has only the slow ones: the rest were fast already.
       saveSeed(ladder, fast + (ladder.steps.length - r.length), Date.now());
@@ -239,11 +256,11 @@ export default function Drill() {
           </div>
         ) : (
           <div className="dr-seeds">
-            {(seeds.length ? seeds : STARTERS.map((s) => ({ seed: s, meaning: "", plays: 0, fast: 0, total: 0, last: 0 }))).map((s) => (
+            {(seeds.length ? seeds : STARTERS.map((s) => ({ seed: s, meaning: "", plays: 0, fast: 0, total: 0, made: 0, last: 0 }))).map((s) => (
               <button key={s.seed} className="dr-seed" onClick={() => open(s.seed)}>
                 <b>{s.seed}</b>
-                {s.total > 0 && (
-                  <span className={s.fast >= s.total ? "full" : ""} aria-label={`3秒以内 ${s.fast}/${s.total}`}>
+                {s.fast > 0 && (
+                  <span className={s.fast >= s.total ? "full" : ""} aria-label={`スピード ${s.fast}/${s.total}`}>
                     ⚡{s.fast}/{s.total}
                   </span>
                 )}
@@ -270,7 +287,7 @@ export default function Drill() {
   }
 
   if (mode === "done") {
-    const fast = lastRuns.filter((r) => r.ok && r.ms !== null && r.ms <= FAST_MS);
+    const fast = lastRuns.filter((r) => fastRun(ladder, r));
     const all = fast.length === lastRuns.length;
     return (
       <main className="dr">
@@ -283,7 +300,7 @@ export default function Drill() {
         <div className="dr-list">
           {lastRuns.map((r) => {
             const s = ladder.steps[r.i];
-            const ok = r.ok && r.ms !== null && r.ms <= FAST_MS;
+            const ok = fastRun(ladder, r);
             return (
               <button key={r.i} className="dr-row" onClick={() => hear(s)}>
                 <i className={ok ? "ok" : r.ok ? "mid" : "no"} aria-hidden>{ok ? "⚡" : r.ok ? "✓" : "✕"}</i>
@@ -332,21 +349,15 @@ export default function Drill() {
         <i style={{ width: `${Math.min(100, (count / Math.max(1, total)) * 100)}%` }} />
       </div>
 
-      {speed ? (
-        <section className="dr-card">
-          <p className="dr-zhcue" lang="zh-Hans">{step.zh}</p>
-          {!result && <div className="dr-clock" key={`${pos}-${queue.length}`} aria-hidden />}
-        </section>
-      ) : (
-        <section className="dr-card">
-          {prev && <p className="dr-prev">{prev}</p>}
-          <div className="dr-cue">
-            <span className="dr-op" aria-hidden>{OP_MARK[step.op]}</span>
-            <b>{step.op === "base" ? ladder.seed : step.cue}</b>
-            <small lang="zh-Hans">{step.op === "base" ? ladder.meaning_zh : step.cue_zh}</small>
-          </div>
-        </section>
-      )}
+      <section className="dr-card">
+        {prev && <p className="dr-prev">{prev}</p>}
+        <div className="dr-cue">
+          <span className="dr-op" aria-hidden>{OP_MARK[step.op]}</span>
+          <b>{step.op === "base" ? ladder.seed : step.cue}</b>
+          <small lang="zh-Hans">{step.op === "base" ? step.zh : step.cue_zh}</small>
+        </div>
+        {speed && !result && <div className="dr-clock" key={`${pos}-${queue.length}`} style={{ animationDuration: `${fastMs(step.ja)}ms` }} aria-hidden />}
+      </section>
 
       <section className={`dr-ans${result ? ` is-${result.kind}` : ""}`}>
         {result ? (
@@ -355,18 +366,23 @@ export default function Drill() {
               {result.kind === "right" ? "✓" : result.kind === "close" ? "△" : result.peek ? "答え" : "✕"}
               {result.kind === "right" && result.ms !== null && <em>{(result.ms / 1000).toFixed(1)}s</em>}
             </div>
-            <p className="dr-ja" onClick={() => hear(step)}>
-              {speed ? (
-                <span className="dr-new">{step.ja}</span>
-              ) : (
-                <>
-                  {same1}
-                  <span className="dr-new">{changed}</span>
-                  {same2}
-                </>
-              )}
+            <p
+              className="dr-ja"
+              onClick={() => {
+                // Hearing it again: stays on this card until 次へ.
+                if (result.kind === "right") {
+                  t.card++;
+                  if (t.next) clearTimeout(t.next);
+                  t.next = 0;
+                }
+                hear(step);
+              }}
+            >
+              {same1}
+              <span className="dr-new">{changed}</span>
+              {same2}
             </p>
-            {!speed && <p className="dr-zh" lang="zh-Hans">{step.zh}</p>}
+            <p className="dr-zh" lang="zh-Hans">{step.zh}</p>
             {result.heard && result.kind !== "right" && <p className="dr-heard">{result.heard}</p>}
           </>
         ) : (
@@ -391,8 +407,8 @@ export default function Drill() {
               <HoldButton
                 label={busy ? "…" : "● 話す"}
                 disabled={busy}
-                onStart={() => {
-                  if (!t.started) t.started = Date.now();
+                onLive={() => {
+                  t.live = Date.now();
                 }}
                 onRecorded={onRecorded}
                 onError={setError}

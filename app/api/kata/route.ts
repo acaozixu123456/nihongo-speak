@@ -4,7 +4,7 @@ import { seedKey } from "@/lib/drill-model";
 import { spend, tooMany } from "@/lib/quota";
 import { storageReady } from "@/lib/store";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 // 型ドリル: the ladder for a word or grammar point the learner typed. fresh: a new one (新しい文).
 export async function POST(request: Request) {
@@ -13,12 +13,10 @@ export async function POST(request: Request) {
   const seed = typeof body.seed === "string" ? body.seed.trim().slice(0, 30) : "";
   if (!seedKey(seed)) return NextResponse.json({ error: "输入一个单词或语法" }, { status: 400 });
   try {
-    if (body.fresh !== true) {
-      const saved = await readLadder(seed);
-      if (saved) return NextResponse.json(saved);
-    }
+    const saved = await readLadder(seed);
+    if (saved && body.fresh !== true) return NextResponse.json(saved);
     if (!(await spend("drill"))) return tooMany();
-    return NextResponse.json(await makeLadder(seed));
+    return NextResponse.json(await makeLadder(seed, saved?.steps.map((s) => s.ja) ?? []));
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: e instanceof Error ? e.message : "出题失败" }, { status: 502 });
