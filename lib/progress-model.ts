@@ -39,6 +39,11 @@ export type DayStats = {
   quickFast?: number;
   xp?: Partial<Record<XpKind, number>>;
   moyuSec?: number; // seconds listened in 摸鱼模式
+  // 型ドリル: seconds of active practice, and speed-round reaction times (ms, scaled to a 12-character
+  // sentence so longer sentences later on don't read as getting slower), summed with how many.
+  drillSec?: number;
+  drillMsSum?: number;
+  drillMsN?: number;
   stuck?: StuckLine[]; // sentences replayed in 摸鱼模式, to say out loud later
   learned?: Learned[]; // what was practised this day (练一练, review, 瞬间说, shadowing), for 今日
 };
@@ -277,7 +282,7 @@ const max = (a = 0, b = 0) => Math.max(a, b);
 
 function mergeStats(a: DayStats = {}, b: DayStats = {}): DayStats {
   // Two devices rarely practise on the same day; keep whichever recorded more.
-  const weight = (s: DayStats) => (s.said ?? 0) + (s.listenLines ?? 0) + (s.moyuSec ?? 0) / 60;
+  const weight = (s: DayStats) => (s.said ?? 0) + (s.listenLines ?? 0) + (s.moyuSec ?? 0) / 60 + (s.drillSec ?? 0) / 60;
   return weight(a) >= weight(b) ? a : b;
 }
 

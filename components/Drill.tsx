@@ -8,12 +8,19 @@ import { cleared, diff, fastMs, findSeed, judge, loadLadder, nextOnPath, readSee
 import { flowOf } from "@/lib/client/fluency";
 import { chime, confetti, verdict, type Kind } from "@/lib/client/fx";
 import { play, stop as stopAudio, ttsUrl, unlock } from "@/lib/client/player";
-import { recordSpeech, wavSeconds } from "@/lib/client/progress";
+import { recordDrill, recordSpeech, useProgress, wavSeconds } from "@/lib/client/progress";
 import { transcribe } from "@/lib/client/recorder";
+import DrillTime from "./DrillTime";
 import HoldButton from "./HoldButton";
 
 const VOICE = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-NanamiNeural";
 const SPEED = LEVELS + 1; // the level after the four: every sentence again, as fast as it comes
+const IDLE = 45_000; // no tap or voice for this long: the clock stops
+const FLUSH = 15; // seconds counted before they are saved
+
+// Reaction time as if the sentence were 12 characters, by the same length rule as the speed clock.
+const scaled = (ms: number, ja: string) => Math.round((ms * (2000 + 60 * 12)) / (2000 + 60 * ja.length));
+const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 
 type Mode = "home" | "loading" | "play" | "up" | "done";
 type Result = { kind: Kind; heard: string; ms: number | null; peek?: boolean };
@@ -41,7 +48,33 @@ export default function Drill() {
   const [combo, setCombo] = useState(0);
   const [done, setDone] = useState(0); // steps said right in the levels
   const [lastRuns, setLastRuns] = useState<Run[]>([]);
-  const t = useRef({ shown: 0, live: 0, again: new Set<number>(), ok: new Set<number>(), runs: [] as Run[], typed: "", card: 0, next: 0 as ReturnType<typeof setTimeout> | 0 }).current;
+  const t = useRef({ shown: 0, live: 0, again: new Set<number>(), ok: new Set<number>(), runs: [] as Run[], typed: "", card: 0, next: 0 as ReturnType<typeof setTimeout> | 0, act: 0, pend: 0, sess: 0 }).current;
+  const progress = useProgress();
+  const [sess, setSess] = useState(0); // seconds this word, for the done screen
+
+  // Practice time: while a card or level-up is on screen, the page is in view and something happened
+  // in the last 45 s. Saved every 15 s, and when leaving play or the page.
+  useEffect(() => {
+    if (mode !== "play" && mode !== "up") return;
+    const flush = () => {
+      if (t.pend) recordDrill(t.pend);
+      t.pend = 0;
+    };
+    const tick = setInterval(() => {
+      if (document.hidden || Date.now() - t.act > IDLE) return;
+      t.pend++;
+      t.sess++;
+      if (t.pend >= FLUSH) flush();
+    }, 1000);
+    const hide = () => document.hidden && flush();
+    document.addEventListener("visibilitychange", hide);
+    return () => {
+      clearInterval(tick);
+      document.removeEventListener("visibilitychange", hide);
+      flush();
+      setSess(t.sess);
+    };
+  }, [mode, t]);
 
   useEffect(() => {
     setSeeds(readSeeds());
@@ -59,6 +92,7 @@ export default function Drill() {
   // A new card: the clock starts for how soon speaking begins.
   useEffect(() => {
     t.shown = Date.now();
+    t.act = t.shown;
     t.live = 0;
   }, [pos, queue, mode, t]);
 
@@ -89,6 +123,7 @@ export default function Drill() {
     setCombo(0);
     setDone(0);
     t.runs = [];
+    t.sess = 0;
     goLevel(l, 1);
   }
 
@@ -122,6 +157,7 @@ export default function Drill() {
     if (!step) return;
     const card = t.card;
     const live = t.live;
+    t.act = Date.now();
     setBusy(true);
     setError("");
     try {
@@ -145,6 +181,7 @@ export default function Drill() {
   }
 
   function peek() {
+    t.act = Date.now();
     if (!step) return;
     show("wrong", "", null, true);
   }
@@ -157,6 +194,7 @@ export default function Drill() {
     if (lv === SPEED) {
       // Said again after a miss or the answer: right, but not from memory, so no time.
       const first = !t.runs.some((x) => x.i === i);
+      if (kind === "right" && first && ms !== null) recordDrill(0, scaled(ms, step.ja));
       t.runs = [...t.runs.filter((x) => x.i !== i), { i, ok: kind === "right", ms: kind === "right" && first ? ms : null }];
     } else if (kind === "right") {
       if (!t.ok.has(i)) {
@@ -176,6 +214,7 @@ export default function Drill() {
   }
 
   function retry() {
+    t.act = Date.now();
     t.card++;
     stopAudio();
     setResult(null);
@@ -234,6 +273,7 @@ export default function Drill() {
       <main className="dr">
         <Link href="/speak" className="back" aria-label="戻る">←</Link>
         <h1 className="dr-title">型ドリル</h1>
+        <DrillTime p={progress} />
         {error && <p className="error">{error}</p>}
         {loading ? (
           <div className="dr-making" aria-label="作成中">
@@ -331,6 +371,7 @@ export default function Drill() {
         <div className={`dr-score${all ? " all" : ""}`}>
           <b>⚡ {fast.length}</b>
           <span>/ {lastRuns.length}</span>
+          {sess > 0 && <em aria-label="練習時間">⏱ {clock(sess)}</em>}
         </div>
         <div className="dr-list">
           {lastRuns.map((r) => {
@@ -469,6 +510,7 @@ export default function Drill() {
                 disabled={busy}
                 onLive={() => {
                   t.live = Date.now();
+                  t.act = t.live;
                 }}
                 onRecorded={onRecorded}
                 onError={setError}

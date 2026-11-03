@@ -2448,3 +2448,41 @@ body:has(.ko) { background: #f6f0e4; }
 .dr-row small { display: block; font-family: var(--sans); font-size: 12px; font-weight: 400; color: var(--muted); }
 .dr-row em { font-style: normal; font-size: 12px; color: var(--muted); }
 .dr-foot { position: sticky; bottom: 0; padding: 16px 0 calc(env(safe-area-inset-bottom) + 8px); background: linear-gradient(transparent, var(--bg) 25%); display: grid; }
+
+/* 型ドリル: practice time — today against 15 min, all hours against the next stop, reaction trend */
+.dr-time { position: relative; z-index: 3; display: flex; gap: 16px; align-items: center; margin: -4px 0 4px; padding: 14px 16px; border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); animation: dr-in 0.3s both; }
+.dr-ring { position: relative; flex: none; width: 76px; height: 76px; }
+.dr-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.dr-ring circle { fill: none; stroke-width: 7; }
+.dr-ring .bg { stroke: var(--soft); }
+.dr-ring .fg { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset 0.8s cubic-bezier(0.3, 1.2, 0.6, 1); }
+.dr-ring.met .fg { stroke: var(--ok); }
+.dr-ring span { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; line-height: 1.05; }
+.dr-ring b { font-family: var(--serif); font-size: 24px; font-weight: 800; }
+.dr-ring b.ok { color: var(--ok); font-size: 26px; }
+.dr-ring small { font-size: 11px; font-weight: 700; color: var(--muted); }
+.dr-time-main { flex: 1; min-width: 0; display: grid; gap: 8px; }
+.dr-total { display: flex; align-items: baseline; gap: 4px; }
+.dr-total b { font-family: var(--serif); font-size: 28px; font-weight: 800; line-height: 1; letter-spacing: 0.01em; }
+.dr-total small { font-size: 12px; font-weight: 700; color: var(--muted); }
+.dr-total .info { align-self: center; position: static; }
+.dr-total .info-tip { top: 66px; left: 12px; right: 12px; max-width: none; width: auto; margin-top: 8px; }
+.dr-stop { position: relative; display: flex; align-items: center; gap: 8px; }
+.dr-stop::before { content: ""; position: absolute; left: 0; right: 34px; height: 6px; border-radius: 3px; background: var(--soft); }
+.dr-stop i { position: relative; height: 6px; border-radius: 3px; background: linear-gradient(90deg, #e8a33a, var(--accent)); min-width: 6px; max-width: calc(100% - 34px); }
+.dr-stop em { margin-left: auto; font-style: normal; font-size: 12px; font-weight: 800; color: var(--accent); }
+.dr-week { display: flex; gap: 6px; height: 40px; }
+.dr-week span { flex: 1; display: grid; grid-template-rows: 1fr auto; justify-items: center; gap: 2px; }
+.dr-week span::before { content: ""; grid-row: 1; grid-column: 1; width: 100%; max-width: 14px; height: 100%; border-radius: 4px; background: var(--soft); }
+.dr-week i { grid-row: 1; grid-column: 1; align-self: end; width: 100%; max-width: 14px; border-radius: 4px; background: #e8a33a; }
+.dr-week i.met { background: var(--ok); }
+.dr-week small { font-size: 10px; color: var(--faint); }
+.dr-week .now small { color: var(--text); font-weight: 800; }
+.dr-react { display: flex; align-items: baseline; gap: 6px; font-family: var(--serif); }
+.dr-react small { font-family: var(--sans); font-size: 12px; font-weight: 700; color: var(--muted); }
+.dr-react s { font-size: 14px; color: var(--faint); }
+.dr-react i { font-style: normal; font-size: 12px; color: var(--faint); }
+.dr-react b { font-size: 18px; font-weight: 800; }
+.dr-react.up b { color: var(--ok-ink); }
+.dr-react em { font-style: normal; font-family: var(--sans); font-size: 12px; font-weight: 800; color: var(--ok-ink); background: var(--ok-bg); padding: 1px 8px; border-radius: 999px; }
+.dr-score em { margin-left: auto; font-style: normal; font-family: var(--sans); font-size: 14px; font-weight: 700; color: var(--muted); }
