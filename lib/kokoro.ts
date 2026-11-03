@@ -30,7 +30,8 @@ export async function saveNotes(day: string, notes: string[]) {
   await writeJson(NOTES, { days });
 }
 
-function context(day: string, notes: Notes | null, p: Progress, news: string[], used: Map<string, number>, asked: string[]) {
+// What the learner did and talked about lately, for questions and sentences about their own life.
+function about(day: string, notes: Notes | null, p: Progress, news: string[]) {
   const work = (notes?.days ?? []).filter((d) => d.day <= day && d.day >= addDays(day, -4));
   const week = addDays(day, -7);
   const tellings = (p.retells ?? [])
@@ -48,7 +49,22 @@ ${work.map((d) => `- ${d.day}\n${d.notes.map((n) => `    ・${n}`).join("\n")}`)
 ${tellings.join("\n") || "（なし）"}
 
 今日のニュース（NHKやさしいことばニュースの見出し。生活の質問の話題にしてもよい）：
-${news.map((t) => `- ${t}`).join("\n") || "（なし）"}
+${news.map((t) => `- ${t}`).join("\n") || "（なし）"}`;
+}
+
+// The same, read now: the routine's notes, the learner's tellings and the day's news.
+export async function aboutNow(day: string) {
+  const [notes, { progress }, news] = await Promise.all([
+    readJson<Notes>(NOTES),
+    readState(),
+    readNews().then((f) => f.items).catch(() => []),
+  ]);
+  const newest = news[0]?.day;
+  return about(day, notes, progress, news.filter((a) => a.day === newest).map((a) => a.title_ja));
+}
+
+function context(day: string, notes: Notes | null, p: Progress, news: string[], used: Map<string, number>, asked: string[]) {
+  return `${about(day, notes, p, news)}
 
 この3日間に聞いた質問（同じ質問・同じ答えにしない。同じ出来事なら、その後や別の面を聞く。生活は別の話題に）：
 ${asked.map((q) => `- ${q}`).join("\n") || "（なし）"}

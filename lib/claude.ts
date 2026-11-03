@@ -1303,3 +1303,39 @@ export async function kokoroQuestions(context: string): Promise<KokoroDraft[]> {
   if (!res.parsed_output) throw new Error(`AI 返回格式不对（${res.stop_reason}）`);
   return res.parsed_output.items;
 }
+
+// ---- 型ドリル: one 型, many sentences, said out loud at once from Chinese ----
+
+const PatternDrillSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        ja: z.string().describe("日本語の1文（30字以内）。型の ＿ 以外の部分を一字も変えずに含める"),
+        zh: z.string().describe("学習者が聞いてすぐ日本語で言う中国語（簡体字）。ja の内容を全部、同じ順で、短く自然に"),
+      }),
+    )
+    .describe("14文（使うのは12文、残りは予備）。易しい順"),
+});
+export type DrillDraft = z.infer<typeof PatternDrillSchema>["items"][number];
+
+export async function drillSentences(context: string, form: string, meaning: string): Promise<DrillDraft[]> {
+  const res = await parse({
+    ...smart(4000),
+    system: `あなたは日本語の先生、森先生です。学習者は日本に住んでIT企業で働いている中国人で、日本語は N4〜N3。
+型ドリル（パターン・ドリル）を作ります。中国語の文が流れ、学習者はそれをすぐ声に出して日本語で言い、模範の日本語を聞いてもう一度言います。一つの型を十数回、間を置かずに使って、考えなくても口から出るようにするのが目的です。
+今日の型：${form}（${meaning}）
+- 全部の文でこの型を使い、型の ＿ 以外の部分は一字も変えずに入れる。型の意味が自然に合う場面だけに使う。
+- 1〜5文目は ＿ に短い語句を入れるだけの短い文。6〜10文目は時・場所・相手など一つ足す。11〜14文目は職場や雑談でそのまま言える少し長い文。どれも30字以内。
+- ＿ に入る中身は文ごとに違う場面にする（同じ動詞や名詞を続けない）。
+- 中身は学習者自身の最近の仕事と生活から（下のメモ）。メモにない出来事や因果関係は作らない。足りなければ通勤・食事・週末・天気・体調・買い物・会議・テスト・資料作りなど、誰にでも言える毎日のこと。
+- 学習者の立場の一人称で、職場で自然な丁寧語。型のほかは N4 の易しい文法と、仕事や生活でよく使う語だけ。
+- 固有名詞（会社名・顧客名・人名）、金額、システム ID は出さず、「お客さん」「先輩」「バッチ」のように一般化する。
+- zh は学習者が聞いてそのまま日本語にする文。ja の内容は全部入れ、ない内容は足さない。日本語の語順に近い、自然で短い中国語。
+- 読み方が二つあって文で変わる語（紅葉、一日、市場、人気、開く など）は ja ではひらがなで書く。`,
+    messages: [{ role: "user", content: context }],
+    output_config: { effort: "low", format: zodOutputFormat(PatternDrillSchema) },
+  });
+  checkStop(res.stop_reason);
+  if (!res.parsed_output) throw new Error(`AI 返回格式不对（${res.stop_reason}）`);
+  return res.parsed_output.items;
+}
