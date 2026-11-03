@@ -14,7 +14,6 @@ export const DAILY = {
   cover: 10, // cover pictures (~$0.07 each)
   scenario: 15, // 重来一次 scenarios
   kokoro: 10, // 心で答える question sets (Opus)
-  drill: 50, // 型ドリル ladders (Opus; 新しい文 and 升级 each make one)
 } as const;
 export type Kind = keyof typeof DAILY;
 
