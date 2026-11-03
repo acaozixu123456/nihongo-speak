@@ -1,341 +1,406 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useEffect, useRef, useState } from "react";
-import { fixedParts } from "@/lib/kokoro-model";
-import type { Drill as DrillSet } from "@/lib/drill-model";
-import { PASSES, currentForm, drillClips, keepForm, loadDrill, markDone, nextForm, timesDone, type DClip } from "@/lib/client/drill";
-import { prepare, pruneCache, type Prepared } from "@/lib/client/moyu";
-import { SILENCE } from "@/lib/client/player";
-import { recordSpeech } from "@/lib/client/progress";
-import { setAudioSession } from "@/lib/client/recorder";
+import { useEffect, useRef, useState } from "react";
+import { LEVELS, type DrillOp, type DrillStep, type Ladder } from "@/lib/drill-model";
+import { FAST_MS, STARTERS, diff, judge, loadLadder, readSeeds, saveSeed, type Seed } from "@/lib/client/drill";
+import { chime, confetti, verdict, type Kind } from "@/lib/client/fx";
+import { play, stop as stopAudio, ttsUrl, unlock } from "@/lib/client/player";
+import { recordSpeech, wavSeconds } from "@/lib/client/progress";
+import { transcribe } from "@/lib/client/recorder";
+import HoldButton from "./HoldButton";
 
-type Phase = "idle" | "loading" | "playing" | "paused" | "done";
-type Now = { clip: DClip; start: number; end: number };
+const VOICE = "ja-JP-Nanami:DragonHDLatestNeural|ja-JP-NanamiNeural";
+const SPEED = LEVELS + 1; // the level after the four: every sentence again, as fast as it comes
 
-// 型ドリル: one 型, a dozen of the learner's own sentences, twice through, said out loud from Chinese
-// with no stop in between (a pattern drill). Earbuds: previous = this one again, next = on.
+type Mode = "home" | "loading" | "play" | "up" | "done";
+type Result = { kind: Kind; heard: string; ms: number | null; peek?: boolean };
+type Run = { i: number; ok: boolean; ms: number | null };
+
+const OP_MARK: Record<DrillOp, string> = { base: "●", sub: "⇄", form: "↻", add: "＋" };
+
+// 型ドリル: type a word or grammar point; 森先生 gives one change at a time (swap a word, change the
+// form, say more) and the whole sentence is said out loud at once, four levels from two words up. Then
+// a speed round of every sentence from its Chinese, again until each comes within three seconds.
 export default function Drill() {
-  const [form, setForm] = useState<string | null>(null);
-  const [drill, setDrill] = useState<DrillSet | null>(null);
+  const [mode, setMode] = useState<Mode>("home");
+  const [seeds, setSeeds] = useState<Seed[]>([]);
+  const [text, setText] = useState("");
+  const [ladder, setLadder] = useState<Ladder | null>(null);
   const [error, setError] = useState("");
-  const [phase, setPhase] = useState<Phase>("idle");
-  const [now, setNow] = useState<Now | null>(null);
-  const [t, setT] = useState(0);
-  const audio = useRef<HTMLAudioElement>(null);
-  const s = useRef({ prep: null as Promise<Prepared> | null, cur: null as Prepared | null, idx: -1, jumped: false, off: false }).current;
+  const [lv, setLv] = useState(1);
+  const [queue, setQueue] = useState<number[]>([]);
+  const [pos, setPos] = useState(0);
+  const [result, setResult] = useState<Result | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [combo, setCombo] = useState(0);
+  const [done, setDone] = useState(0); // steps said right in the levels
+  const [lastRuns, setLastRuns] = useState<Run[]>([]);
+  const t = useRef({ shown: 0, started: 0, again: new Set<number>(), runs: [] as Run[], card: 0, next: 0 as ReturnType<typeof setTimeout> | 0 }).current;
 
   useEffect(() => {
-    pruneCache();
-    setForm(currentForm());
+    setSeeds(readSeeds());
     return () => {
-      audio.current?.pause();
-      if (s.cur) URL.revokeObjectURL(s.cur.url);
-      const ms = navigator.mediaSession;
-      if (ms) for (const a of ["play", "pause", "previoustrack", "nexttrack"] as MediaSessionAction[]) ms.setActionHandler(a, null);
+      stopAudio();
+      if (t.next) clearTimeout(t.next);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // The 型's sentences, then the round's sound made at once so 始める starts without a wait.
+  const i = queue[pos] ?? -1;
+  const step: DrillStep | null = ladder && i >= 0 ? ladder.steps[i] : null;
+
+  // A new card: the clock starts for how soon speaking begins.
   useEffect(() => {
-    if (!form) return;
-    let gone = false;
-    setDrill(null);
-    setError("");
-    keepForm(form);
-    loadDrill(form).then(
-      (d) => {
-        if (gone) return;
-        setDrill(d);
-        roundAudio(d);
-      },
-      (e) => !gone && setError(e instanceof Error ? e.message : "出题失败"),
-    );
-    return () => {
-      gone = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form]);
+    t.shown = Date.now();
+    t.started = 0;
+  }, [pos, queue, mode, t]);
 
-  function roundAudio(d: DrillSet) {
-    if (!s.prep) {
-      const p = prepare(drillClips(d));
-      p.catch(() => s.prep === p && (s.prep = null));
-      s.prep = p;
-    }
-    return s.prep;
-  }
-
-  async function start() {
-    if (!drill) return;
-    const a = audio.current!;
-    // iPhone only lets this element play later if it first plays from the tap itself.
-    a.src = SILENCE;
-    a.play().catch(() => {});
-    setAudioSession("playback");
+  async function open(seed: string, fresh = false) {
+    const s = seed.trim();
+    if (!s) return;
+    unlock();
     setError("");
-    setupMediaSession();
-    s.off = false;
-    setPhase("loading");
+    setMode("loading");
     try {
-      // A round heard before has had its file let go; make it again (from the phone's cache).
-      if (s.cur) {
-        s.prep = null;
-        s.cur = null;
-      }
-      const prep = await roundAudio(drill);
-      if (s.off) return;
-      s.cur = prep;
-      s.idx = -1;
-      a.src = prep.url;
-      a.play().catch((e) => setError(e instanceof Error ? e.message : "播放失败"));
+      const l = await loadLadder(s, fresh);
+      setLadder(l);
+      startLevels(l);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "出错了");
-      setPhase("idle");
+      setError(e instanceof Error ? e.message : "出题失败");
+      setMode("home");
     }
   }
 
-  function close() {
-    s.off = true;
-    audio.current?.pause();
-    setPhase("idle");
-    setNow(null);
+  const levelSteps = (l: Ladder, n: number) => l.steps.map((s, k) => (s.lv === n ? k : -1)).filter((k) => k >= 0);
+
+  function startLevels(l: Ladder) {
+    t.again.clear();
+    setCombo(0);
+    setDone(0);
+    t.runs = [];
+    goLevel(l, 1);
   }
 
-  function onEnded() {
-    if (drill) markDone(drill.form);
-    setPhase("done");
-    setNow(null);
+  function goLevel(l: Ladder, n: number) {
+    let k = n;
+    while (k <= LEVELS && !levelSteps(l, k).length) k++;
+    setLv(k);
+    setQueue(k > LEVELS ? l.steps.map((_, x) => x) : levelSteps(l, k));
+    setPos(0);
+    setResult(null);
+    setMode("play");
   }
 
-  // Another 型: the one drilled least.
-  function other() {
-    if (!form) return;
-    if (s.cur) URL.revokeObjectURL(s.cur.url);
-    s.prep?.then((p) => URL.revokeObjectURL(p.url), () => {});
-    s.prep = null;
-    s.cur = null;
-    setPhase("idle");
-    setForm(nextForm([form]));
+  // The speed round again, with only what wasn't fast yet.
+  function speedAgain() {
+    if (!ladder) return;
+    const slow = lastRuns.filter((r) => !r.ok || r.ms === null || r.ms > FAST_MS).map((r) => r.i);
+    setLv(SPEED);
+    setQueue(slow.length ? slow : ladder.steps.map((_, x) => x));
+    t.runs = [];
+    setPos(0);
+    setResult(null);
+    setMode("play");
   }
 
-  function onTime() {
-    const a = audio.current!;
-    const cur = s.cur;
-    if (!cur || a.src !== cur.url) return;
-    const time = a.currentTime;
-    let i = 0;
-    while (i + 1 < cur.starts.length && cur.starts[i + 1] <= time) i++;
-    if (i !== s.idx) {
-      // A sentence said out loud: the time given to say it, once it ran to the end.
-      const was = cur.clips[s.idx] as DClip | undefined;
-      if (was?.step === "say" && i === s.idx + 1 && !s.jumped) recordSpeech(Math.round((cur.starts[i] - cur.starts[s.idx]) * 10) / 10);
-      s.jumped = false;
-      s.idx = i;
-      const clip = cur.clips[i] as DClip;
-      setNow({ clip, start: cur.starts[i], end: cur.starts[i + 1] ?? cur.total });
-      if (navigator.mediaSession && typeof MediaMetadata !== "undefined") {
-        navigator.mediaSession.metadata = new MediaMetadata({ title: clip.show, artist: `${clip.pass + 1}周目`, album: "型ドリル" });
+  function hear(s: DrillStep) {
+    return play(ttsUrl(s.ja, VOICE)).catch(() => {});
+  }
+
+  async function onRecorded(wav: Blob) {
+    if (!step) return;
+    const ms = t.started ? t.started - t.shown : null;
+    setBusy(true);
+    setError("");
+    try {
+      const r = await transcribe(wav, step.ja);
+      recordSpeech(wavSeconds(wav), r.scores?.pron);
+      if (!r.text) {
+        setError("聞き取れませんでした");
+        return;
       }
+      show(judge(r, step), r.text, ms);
+    } catch {
+      setError("聞き取れませんでした");
+    } finally {
+      setBusy(false);
     }
-    setT(time);
   }
 
-  function seekClip(i: number) {
-    const a = audio.current;
-    const cur = s.cur;
-    if (!a || !cur) return;
-    s.jumped = true;
-    a.currentTime = i >= cur.clips.length ? Math.max(0, cur.total - 0.05) : cur.starts[i] + 0.01;
-    if (a.paused) a.play().catch(() => {});
+  function peek() {
+    if (!step) return;
+    show("wrong", "", null, true);
   }
 
-  const clips = () => (s.cur?.clips ?? []) as DClip[];
-
-  // This sentence again from its Chinese.
-  function again() {
-    const list = clips();
-    const c = list[s.idx];
-    if (!c) return;
-    seekClip(list.findIndex((x) => x.pass === c.pass && x.item === c.item));
+  function show(kind: Kind, heard: string, ms: number | null, peeked = false) {
+    if (!step || !ladder) return;
+    verdict(kind, peeked, false);
+    setResult({ kind, heard, ms, peek: peeked });
+    setCombo((c) => (kind === "right" ? c + 1 : 0));
+    if (lv === SPEED) {
+      t.runs = [...t.runs.filter((x) => x.i !== i), { i, ok: kind === "right", ms: kind === "right" ? ms : null }];
+    } else if (kind === "right") {
+      if (!t.again.has(i)) setDone((d) => d + 1);
+    } else if (!t.again.has(i)) {
+      // Missed: comes back at the end of this level.
+      t.again.add(i);
+      setQueue((q) => [...q, i]);
+    }
+    // Right: the sentence is said once, then on by itself.
+    const card = t.card;
+    const said = hear(step);
+    // Not when the learner moved on (or said it again) while it played.
+    if (kind === "right") said.then(() => card === t.card && (t.next = setTimeout(next, lv === SPEED ? 250 : 500)));
   }
 
-  // On: from the Chinese to the model, from the model to the next sentence.
-  function skip() {
-    const list = clips();
-    const c = list[s.idx];
-    if (!c) return;
-    const to = c.step === "model" ? s.idx + 1 : list.findIndex((x) => x.pass === c.pass && x.item === c.item && x.step === "model");
-    seekClip(to < 0 ? list.length : to);
+  function retry() {
+    t.card++;
+    stopAudio();
+    setResult(null);
+    t.shown = Date.now();
+    t.started = 0;
   }
 
-  function toggle() {
-    const a = audio.current!;
-    if (a.paused) a.play().catch(() => {});
-    else a.pause();
+  function next() {
+    t.card++;
+    if (t.next) clearTimeout(t.next);
+    t.next = 0;
+    stopAudio();
+    if (!ladder) return;
+    setResult(null);
+    if (pos + 1 < queue.length) {
+      setPos((p) => p + 1);
+      return;
+    }
+    if (lv === SPEED) {
+      const r = t.runs;
+      const fast = r.filter((x) => x.ok && x.ms !== null && x.ms <= FAST_MS).length;
+      setLastRuns(r);
+      // A second speed round has only the slow ones: the rest were fast already.
+      saveSeed(ladder, fast + (ladder.steps.length - r.length), Date.now());
+      if (fast === r.length) confetti(70);
+      setSeeds(readSeeds());
+      setMode("done");
+      return;
+    }
+    // A level done.
+    if (lv === LEVELS) saveSeed(ladder, null, Date.now());
+    chime(true);
+    if (lv === LEVELS) confetti(40);
+    setMode("up");
+    const to = lv + 1;
+    t.next = setTimeout(() => goLevel(ladder, to), 1500);
   }
 
-  function setupMediaSession() {
-    const ms = navigator.mediaSession;
-    if (!ms) return;
-    ms.setActionHandler("play", () => audio.current?.play().catch(() => {}));
-    ms.setActionHandler("pause", () => audio.current?.pause());
-    ms.setActionHandler("previoustrack", again);
-    ms.setActionHandler("nexttrack", skip);
+  function home() {
+    t.card++;
+    stopAudio();
+    if (t.next) clearTimeout(t.next);
+    setSeeds(readSeeds());
+    setMode("home");
+    setResult(null);
   }
 
-  const audioEl = (
-    <audio
-      ref={audio}
-      playsInline
-      preload="auto"
-      onEnded={() => s.cur && audio.current?.src === s.cur.url && onEnded()}
-      onTimeUpdate={onTime}
-      onPlaying={() => {
-        if (!s.off && s.cur && audio.current?.src === s.cur.url) setPhase("playing");
-      }}
-      onPause={() => {
-        if (!s.off && s.cur && audio.current?.src === s.cur.url && !audio.current.ended) setPhase("paused");
-      }}
-    />
-  );
+  // ---- screens ----
 
-  const playing = phase === "playing" || phase === "paused" || phase === "loading";
-  let body: React.ReactNode;
-  if (playing && drill) {
-    const c = now?.clip;
-    const it = c ? drill.items[c.item] : null;
-    const n = c ? clips().filter((x) => x.pass === c.pass && x.step === "cue").findIndex((x) => x.item === c.item) : -1;
-    const left = now ? Math.max(0, Math.ceil(now.end - t)) : 0;
-    const p = now && c?.step === "say" ? (now.end - t) / (now.end - now.start) : 0;
-    body = (
-      <>
-        <div className="ko-top">
-          <button className="ko-x" aria-label="閉じる" onClick={close}>×</button>
-          <span className="ko-no">{c ? `${String(n + 1).padStart(2, "0")} / ${String(drill.items.length).padStart(2, "0")}` : ""}</span>
-          <span className={`ko-pill${c?.step === "model" ? " ans" : c?.pass ? " last" : ""}`}>{c?.step === "model" ? "答え" : `${(c?.pass ?? 0) + 1}周目`}</span>
-        </div>
-        <div className="ko-dots" aria-hidden>
-          {drill.items.map((_, i) => (
-            <i key={i} className={c && i < n ? "d" : c && i === n ? "n" : ""} />
-          ))}
-        </div>
-        {(!c || c.pass === 0) && <Pattern form={drill.pattern} small />}
-        {it && c ? (
-          c.step === "model" ? (
-            <>
-              <div className="ko-q small" lang="zh-Hans">{it.zh}</div>
-              <p className="ko-ans dr-ja">
-                <Marked text={it.ja} form={drill.pattern} />
-              </p>
-            </>
-          ) : (
-            <>
-              <h1 className="ko-q" lang="zh-Hans">{it.zh}</h1>
-              {c.step === "say" && (
-                <div className="ko-ring" role="timer" aria-label={`言う 残り${left}秒`} style={{ ["--p" as string]: `${Math.round(p * 100)}%` }}>
-                  <span>{left}</span>
-                </div>
-              )}
-            </>
-          )
-        ) : (
-          <div className="ko-wait" aria-label="準備中" />
-        )}
-        {error && <p className="error">{error}</p>}
-        <div className="ko-dock">
-          <button onClick={again} aria-label="もう一回">⏮<small>もう一回</small></button>
-          <button className="ko-play" onClick={toggle} disabled={phase === "loading"} aria-label={phase === "playing" ? "一時停止" : "再生"}>
-            {phase === "playing" ? "❚❚" : "▶"}
-          </button>
-          <button onClick={skip} aria-label="次へ">⏭<small>次へ</small></button>
-        </div>
-      </>
-    );
-  } else {
-    const done = phase === "done";
-    const times = form ? timesDone(form) : 0;
-    body = (
-      <>
+  if (mode === "home" || mode === "loading") {
+    const loading = mode === "loading";
+    return (
+      <main className="dr">
         <Link href="/speak" className="back" aria-label="戻る">←</Link>
-        <header className="mg-mast">
-          <h1>型ドリル</h1>
-          {times > 0 && (
-            <div className="mg-issue">
-              <b>{times}</b>回
-            </div>
-          )}
-        </header>
-        {drill && <Pattern form={drill.pattern} zh={drill.zh} />}
-        {!drill && !error && <div className="ko-wait" aria-label="作成中" />}
+        <h1 className="dr-title">型ドリル</h1>
+        <form
+          className="dr-input"
+          onSubmit={(e) => {
+            e.preventDefault();
+            open(text);
+          }}
+        >
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="食べる・〜てしまう"
+            aria-label="単語・文法"
+            maxLength={30}
+            enterKeyHint="go"
+            disabled={loading}
+          />
+          <button type="submit" disabled={loading || !text.trim()} aria-label="始める">
+            {loading ? <span className="dr-spin" /> : "▶"}
+          </button>
+        </form>
         {error && <p className="error">{error}</p>}
-        {done && drill && (
-          <>
-            <p className="dr-done">
-              <i aria-hidden>✓</i> {drill.items.length * PASSES}文
-            </p>
-            {drill.items.map((it, i) => (
-              <div key={i} className="ko-row">
-                <span className="ko-n">{String(i + 1).padStart(2, "0")}</span>
-                <span>
-                  <Marked text={it.ja} form={drill.pattern} />
-                  <small className="dr-zh" lang="zh-Hans">{it.zh}</small>
-                </span>
-              </div>
+        {loading ? (
+          <div className="dr-making" aria-label="作成中">
+            {[0, 1, 2, 3].map((k) => (
+              <i key={k} style={{ animationDelay: `${k * 0.18}s` }} />
             ))}
-          </>
-        )}
-        {drill && (done ? (
-          <>
-            <button className="ko-go" onClick={other}>＋ 次の型</button>
-            <button className="ko-on" onClick={start}>▶ もう一度</button>
-          </>
+          </div>
         ) : (
-          <>
-            <button className="ko-go" onClick={start}>▶ 始める</button>
-            <button className="ko-on" onClick={other}>↻ 別の型</button>
-          </>
-        ))}
-      </>
+          <div className="dr-seeds">
+            {(seeds.length ? seeds : STARTERS.map((s) => ({ seed: s, meaning: "", plays: 0, fast: 0, total: 0, last: 0 }))).map((s) => (
+              <button key={s.seed} className="dr-seed" onClick={() => open(s.seed)}>
+                <b>{s.seed}</b>
+                {s.total > 0 && (
+                  <span className={s.fast >= s.total ? "full" : ""} aria-label={`3秒以内 ${s.fast}/${s.total}`}>
+                    ⚡{s.fast}/{s.total}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </main>
     );
   }
 
-  // One <audio> for the whole page, always first: iPhone lets only the element played from the tap
-  // on 始める play later.
-  return (
-    <main className="ko">
-      {audioEl}
-      {body}
-    </main>
-  );
-}
+  if (!ladder) return null;
 
-function Pattern({ form, zh, small }: { form: string; zh?: string; small?: boolean }) {
+  if (mode === "up") {
+    const to = lv + 1;
+    return (
+      <main className="dr dr-upwrap">
+        <div className="dr-up">
+          <span>{to > LEVELS ? "⚡" : `Lv${to}`}</span>
+          <b>{to > LEVELS ? "スピード" : ["", "", "広げる", "形を変える", "長くする"][to]}</b>
+        </div>
+      </main>
+    );
+  }
+
+  if (mode === "done") {
+    const fast = lastRuns.filter((r) => r.ok && r.ms !== null && r.ms <= FAST_MS);
+    const all = fast.length === lastRuns.length;
+    return (
+      <main className="dr">
+        <button className="back" aria-label="戻る" onClick={home}>←</button>
+        <h1 className="dr-title">{ladder.seed}</h1>
+        <div className={`dr-score${all ? " all" : ""}`}>
+          <b>⚡ {fast.length}</b>
+          <span>/ {lastRuns.length}</span>
+        </div>
+        <div className="dr-list">
+          {lastRuns.map((r) => {
+            const s = ladder.steps[r.i];
+            const ok = r.ok && r.ms !== null && r.ms <= FAST_MS;
+            return (
+              <button key={r.i} className="dr-row" onClick={() => hear(s)}>
+                <i className={ok ? "ok" : r.ok ? "mid" : "no"} aria-hidden>{ok ? "⚡" : r.ok ? "✓" : "✕"}</i>
+                <span>
+                  {s.ja}
+                  <small>{s.zh}</small>
+                </span>
+                {r.ok && r.ms !== null && <em>{(r.ms / 1000).toFixed(1)}s</em>}
+              </button>
+            );
+          })}
+        </div>
+        <div className="dr-foot">
+          {all ? (
+            <button className="dr-go" onClick={() => open(ladder.seed, true)}>＋ 新しい文</button>
+          ) : (
+            <button className="dr-go" onClick={speedAgain}>⚡ もう一回</button>
+          )}
+          <button className="ko-on" onClick={all ? speedAgain : () => open(ladder.seed, true)}>{all ? "⚡ もう一回" : "＋ 新しい文"}</button>
+        </div>
+      </main>
+    );
+  }
+
+  // ---- play ----
+  if (!step) return null;
+  const speed = lv === SPEED;
+  const prev = i > 0 ? ladder.steps[i - 1].ja : "";
+  const [same1, changed, same2] = diff(prev, step.ja);
+  const total = speed ? queue.length : ladder.steps.length;
+  const count = speed ? pos + (result ? 1 : 0) : done;
+
   return (
-    <div className={`ko-box${small ? " dr-small" : ""}`}>
-      <h4>型</h4>
-      <div className="ko-pat">
-        {form.split("＿").map((piece, n) => (
-          <Fragment key={n}>
-            {n > 0 && <span className="ko-blank" aria-label="空欄" />}
-            {piece}
-          </Fragment>
-        ))}
+    <main className={`dr dr-play op-${speed ? "speed" : step.op}`}>
+      <div className="dr-top">
+        <button className="dr-x" aria-label="閉じる" onClick={home}>×</button>
+        <div className="dr-lvs" aria-label={speed ? "スピード" : `レベル${lv}`}>
+          {Array.from({ length: LEVELS }, (_, k) => (
+            <i key={k} className={k + 1 < lv ? "d" : k + 1 === lv ? "n" : ""}>{k + 1}</i>
+          ))}
+          <i className={speed ? "n bolt" : "bolt"}>⚡</i>
+        </div>
+        {combo >= 2 ? <span className="dr-combo" key={combo}>{combo} 連</span> : <span className="dr-combo-sp" />}
       </div>
-      {zh && <p className="ko-zh" lang="zh-Hans">{zh}</p>}
-    </div>
-  );
-}
+      <div className="dr-bar" aria-hidden>
+        <i style={{ width: `${Math.min(100, (count / Math.max(1, total)) * 100)}%` }} />
+      </div>
 
-// The sentence with the 型's fixed parts marked.
-function Marked({ text, form }: { text: string; form: string }) {
-  const parts = fixedParts(form).sort((a, b) => b.length - a.length);
-  if (!parts.length) return <>{text}</>;
-  const re = new RegExp(`(${parts.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "g");
-  return (
-    <>
-      {text.split(re).map((piece, i) => (i % 2 ? <span key={i} className="mg-hl ko-hl">{piece}</span> : piece))}
-    </>
+      {speed ? (
+        <section className="dr-card">
+          <p className="dr-zhcue" lang="zh-Hans">{step.zh}</p>
+          {!result && <div className="dr-clock" key={`${pos}-${queue.length}`} aria-hidden />}
+        </section>
+      ) : (
+        <section className="dr-card">
+          {prev && <p className="dr-prev">{prev}</p>}
+          <div className="dr-cue">
+            <span className="dr-op" aria-hidden>{OP_MARK[step.op]}</span>
+            <b>{step.op === "base" ? ladder.seed : step.cue}</b>
+            <small lang="zh-Hans">{step.op === "base" ? ladder.meaning_zh : step.cue_zh}</small>
+          </div>
+        </section>
+      )}
+
+      <section className={`dr-ans${result ? ` is-${result.kind}` : ""}`}>
+        {result ? (
+          <>
+            <div className="dr-mark" aria-label={result.kind === "right" ? "正解" : result.kind === "close" ? "惜しい" : "答え"}>
+              {result.kind === "right" ? "✓" : result.kind === "close" ? "△" : result.peek ? "答え" : "✕"}
+              {result.kind === "right" && result.ms !== null && <em>{(result.ms / 1000).toFixed(1)}s</em>}
+            </div>
+            <p className="dr-ja" onClick={() => hear(step)}>
+              {speed ? (
+                <span className="dr-new">{step.ja}</span>
+              ) : (
+                <>
+                  {same1}
+                  <span className="dr-new">{changed}</span>
+                  {same2}
+                </>
+              )}
+            </p>
+            {!speed && <p className="dr-zh" lang="zh-Hans">{step.zh}</p>}
+            {result.heard && result.kind !== "right" && <p className="dr-heard">{result.heard}</p>}
+          </>
+        ) : (
+          <div className="dr-blank" aria-hidden>
+            {busy ? <span className="dr-spin dark" /> : "？"}
+          </div>
+        )}
+      </section>
+
+      {error && <p className="error">{error}</p>}
+
+      <div className="dr-dock">
+        {result ? (
+          <div className="dr-btns">
+            {result.kind !== "right" && <button className="dr-ghost" onClick={retry}>もう一回</button>}
+            <button className="dr-go" onClick={next}>次へ</button>
+          </div>
+        ) : (
+          <div className="dr-btns">
+            <button className="dr-ghost" onClick={peek} disabled={busy}>答え</button>
+            <div className="dr-mic">
+              <HoldButton
+                label={busy ? "…" : "● 話す"}
+                disabled={busy}
+                onStart={() => {
+                  if (!t.started) t.started = Date.now();
+                }}
+                onRecorded={onRecorded}
+                onError={setError}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </main>
   );
 }
