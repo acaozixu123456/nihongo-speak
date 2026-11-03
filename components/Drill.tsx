@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { LEVELS, TIERS, TIER_NAME, tierOf, type DrillOp, type DrillStep, type Ladder } from "@/lib/drill-model";
+import { LEVELS, TIERS, TIER_NAME, seedKey, tierOf, type DrillOp, type DrillStep, type Ladder } from "@/lib/drill-model";
 import { DRILL_PATH, PATH_ITEMS } from "@/content/drill-path";
-import { DAYS_TO_CLEAR, cleared, diff, fastDays, fastMs, findSeed, judge, loadLadder, nextOnPath, once, readSeeds, saveSeed, type Seed } from "@/lib/client/drill";
+import { DAYS_TO_CLEAR, cleared, diff, dueAgain, fastDays, fastMs, findSeed, judge, loadLadder, nextOnPath, once, readSeeds, saveSeed, type Seed } from "@/lib/client/drill";
 import { flowOf } from "@/lib/client/fluency";
 import { chime, confetti, verdict, type Kind } from "@/lib/client/fx";
 import { play, stop as stopAudio, ttsUrl, unlock } from "@/lib/client/player";
@@ -422,7 +422,8 @@ export default function Drill() {
             </>
           ) : (
             <>
-              {after && findSeed(seeds, after.seed) === undefined ? (
+              {/* Next on the list: one never opened, or one due for its second day (not this word). */}
+              {after && seedKey(after.seed) !== seedKey(t.typed) && (findSeed(seeds, after.seed) === undefined || dueAgain(findSeed(seeds, after.seed))) ? (
                 <button className="dr-go" onClick={() => open(after.seed)}>▶ {after.seed}</button>
               ) : (
                 <button className="dr-go" onClick={() => open(t.typed, true, tier)}>＋ 新しい文</button>
@@ -504,7 +505,7 @@ export default function Drill() {
         ) : (
           <div className={`dr-blank${busy ? "" : ` mic-${mic}`}`} aria-live="polite">
             {busy ? (
-              <span className="dr-spin dark" aria-label="判定中" />
+              <span className="dr-spin dark" role="img" aria-label="判定中" />
             ) : mic === "live" ? (
               <>
                 <span className="dr-wave" aria-hidden>

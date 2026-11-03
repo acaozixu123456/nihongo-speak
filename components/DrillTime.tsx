@@ -2,6 +2,7 @@
 
 import { addDays, dayKey, type Progress } from "@/lib/progress-model";
 import { lastDays } from "@/lib/client/metrics";
+import { useHydrated } from "@/lib/client/hydrated";
 import Info from "./Info";
 
 export const DAY_GOAL = 15 * 60; // seconds a day
@@ -44,6 +45,8 @@ const hours = (sec: number) => {
 // sentences come now against the first week.
 export default function DrillTime({ p }: { p: Progress }) {
   const { today, total, days, now, start } = drillTotals(p);
+  // The weekdays come from today's date: only after hydration, as the page is prerendered on another day.
+  const hydrated = useHydrated();
   const frac = Math.min(1, today / DAY_GOAL);
   const met = today >= DAY_GOAL;
   const h = total / 3600;
@@ -80,11 +83,11 @@ export default function DrillTime({ p }: { p: Progress }) {
           </Info>
         </div>
         <div className="dr-stop" aria-label={`次 ${stop} 時間`}>
-          <i style={{ width: `${Math.min(100, ((h - prevStop) / (stop - prevStop)) * 100)}%` }} />
+          <i style={{ width: `${stop > prevStop ? Math.min(100, ((h - prevStop) / (stop - prevStop)) * 100) : 100}%` }} />
           <em>{stop}h</em>
         </div>
         <div className="dr-week" aria-hidden>
-          {days.map((x) => (
+          {hydrated && days.map((x) => (
             <span key={x.d} className={x.d === dayKey() ? "now" : ""}>
               <i className={x.sec >= DAY_GOAL ? "met" : ""} style={{ height: `${Math.max(x.sec ? 8 : 0, (x.sec / top) * 100)}%` }} />
               <small>{WEEK[new Date(`${x.d}T00:00:00Z`).getUTCDay()]}</small>

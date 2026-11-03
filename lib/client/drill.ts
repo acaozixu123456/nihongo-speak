@@ -67,6 +67,11 @@ const KEY = "nihongo-speak:drill-seeds";
 
 type Old = Partial<Seed> & { seed: string; fast?: number; total?: number; made?: number };
 
+// Fast all through before days were kept (one session was enough then): counted as two days, so it
+// stays cleared and isn't asked for again.
+const legacy = (r: TierRun): TierRun =>
+  r.days === undefined && r.total > 0 && r.fast >= r.total ? { ...r, days: ["0000-00-00", "0000-00-01"] } : r;
+
 export function readSeeds(): Seed[] {
   try {
     const list = JSON.parse(localStorage.getItem(KEY) ?? "[]") as Old[];
@@ -78,7 +83,9 @@ export function readSeeds(): Seed[] {
         seed: s.seed,
         meaning: s.meaning ?? "",
         tier: s.tier ?? 1,
-        tiers: s.tiers ?? (s.total ? { 1: { fast: s.fast ?? 0, total: s.total, made: s.made ?? 0 } } : {}),
+        tiers: Object.fromEntries(
+          Object.entries(s.tiers ?? (s.total ? { 1: { fast: s.fast ?? 0, total: s.total, made: s.made ?? 0 } } : {})).map(([k, r]) => [k, legacy(r)]),
+        ),
         plays: s.plays ?? 0,
         last: s.last ?? 0,
       }))
