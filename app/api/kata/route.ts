@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { makeLadder, readLadder } from "@/lib/drill";
 import { TIERS, seedKey } from "@/lib/drill-model";
-import { refund, spend, tooMany } from "@/lib/quota";
 import { storageReady } from "@/lib/store";
 
 export const maxDuration = 300;
@@ -17,17 +16,8 @@ export async function POST(request: Request) {
   try {
     const saved = await readLadder(seed, tier);
     if (saved && body.fresh !== true) return NextResponse.json(saved);
-    if (!(await spend("drill"))) {
-      // Over the limit: the count isn't kept, so it stays at the limit and doesn't climb with each try.
-      await refund("drill");
-      return tooMany();
-    }
-    try {
-      return NextResponse.json(await makeLadder(seed, saved?.steps.map((s) => s.ja) ?? [], tier));
-    } catch (e) {
-      await refund("drill");
-      throw e;
-    }
+    // No daily limit (the learner asked): every 新しい文 and 升级 makes one.
+    return NextResponse.json(await makeLadder(seed, saved?.steps.map((s) => s.ja) ?? [], tier));
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: e instanceof Error ? e.message : "出题失败" }, { status: 502 });
