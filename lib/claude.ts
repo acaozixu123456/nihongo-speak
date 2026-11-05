@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import * as z from "zod/v4";
 import type { Scenario } from "@/content/scenarios";
+import type { HitoDraft } from "@/lib/hitokoto-model";
 import { helpRules, type HelpCtx } from "@/lib/help-prompt";
 import { inJapanese, japaneseZh, variantOk, zhIsTranslation } from "@/lib/variant";
 
@@ -1349,6 +1350,50 @@ const LADDER_TIERS: Record<number, string> = {
 - ただし入力が丁寧体・敬語の形そのもの（〜ます、〜てください、〜ないでください、〜ましょう、〜ていただけますか、〜させてください、〜でしょうか、お〜します など）なら、普通体の段は作らない。lv1 は同僚への丁寧体の短い文から始めて sub、lv2 は sub で場面（会議、電話、チャット）を一つずつ変え、lv3 で一か所ずつ上司やお客さんへの敬語に上げる。どの段も入力の形を消さない。`,
 };
 const LADDER_TOP = 3;
+
+// ---- 私の一言: a sentence from the learner's own day, taken apart and made into practice ----
+
+const HitoSchema = z.object({
+  ja: z.string().describe("学習者が言いたかった文の、自然で正しい日本語（場面に合う丁寧さ。元の文が自然ならそのまま）"),
+  kana: z.string().describe("ja の読みを全部ひらがなで（句読点なし）"),
+  zh: z.string().describe("ja の中国語訳（簡体字、自然で短く）"),
+  fix_zh: z.string().describe("元の文を直したときだけ、何をどう直したかを一言（簡体字、20字以内）。直していなければ空文字"),
+  parts: z
+    .array(
+      z.object({
+        ja: z.string().describe("ja を前から切った一かたまり。全部つなぐと ja と一字も違わない"),
+        zh: z.string().describe("このかたまりの意味（簡体字、8字以内）"),
+        note_zh: z.string().describe("このかたまりの文法・使い方の説明（簡体字、40字以内）。形の作り方、助詞の選び方、ニュアンス、中国人が間違えやすい点"),
+      }),
+    )
+    .describe("3〜6個"),
+  versions: z
+    .array(z.object({ to: z.enum(["友達", "同僚", "上司・お客さん"]), ja: z.string(), zh: z.string() }))
+    .describe("同じことを相手ごとに言い分けた3文（友達・同僚・上司・お客さんの順）。どれかは ja と同じでよい"),
+  kata: z.string().describe("この文の中心になる型を、型ドリルで練習する形で（例：〜られなくて、すみません／〜てしまいました）。12字以内"),
+  kata_zh: z.string().describe("kata の意味（簡体字、10字以内）"),
+  scene_zh: z.string().describe("思い出す練習の場面（簡体字、30字以内）。だれに、どんな状況で、何を伝えたいかだけを書き、日本語の答えの語は出さない。例：同事说刚才打你电话没接，你向他道歉"),
+  reply_ja: z.string().describe("この文のあとに自然に続ける一言（短く）"),
+  reply_zh: z.string().describe("reply_ja の中国語訳"),
+});
+
+export async function hitokoto(text: string, context: string): Promise<HitoDraft> {
+  const res = await parse({
+    ...smart(3000),
+    system: `あなたは日本語の先生、森先生です。学習者は日本に住んでIT企業で働いている中国人で、日本語は N4〜N3。
+学習者が今日、実際に言った（または言いたかった）一言を書いてきます。調べてから言った文なので、本当に自分のものにしたい。
+この文を、意味・作り方・言い分けまで完全に分かるように分解し、あとで場面から思い出して言えるように練習の材料を作ります。
+
+- 入力が中国語や間違いのある日本語なら、その場面で日本人が自然に言う文にする。正しくて自然なら変えない。
+- parts の説明は短く具体的に。例：「出られる：出る的可能形（一段动词 る→られる）。口语常说 出れる」「電話に出る：接电话，用に不用を」「〜なくて：否定て形，表示原因，后接道歉・感谢」。
+- 語彙は一般的な表記で書く。固有名詞・社内の略語は出さない。`,
+    messages: [{ role: "user", content: `入力：${text}\n\n学習者の最近のメモ（場面の参考。なくてもよい）：\n${context}` }],
+    output_config: { effort: "medium", format: zodOutputFormat(HitoSchema) },
+  });
+  checkStop(res.stop_reason);
+  if (!res.parsed_output) throw new Error(`AI 返回格式不对（${res.stop_reason}）`);
+  return res.parsed_output;
+}
 
 export async function drillLadder(seed: string, context: string, tier = 1): Promise<LadderDraft> {
   const rules = LADDER_TIERS[Math.min(LADDER_TOP, Math.max(1, tier))];
