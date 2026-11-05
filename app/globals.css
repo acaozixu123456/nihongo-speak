@@ -2554,3 +2554,9 @@ body:has(.ko) { background: #f6f0e4; }
 .dr-think { width: 100%; height: 100%; }
 .pl .hi-dots { flex: none; overflow: visible; }
 .hi-list .pl.two .pl-text b { color: var(--text); }
+/* 型ドリル speed round: from the Chinese, the cue a tap away */
+.dr-zhcue { display: grid; gap: 12px; justify-items: start; }
+.dr-zhcue b { font-family: var(--sans); font-size: 21px; font-weight: 700; line-height: 1.5; color: var(--text); }
+.dr-hint { padding: 6px 14px; border: 1.5px dashed var(--line); border-radius: 999px; background: none; color: var(--muted); font-family: var(--ja); font-size: 14px; font-weight: 700; cursor: pointer; }
+.dr-hinted { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px; background: var(--op-bg); color: var(--op); font-family: var(--ja); font-size: 17px; font-weight: 800; }
+.dr-hinted i { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--op); color: #fff; font-style: normal; font-size: 13px; }

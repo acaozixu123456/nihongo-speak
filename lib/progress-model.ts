@@ -44,6 +44,10 @@ export type DayStats = {
   drillSec?: number;
   drillMsSum?: number;
   drillMsN?: number;
+  // The same since the speed round is said from the Chinese (2026-11): a harder task, kept apart so the
+  // trend doesn't show a slowdown that isn't one.
+  drillZhMsSum?: number;
+  drillZhMsN?: number;
   stuck?: StuckLine[]; // sentences replayed in 摸鱼模式, to say out loud later
   learned?: Learned[]; // what was practised this day (练一练, review, 瞬间说, shadowing), for 今日
 };
