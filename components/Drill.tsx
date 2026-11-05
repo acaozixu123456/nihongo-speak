@@ -4,10 +4,10 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { LEVELS, TIERS, TIER_NAME, seedKey, tierOf, type DrillOp, type DrillStep, type Ladder } from "@/lib/drill-model";
 import { DRILL_PATH, PATH_ITEMS } from "@/content/drill-path";
-import { DAYS_TO_CLEAR, cleared, diff, dueAgain, fastDays, fastMs, findSeed, judge, loadLadder, nextOnPath, once, readSeeds, saveSeed, type Seed } from "@/lib/client/drill";
+import { DAYS_TO_CLEAR, cleared, diff, dueAgain, fastDays, fastMs, findSeed, judge, loadLadder, nextOnPath, prefetchLadder, once, readSeeds, saveSeed, type Seed } from "@/lib/client/drill";
 import { flowOf } from "@/lib/client/fluency";
 import { chime, confetti, verdict, type Kind } from "@/lib/client/fx";
-import { play, stop as stopAudio, ttsUrl, unlock } from "@/lib/client/player";
+import { play, preload, stop as stopAudio, ttsUrl, unlock } from "@/lib/client/player";
 import { recordDrill, recordSpeech, useProgress, wavSeconds } from "@/lib/client/progress";
 import { transcribe } from "@/lib/client/recorder";
 import { readSilent, writeSilent } from "@/lib/client/silent";
@@ -33,9 +33,20 @@ const fastRun = (l: Ladder, r: Run) => r.ok && r.ms !== null && r.ms <= fastMs(l
 
 const OP_MARK: Record<DrillOp, string> = { base: "●", sub: "⇄", form: "形", add: "＋" };
 
+// Mixed up, so the order gives nothing away.
+const shuffle = (xs: number[]) => {
+  const a = [...xs];
+  for (let k = a.length - 1; k > 0; k--) {
+    const j = Math.floor(Math.random() * (k + 1));
+    [a[k], a[j]] = [a[j], a[k]];
+  }
+  return a;
+};
+
 // 型ドリル: type a word or grammar point; 森先生 gives one change at a time (swap a word, change the
 // form, say more) and the whole sentence is said out loud at once, four levels from two words up. Then
-// a speed round of every sentence from its Chinese, again until each comes within three seconds.
+// a speed round of every sentence from its Chinese alone, mixed up, with no sentence before it to copy
+// from (the cue a tap away, and then not counted fast), again until each comes in time.
 export default function Drill() {
   const [mode, setMode] = useState<Mode>("home");
   const [seeds, setSeeds] = useState<Seed[]>([]);
@@ -59,6 +70,8 @@ export default function Drill() {
   const [silent, setSilent] = useState(false);
   const [reveal, setReveal] = useState<{ ms: number } | null>(null);
   const quietRun = useRef(false);
+  // Speed round: the cue was looked at for this card.
+  const [hint, setHint] = useState(false);
 
   // Practice time: while a card or level-up is on screen, the page is in view and something happened
   // in the last 45 s. Saved every 15 s, and when leaving play or the page.
@@ -101,6 +114,18 @@ export default function Drill() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // On the done screen, the ladder its main button opens is made now (升级, or the next on the list),
+  // so the tap starts at once instead of a 30-90 s wait.
+  useEffect(() => {
+    if (mode !== "done" || !ladder || !lastRuns.every((r) => fastRun(ladder, r))) return;
+    const tier = tierOf(ladder);
+    if (cleared(findSeed(seeds, t.typed), tier) && tier < TIERS) return prefetchLadder(t.typed, tier + 1);
+    const after = nextOnPath(seeds);
+    const rec = after ? findSeed(seeds, after.seed) : undefined;
+    if (after && seedKey(after.seed) !== seedKey(t.typed) && (!rec || dueAgain(rec))) prefetchLadder(after.seed, rec?.tier ?? 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
   const i = queue[pos] ?? -1;
   const step: DrillStep | null = ladder && i >= 0 ? ladder.steps[i] : null;
 
@@ -109,6 +134,7 @@ export default function Drill() {
     t.shown = Date.now();
     t.act = t.shown;
     t.live = 0;
+    setHint(false);
   }, [pos, queue, mode, t]);
 
   // A word or grammar point at its tier: the highest opened unless one is given (升级, or 新しい文 at this one).
@@ -121,6 +147,8 @@ export default function Drill() {
     t.typed = s;
     try {
       const l = await loadLadder(s, fresh, tier ?? findSeed(readSeeds(), s)?.tier ?? 1);
+      // Every sentence's voice fetched now, so a right answer is heard at once.
+      preload(l.steps.map((x) => ttsUrl(x.ja, VOICE)));
       setLadder(l);
       startLevels(l);
     } catch (e) {
@@ -147,7 +175,9 @@ export default function Drill() {
     let k = n;
     while (k <= LEVELS && !levelSteps(l, k).length) k++;
     setLv(k);
-    setQueue(k > LEVELS ? l.steps.map((_, x) => x) : levelSteps(l, k));
+    // The speed round counts toward 定着 by itself: said aloud there, it counts whatever the levels were.
+    if (k > LEVELS) quietRun.current = false;
+    setQueue(k > LEVELS ? shuffle(l.steps.map((_, x) => x)) : levelSteps(l, k));
     setPos(0);
     setResult(null);
     setReveal(null);
@@ -159,7 +189,7 @@ export default function Drill() {
     if (!ladder) return;
     const slow = lastRuns.filter((r) => !fastRun(ladder, r)).map((r) => r.i);
     setLv(SPEED);
-    setQueue(slow.length ? slow : ladder.steps.map((_, x) => x));
+    setQueue(shuffle(slow.length ? slow : ladder.steps.map((_, x) => x)));
     t.runs = [];
     quietRun.current = false;
     setPos(0);
@@ -226,11 +256,14 @@ export default function Drill() {
     verdict(kind, peeked, false);
     setResult({ kind, heard, ms, peek: peeked });
     setCombo((c) => (kind === "right" ? c + 1 : 0));
+    let quick = false;
     if (lv === SPEED) {
-      // Said again after a miss or the answer: right, but not from memory, so no time.
-      const first = !t.runs.some((x) => x.i === i);
+      // Said again after a miss or the answer, or after the cue was looked at: right, but not from
+      // memory, so no time.
+      const first = !t.runs.some((x) => x.i === i) && !hint;
       if (kind === "right" && first && ms !== null && !quiet) recordDrill(0, scaled(ms, step.ja));
       t.runs = [...t.runs.filter((x) => x.i !== i), { i, ok: kind === "right", ms: kind === "right" && first ? ms : null }];
+      quick = kind === "right" && first && ms !== null && ms <= fastMs(step.ja, tierOf(ladder));
     } else if (kind === "right") {
       if (!t.ok.has(i)) {
         t.ok.add(i);
@@ -243,7 +276,8 @@ export default function Drill() {
     }
     // Right: the sentence is said once, then on by itself.
     const card = t.card;
-    const said = quiet ? new Promise<void>((ok) => setTimeout(ok, 150)) : hear(step);
+    // Fast in the speed round: the ピンポン only and straight on, so the round keeps its beat.
+    const said = quiet || quick ? new Promise<void>((ok) => setTimeout(ok, quick ? 100 : 150)) : hear(step);
     // Not when the learner moved on (or said it again) while it played.
     if (kind === "right") said.then(() => card === t.card && (t.next = setTimeout(next, lv === SPEED ? 250 : 500)));
   }
@@ -441,7 +475,7 @@ export default function Drill() {
             ))}
             {!up && <b>明日 ↑{TIER_NAME[tier + 1]}</b>}
             <Info label="升级条件">
-              隔天再来一次，全部又快又对才升级。研究：同一天练到熟只是短期记忆，分开两天都能做到才算记住（Rawson &amp; Dunlosky，连续再学习）；难度保持在大约 85% 能答对时学得最快（Wilson 等 2019）。
+              隔天再来一次，全部又快又对才升级。研究：同一天练到熟只是短期记忆，分开两天都能做到才算记住（Rawson &amp; Dunlosky，连续再学习）；有点难但大多能答对时学得最好。
             </Info>
           </div>
         )}
@@ -525,12 +559,32 @@ export default function Drill() {
       </div>
 
       <section className="dr-card">
-        {prev && <p className="dr-prev">{prev}</p>}
-        <div className="dr-cue">
-          <span className="dr-op" aria-hidden>{OP_MARK[step.op]}</span>
-          <b>{step.op === "base" ? ladder.seed : step.cue}</b>
-          <small lang="zh-Hans">{step.op === "base" ? step.zh : step.cue_zh}</small>
-        </div>
+        {speed ? (
+          <div className="dr-zhcue">
+            <b lang="zh-Hans">{step.zh}</b>
+            {hint ? (
+              <span className="dr-hinted">
+                <i aria-hidden>{OP_MARK[step.op]}</i>
+                {step.op === "base" ? ladder.seed : step.cue}
+              </span>
+            ) : (
+              !result && !reveal && (
+                <button className="dr-hint" onClick={() => setHint(true)}>
+                  ヒント
+                </button>
+              )
+            )}
+          </div>
+        ) : (
+          <>
+            {prev && <p className="dr-prev">{prev}</p>}
+            <div className="dr-cue">
+              <span className="dr-op" aria-hidden>{OP_MARK[step.op]}</span>
+              <b>{step.op === "base" ? ladder.seed : step.cue}</b>
+              <small lang="zh-Hans">{step.op === "base" ? step.zh : step.cue_zh}</small>
+            </div>
+          </>
+        )}
         {speed && !result && <div className="dr-clock" key={`${pos}-${queue.length}`} style={{ animationDuration: `${fastMs(step.ja, tierOf(ladder))}ms` }} aria-hidden />}
       </section>
 
@@ -542,7 +596,7 @@ export default function Drill() {
               <span className="dr-new">{changed}</span>
               {same2}
             </p>
-            <p className="dr-zh" lang="zh-Hans">{step.zh}</p>
+            {!speed && <p className="dr-zh" lang="zh-Hans">{step.zh}</p>}
           </>
         ) : result ? (
           <>
@@ -566,7 +620,7 @@ export default function Drill() {
               <span className="dr-new">{changed}</span>
               {same2}
             </p>
-            <p className="dr-zh" lang="zh-Hans">{step.zh}</p>
+            {!speed && <p className="dr-zh" lang="zh-Hans">{step.zh}</p>}
             {result.heard && result.kind !== "right" && <p className="dr-heard">{result.heard}</p>}
           </>
         ) : (

@@ -3,28 +3,75 @@
 import { bare, closeness, type Kind } from "./fx";
 import type { SttResult } from "./recorder";
 import { TIERS, seedKey, tierOf, type DrillStep, type Ladder } from "@/lib/drill-model";
-import { PATH_ITEMS } from "@/content/drill-path";
+import { PATH_ITEMS, type PathItem } from "@/content/drill-path";
 import { dayKey } from "@/lib/progress-model";
 
 // 型ドリル on the phone: the ladder asked for, what was said judged at once (no AI wait), and the words
 // practised kept with how fast they came by the end.
 
-export async function loadLadder(seed: string, fresh = false, tier = 1): Promise<Ladder> {
-  const res = await fetch("/api/kata", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seed, fresh, tier }) });
+async function fetchLadder(seed: string, fresh: boolean, tier: number): Promise<Ladder> {
+  const ask = () => fetch("/api/kata", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seed, fresh, tier }) });
+  // The connection cut (screen locked while it was being made): the server kept the ladder, so asking
+  // once more gets it at once.
+  const res = await ask().catch(() => new Promise<Response>((ok) => setTimeout(ok, 1500)).then(ask)).catch(() => null);
+  if (!res) throw new Error("连不上，再试一次");
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error ?? "出题失败");
   return data as Ladder;
 }
+
+// Ladders asked for (or made ahead) in this visit, so a tap while one is still on its way waits for
+// that one instead of making a second. 新しい文 (fresh) always asks anew.
+const asked = new Map<string, Promise<Ladder>>();
+
+export function loadLadder(seed: string, fresh = false, tier = 1): Promise<Ladder> {
+  const k = `${seedKey(seed)}@${tier}`;
+  const had = asked.get(k);
+  if (had && !fresh) return had;
+  // A 新しい文 replaces the kept ladder, here too: the next plain open gets the new one.
+  const p = fetchLadder(seed, fresh, tier);
+  asked.set(k, p);
+  p.catch(() => asked.get(k) === p && asked.delete(k));
+  return p;
+}
+
+// Made ahead while the learner looks at the done screen: the next tap starts at once.
+export const prefetchLadder = (seed: string, tier = 1) => void loadLadder(seed, false, tier).catch(() => {});
 
 // Hiragana only, for comparing readings: katakana folded, punctuation and spaces gone.
 const hira = (s: string) => bare(s.normalize("NFKC")).replace(/[ァ-ヶ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0x60));
 
 const near = (said: string, s: DrillStep) => Math.max(closeness(said, s.ja), s.kana ? closeness(hira(said), hira(s.kana)) : 0);
 
+const KANA = /^[ぁ-ゖァ-ヶー]+$/;
+
+// The one place this step changes, said as asked: 会社に for 会社で is 90% the same sentence but it is
+// exactly the part being practised. Kana changes (particles, endings, ない) are checked by their kana
+// with the kana right next to them; a change with kanji in it by its letters or its reading, and only
+// counted missed when what was said still has the old words.
+function changeSaid(said: string, step: DrillStep, prev: DrillStep) {
+  const [a, mid, b] = diff(bare(prev.ja), bare(step.ja));
+  if (!mid || mid === bare(step.ja)) return true;
+  const s = bare(said.normalize("NFKC"));
+  const h = hira(said);
+  if (KANA.test(mid)) {
+    const l = KANA.test(a.slice(-1)) ? a.slice(-1) : "";
+    const r = KANA.test(b.slice(0, 1)) ? b.slice(0, 1) : "";
+    const want = hira(l + mid + r);
+    return s.includes(l + mid + r) || h.includes(want);
+  }
+  if (s.includes(mid)) return true;
+  const [, kmid] = diff(hira(prev.kana), hira(step.kana));
+  if (kmid && h.includes(kmid)) return true;
+  const [, old] = diff(bare(step.ja), bare(prev.ja));
+  return !(old && s.includes(old));
+}
+
 // Said vs the step's sentence: by the letters (kanji or kana, whichever the recogniser wrote), and by
-// Azure's check against the sentence when the letters differ only in how they are written. Two things
+// Azure's check against the sentence when the letters differ only in how they are written. Three things
 // keep a near miss from passing as right: the kana ending must be the one asked for (食べます when
-// 食べました is wanted), and saying the step before again (the change left out) isn't the answer.
+// 食べました is wanted), the changed part must be the one asked for, and saying the step before again
+// (the change left out) isn't the answer.
 export function judge(r: SttResult, step: DrillStep, prev?: DrillStep): Kind {
   const c = near(r.text, step);
   const s = r.scores;
@@ -34,6 +81,7 @@ export function judge(r: SttResult, step: DrillStep, prev?: DrillStep): Kind {
     const end = hira(step.ja).match(/[ぁ-ゖー]{1,3}$/)?.[0] ?? "";
     if (end && !hira(r.text).endsWith(end)) kind = "close";
     else if (prev && near(r.text, prev) > c) kind = "close";
+    else if (prev && step.op !== "base" && !changeSaid(r.text, step, prev)) kind = "close";
   }
   return kind;
 }
@@ -97,7 +145,7 @@ export function readSeeds(): Seed[] {
 
 function writeSeeds(list: Seed[]) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(list.slice(0, 80)));
+    localStorage.setItem(KEY, JSON.stringify(list.slice(0, 300)));
   } catch {}
 }
 
@@ -149,11 +197,13 @@ export function saveSeed(l: Ladder, fast: number | null, at: number, typed = l.s
   writeSeeds([next, ...list.filter((s) => s !== old)]);
 }
 
-// What to practise next from the list: one fast on an earlier day and due for its second check, else the
-// first never opened, else the first not yet cleared.
-export function nextOnPath(list: Seed[]) {
+// What to practise next: anything fast on an earlier day and due for its second check (on the list or
+// typed by the learner, latest first), else the first on the list never opened, else the first not yet
+// cleared.
+export function nextOnPath(list: Seed[]): PathItem | null {
+  const due = list.find((s) => dueAgain(s));
+  if (due) return PATH_ITEMS.find((p) => findSeed([due], p.seed)) ?? { seed: due.seed, zh: due.meaning };
   return (
-    PATH_ITEMS.find((p) => dueAgain(findSeed(list, p.seed))) ??
     PATH_ITEMS.find((p) => !findSeed(list, p.seed)) ??
     PATH_ITEMS.find((p) => !cleared(findSeed(list, p.seed))) ??
     null

@@ -347,7 +347,7 @@ export function recordDrill(sec: number, ms?: number) {
     bumpStats(read(), (s) => ({
       ...s,
       drillSec: (s.drillSec ?? 0) + sec,
-      ...(ms === undefined ? {} : { drillMsSum: (s.drillMsSum ?? 0) + ms, drillMsN: (s.drillMsN ?? 0) + 1 }),
+      ...(ms === undefined ? {} : { drillZhMsSum: (s.drillZhMsSum ?? 0) + ms, drillZhMsN: (s.drillZhMsN ?? 0) + 1 }),
     })),
   );
 }

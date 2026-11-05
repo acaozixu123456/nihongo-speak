@@ -1,0 +1,27 @@
+// Checks 型ドリル's judge on the cases a one-place change gets wrong. Run: npx tsx scripts/test-drill-judge.ts
+import { judge } from "../lib/client/drill";
+import type { DrillStep } from "../lib/drill-model";
+
+const st = (ja: string, kana: string, op: DrillStep["op"] = "sub"): DrillStep => ({ lv: 1, op, cue: "", cue_zh: "", ja, kana, zh: "" });
+const cases: [string, DrillStep, DrillStep, string][] = [
+  ["会社で昼ご飯を食べます", st("会社で昼ご飯を食べます", "かいしゃでひるごはんをたべます"), st("会社に昼ご飯を持っていきます", "かいしゃにひるごはんをもっていきます"), "close"],
+  ["会社に行きます", st("会社で働きます", "かいしゃではたらきます"), st("会社に行きます", "かいしゃにいきます"), "right"],
+  ["会社で行きます", st("会社で行きます", "かいしゃでいきます"), st("会社に行きます", "かいしゃにいきます"), "close"],
+  ["家で昼ご飯を食べます", st("家で昼ご飯を食べます", "いえでひるごはんをたべます"), st("家に昼ご飯を食べます", "いえにひるごはんをたべます"), "close"],
+  ["会社で昼ご飯を食べます", st("家で昼ご飯を食べます", "いえでひるごはんをたべます"), st("会社で昼ご飯を食べます", "かいしゃでひるごはんをたべます"), "right"],
+  ["かいしゃで昼ごはんを食べます", st("家で昼ご飯を食べます", "いえでひるごはんをたべます"), st("会社で昼ご飯を食べます", "かいしゃでひるごはんをたべます"), "right"],
+  ["友達と映画を見に行きたい", st("友達と映画を見に行きたい", "ともだちとえいがをみにいきたい"), st("友達と映画を見に行きたくない", "ともだちとえいがをみにいきたくない", "form"), "close"],
+  ["友達と映画を見に行きたくない", st("友達と映画を見に行きたい", "ともだちとえいがをみにいきたい"), st("友達と映画を見に行きたくない", "ともだちとえいがをみにいきたくない", "form"), "right"],
+  ["毎朝パンを食べる", st("毎朝ご飯を食べる", "まいあさごはんをたべる"), st("毎朝パンを食べる", "まいあさぱんをたべる"), "right"],
+  ["毎朝ぱんを食べる", st("毎朝ご飯を食べる", "まいあさごはんをたべる"), st("毎朝パンを食べる", "まいあさぱんをたべる"), "right"],
+  ["毎朝ご飯を食べる", st("毎朝ご飯を食べる", "まいあさごはんをたべる"), st("毎朝パンを食べる", "まいあさぱんをたべる"), "close"],
+  ["昨日は早く寝てしまいました", st("昨日は早く寝てしまった", "きのうははやくねてしまった"), st("昨日は早く寝てしまいました", "きのうははやくねてしまいました", "form"), "right"],
+  ["駅でともだちに会いました", st("駅で先生に会いました", "えきでせんせいにあいました"), st("駅で友達に会いました", "えきでともだちにあいました"), "right"],
+];
+let bad = 0;
+for (const [said, cur, prev, want] of [...cases].map(([s, p, c, w]) => [s, c, p, w] as const)) {
+  const got = judge({ text: said, scores: { completeness: 95, accuracy: 90, fluency: 90, pron: 90 } } as never, cur, prev);
+  if (got !== want) bad++;
+  console.log(got === want ? "ok  " : "FAIL", want.padEnd(5), got.padEnd(5), said, "←", cur.ja);
+}
+process.exit(bad ? 1 : 0);

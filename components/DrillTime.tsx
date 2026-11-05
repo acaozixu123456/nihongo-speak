@@ -9,13 +9,14 @@ export const DAY_GOAL = 15 * 60; // seconds a day
 const STOPS = [1, 3, 5, 10, 20, 50, 100, 200]; // hours
 const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
 
-// Speed-round reaction time over days [from, to], in seconds, or null with none.
+// Speed-round reaction time over days [from, to], in seconds, or null with none. Only since the round is
+// said from the Chinese; the earlier, easier times aren't compared with these.
 function reaction(p: Progress, from: string, to: string) {
   let sum = 0;
   let n = 0;
   for (let d = from; d <= to; d = addDays(d, 1)) {
-    sum += p.stats[d]?.drillMsSum ?? 0;
-    n += p.stats[d]?.drillMsN ?? 0;
+    sum += p.stats[d]?.drillZhMsSum ?? 0;
+    n += p.stats[d]?.drillZhMsN ?? 0;
   }
   return n ? sum / n / 1000 : null;
 }
@@ -26,7 +27,7 @@ export function drillTotals(p: Progress) {
   let first = "";
   for (const [d, s] of Object.entries(p.stats)) {
     total += s.drillSec ?? 0;
-    if (s.drillMsN && (!first || d < first)) first = d;
+    if (s.drillZhMsN && (!first || d < first)) first = d;
   }
   const days = lastDays(7, today).map((d) => ({ d, sec: p.stats[d]?.drillSec ?? 0 }));
   const now = reaction(p, addDays(today, -6), today);
