@@ -181,6 +181,7 @@ export default function Drill() {
     setPos(0);
     setResult(null);
     setReveal(null);
+    setHint(false);
     setMode("play");
   }
 
@@ -192,6 +193,7 @@ export default function Drill() {
     setQueue(shuffle(slow.length ? slow : ladder.steps.map((_, x) => x)));
     t.runs = [];
     quietRun.current = false;
+    setHint(false);
     setPos(0);
     setResult(null);
     setMode("play");
@@ -300,6 +302,8 @@ export default function Drill() {
     if (!ladder) return;
     setResult(null);
     setReveal(null);
+    // In the same render as the next card, so its cue never shows for a frame.
+    setHint(false);
     if (pos + 1 < queue.length) {
       setPos((p) => p + 1);
       return;

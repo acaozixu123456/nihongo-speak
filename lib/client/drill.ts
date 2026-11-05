@@ -46,25 +46,23 @@ const near = (said: string, s: DrillStep) => Math.max(closeness(said, s.ja), s.k
 const KANA = /^[ぁ-ゖァ-ヶー]+$/;
 
 // The one place this step changes, said as asked: 会社に for 会社で is 90% the same sentence but it is
-// exactly the part being practised. Kana changes (particles, endings, ない) are checked by their kana
-// with the kana right next to them; a change with kanji in it by its letters or its reading, and only
-// counted missed when what was said still has the old words.
+// exactly the part being practised. Found by its letters or its reading, it was said. Not found, it
+// counts as missed only when what was said still has the old part (with the kana right next to it, so
+// 行きたい is caught when 行きたくない is wanted): the recogniser may just have written the new part
+// another way (分かります for わかります, ご飯 for ごはん).
 function changeSaid(said: string, step: DrillStep, prev: DrillStep) {
   const [a, mid, b] = diff(bare(prev.ja), bare(step.ja));
   if (!mid || mid === bare(step.ja)) return true;
   const s = bare(said.normalize("NFKC"));
   const h = hira(said);
-  if (KANA.test(mid)) {
-    const l = KANA.test(a.slice(-1)) ? a.slice(-1) : "";
-    const r = KANA.test(b.slice(0, 1)) ? b.slice(0, 1) : "";
-    const want = hira(l + mid + r);
-    return s.includes(l + mid + r) || h.includes(want);
-  }
-  if (s.includes(mid)) return true;
+  const l = KANA.test(a.slice(-1)) ? a.slice(-1) : "";
+  const r = KANA.test(b.slice(0, 1)) ? b.slice(0, 1) : "";
+  const has = (x: string) => !!x && (s.includes(x) || h.includes(hira(x)));
+  if (has(KANA.test(mid) ? l + mid + r : mid)) return true;
   const [, kmid] = diff(hira(prev.kana), hira(step.kana));
   if (kmid && h.includes(kmid)) return true;
   const [, old] = diff(bare(step.ja), bare(prev.ja));
-  return !(old && s.includes(old));
+  return !has(KANA.test(old || "あ") ? l + old + r : old);
 }
 
 // Said vs the step's sentence: by the letters (kanji or kana, whichever the recogniser wrote), and by
