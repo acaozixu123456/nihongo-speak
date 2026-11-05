@@ -10,6 +10,7 @@ import { chime, confetti, verdict, type Kind } from "@/lib/client/fx";
 import { play, stop as stopAudio, ttsUrl, unlock } from "@/lib/client/player";
 import { recordDrill, recordSpeech, useProgress, wavSeconds } from "@/lib/client/progress";
 import { transcribe } from "@/lib/client/recorder";
+import { readSilent, writeSilent } from "@/lib/client/silent";
 import DrillTime from "./DrillTime";
 import HoldButton, { type MicPhase } from "./HoldButton";
 import Info from "./Info";
@@ -53,6 +54,11 @@ export default function Drill() {
   const progress = useProgress();
   const [sess, setSess] = useState(0); // seconds this word, for the done screen
   const [mic, setMic] = useState<MicPhase>("idle");
+  // 声なし: said in the head, the answer heard, marked by the learner. reveal: the answer is shown and
+  // waits for that mark, with how soon 頭で言えた was tapped.
+  const [silent, setSilent] = useState(false);
+  const [reveal, setReveal] = useState<{ ms: number } | null>(null);
+  const quietRun = useRef(false);
 
   // Practice time: while a card or level-up is on screen, the page is in view and something happened
   // in the last 45 s. Saved every 15 s, and when leaving play or the page.
@@ -80,6 +86,13 @@ export default function Drill() {
 
   useEffect(() => {
     setSeeds(readSeeds());
+    setSilent(readSilent());
+    // Opened from 話す or 私の一言 with a word to start on.
+    const s = new URLSearchParams(location.search).get("s");
+    if (s) {
+      history.replaceState(null, "", "/drill");
+      open(s);
+    }
     return () => {
       t.card++;
       stopAudio();
@@ -126,6 +139,7 @@ export default function Drill() {
     setDone(0);
     t.runs = [];
     t.sess = 0;
+    quietRun.current = false;
     goLevel(l, 1);
   }
 
@@ -136,6 +150,7 @@ export default function Drill() {
     setQueue(k > LEVELS ? l.steps.map((_, x) => x) : levelSteps(l, k));
     setPos(0);
     setResult(null);
+    setReveal(null);
     setMode("play");
   }
 
@@ -146,6 +161,7 @@ export default function Drill() {
     setLv(SPEED);
     setQueue(slow.length ? slow : ladder.steps.map((_, x) => x));
     t.runs = [];
+    quietRun.current = false;
     setPos(0);
     setResult(null);
     setMode("play");
@@ -188,7 +204,24 @@ export default function Drill() {
     show("wrong", "", null, true);
   }
 
-  function show(kind: Kind, heard: string, ms: number | null, peeked = false) {
+  // 声なし: 頭で言えた shows the answer and plays it; the learner marks it.
+  function thought() {
+    if (!step) return;
+    t.act = Date.now();
+    setReveal({ ms: Date.now() - t.shown });
+    hear(step);
+  }
+
+  function marked(ok: boolean) {
+    if (!reveal) return;
+    quietRun.current = true;
+    const ms = reveal.ms;
+    setReveal(null);
+    show(ok ? "right" : "wrong", "", ms, false, true);
+  }
+
+  // quiet: marked by the learner after hearing it (声なし): not played again, and its time is a tap, not a voice.
+  function show(kind: Kind, heard: string, ms: number | null, peeked = false, quiet = false) {
     if (!step || !ladder) return;
     verdict(kind, peeked, false);
     setResult({ kind, heard, ms, peek: peeked });
@@ -196,7 +229,7 @@ export default function Drill() {
     if (lv === SPEED) {
       // Said again after a miss or the answer: right, but not from memory, so no time.
       const first = !t.runs.some((x) => x.i === i);
-      if (kind === "right" && first && ms !== null) recordDrill(0, scaled(ms, step.ja));
+      if (kind === "right" && first && ms !== null && !quiet) recordDrill(0, scaled(ms, step.ja));
       t.runs = [...t.runs.filter((x) => x.i !== i), { i, ok: kind === "right", ms: kind === "right" && first ? ms : null }];
     } else if (kind === "right") {
       if (!t.ok.has(i)) {
@@ -210,7 +243,7 @@ export default function Drill() {
     }
     // Right: the sentence is said once, then on by itself.
     const card = t.card;
-    const said = hear(step);
+    const said = quiet ? new Promise<void>((ok) => setTimeout(ok, 150)) : hear(step);
     // Not when the learner moved on (or said it again) while it played.
     if (kind === "right") said.then(() => card === t.card && (t.next = setTimeout(next, lv === SPEED ? 250 : 500)));
   }
@@ -220,6 +253,7 @@ export default function Drill() {
     t.card++;
     stopAudio();
     setResult(null);
+    setReveal(null);
     t.shown = Date.now();
     t.live = 0;
   }
@@ -231,6 +265,7 @@ export default function Drill() {
     stopAudio();
     if (!ladder) return;
     setResult(null);
+    setReveal(null);
     if (pos + 1 < queue.length) {
       setPos((p) => p + 1);
       return;
@@ -239,8 +274,10 @@ export default function Drill() {
       const r = t.runs;
       const fast = r.filter((x) => fastRun(ladder, x)).length;
       setLastRuns(r);
-      // A second speed round has only the slow ones: the rest were fast already.
-      saveSeed(ladder, fast + (ladder.steps.length - r.length), Date.now(), t.typed);
+      // A second speed round has only the slow ones: the rest were fast already. Said in the head
+      // (声なし), it isn't the mouth being fast: kept as practised, not toward 定着.
+      if (quietRun.current) saveSeed(ladder, null, Date.now(), t.typed);
+      else saveSeed(ladder, fast + (ladder.steps.length - r.length), Date.now(), t.typed);
       if (fast === r.length) confetti(70);
       setSeeds(readSeeds());
       setMode("done");
@@ -262,7 +299,20 @@ export default function Drill() {
     setSeeds(readSeeds());
     setMode("home");
     setResult(null);
+    setReveal(null);
   }
+
+  function toggleSilent() {
+    writeSilent(!silent);
+    setSilent(!silent);
+    setReveal(null);
+  }
+
+  const silentBtn = (
+    <button className={`hi-silent${silent ? " on" : ""}`} aria-pressed={silent} onClick={toggleSilent}>
+      {silent ? "🔇 声なし" : "🔈 声あり"}
+    </button>
+  );
 
   // ---- screens ----
 
@@ -274,7 +324,13 @@ export default function Drill() {
     return (
       <main className="dr">
         <Link href="/speak" className="back" aria-label="戻る">←</Link>
-        <h1 className="dr-title">型ドリル</h1>
+        <div className="dr-head">
+          <h1 className="dr-title">型ドリル</h1>
+          {silentBtn}
+          <Info label="声なし">
+            不能出声时用：看到提示，在脑子里把整句完整说出来（能动嘴不出声更好），点「頭で言えた」，听答案，自己判 ✓/✕。研究：在脑中提取和出声提取对记忆的帮助差不多（Smith 等 2013），但嘴的熟练只能靠出声练，所以声なし不算进「定着」和升级。
+          </Info>
+        </div>
         <DrillTime p={progress} />
         {error && <p className="error">{error}</p>}
         {loading ? (
@@ -375,8 +431,9 @@ export default function Drill() {
           <b>⚡ {fast.length}</b>
           <span>/ {lastRuns.length}</span>
           {sess > 0 && <em aria-label="練習時間">⏱ {clock(sess)}</em>}
+          {quietRun.current && <em aria-label="声なし">🔇</em>}
         </div>
-        {all && tier < TIERS && (
+        {all && tier < TIERS && !quietRun.current && (
           <div className={`dr-days${up ? " met" : ""}`} aria-label={`定着 ${days}/${DAYS_TO_CLEAR}`}>
             <span>定着</span>
             {Array.from({ length: DAYS_TO_CLEAR }, (_, k) => (
@@ -461,6 +518,7 @@ export default function Drill() {
         ) : (
           <span className="dr-combo-sp" />
         )}
+        {silentBtn}
       </div>
       <div className="dr-bar" aria-hidden>
         <i style={{ width: `${Math.min(100, (count / Math.max(1, total)) * 100)}%` }} />
@@ -477,7 +535,16 @@ export default function Drill() {
       </section>
 
       <section className={`dr-ans${result ? ` is-${result.kind}` : ""}`}>
-        {result ? (
+        {reveal && !result ? (
+          <>
+            <p className="dr-ja" onClick={() => hear(step)}>
+              {same1}
+              <span className="dr-new">{changed}</span>
+              {same2}
+            </p>
+            <p className="dr-zh" lang="zh-Hans">{step.zh}</p>
+          </>
+        ) : result ? (
           <>
             <div className="dr-mark" aria-label={result.kind === "right" ? "正解" : result.kind === "close" ? "惜しい" : "答え"}>
               {result.kind === "right" ? "✓" : result.kind === "close" ? "△" : result.peek ? "答え" : "✕"}
@@ -506,6 +573,8 @@ export default function Drill() {
           <div className={`dr-blank${busy ? "" : ` mic-${mic}`}`} aria-live="polite">
             {busy ? (
               <span className="dr-spin dark" role="img" aria-label="判定中" />
+            ) : silent ? (
+              <span className="dr-think" aria-hidden>🤫</span>
             ) : mic === "live" ? (
               <>
                 <span className="dr-wave" aria-hidden>
@@ -531,6 +600,16 @@ export default function Drill() {
           <div className="dr-btns">
             {result.kind !== "right" && <button className="dr-ghost" onClick={retry}>もう一回</button>}
             <button className="dr-go" onClick={next}>次へ</button>
+          </div>
+        ) : reveal ? (
+          <div className="dr-btns">
+            <button className="dr-ghost hi-no" onClick={() => marked(false)}>✕ 違った</button>
+            <button className="dr-go hi-yes" onClick={() => marked(true)}>✓ 言えた</button>
+          </div>
+        ) : silent ? (
+          <div className="dr-btns">
+            <button className="dr-ghost" onClick={peek}>答え</button>
+            <button className="dr-go" onClick={thought}>頭で言えた</button>
           </div>
         ) : (
           <div className="dr-btns">
