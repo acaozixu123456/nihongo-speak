@@ -1144,6 +1144,24 @@ export function newsNotes(title: string, sentences: string[]): Promise<NewsNotes
   );
 }
 
+// One article a day: of the day's NHK articles, the one this learner gets most from.
+const NewsPickSchema = z.object({ n: z.number().describe("選んだ記事の番号") });
+
+export async function newsPick(cands: { title: string; text: string }[], recent: string[]): Promise<number> {
+  const r = await haikuFirst(
+    NewsPickSchema,
+    `学習者は日本に住んでIT企業で働いている中国人（日本語 N4〜N3）。NHK のやさしい日本語のニュースを1日1本だけ、朝に2回聞き、夜にその内容を自分の言葉で3回話す。
+今日の記事の中から1本だけ選ぶ。選ぶ基準（上ほど大事）：
+1. 日本での生活や仕事で身近な話題（くらし・天気・交通・お金・健康・仕事・技術・季節の行事など）。自分の言葉で人に話しやすい内容
+2. 日常で使う語が多く、N4〜N3 の学習者が少し頑張れば分かる。固有名詞・数字・専門用語が少ない
+3. 長すぎない
+4. 最近選んだ記事と話題が重ならない`,
+    `${cands.map((c, i) => `【${i + 1}】${c.title}\n${c.text}`).join("\n\n")}${recent.length ? `\n\n最近選んだ記事：\n${recent.map((t) => `- ${t}`).join("\n")}` : ""}`,
+    500,
+  );
+  return Math.round(r.n) - 1;
+}
+
 // 一文ずつ三回話す: one NHK sentence said back from memory. Judged by meaning, from what the learner managed to
 // say: where they got stuck, and their own sentence made right (their words, their level) rather than NHK's.
 // parts: the NHK sentence cut in order, each part said or not, for the original shown small underneath.
