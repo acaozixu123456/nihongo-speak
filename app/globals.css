@@ -2358,6 +2358,40 @@ body:has(.ko) { background: #f6f0e4; }
 .dr.op-form { --op: #7a4bb0; --op-bg: #eee4f8; }
 .dr.op-add { --op: #2f8a4c; --op-bg: #e0f1e4; }
 .dr.op-speed { --op: #c48a12; --op-bg: #fbefcf; }
+.dr.op-build { --op: #137a74; --op-bg: #dcf0ee; }
+.dr.op-fix { --op: #c23b3b; --op-bg: #fbe4e2; }
+.dr.op-join { --op: #c4621a; --op-bg: #fcebd9; }
+/* 組み立て cards: tiles, a wrong sentence, pieces to join, a frame, a half sentence. On a right answer
+   (.won) the pieces fly together and fade under the answer. */
+.dr-build, .dr-fixcard, .dr-joincard, .dr-putcard, .dr-finishcard { display: grid; gap: 12px; justify-items: start; }
+.dr-build > small, .dr-fixcard > small, .dr-joincard > small, .dr-putcard > small, .dr-finishcard > small { font-size: 13px; color: var(--muted); }
+.dr-tiles { display: flex; flex-wrap: wrap; gap: 10px; }
+.dr-tile { padding: 8px 14px; transition: transform 0.4s cubic-bezier(0.3, 1.5, 0.6, 1), background 0.3s, color 0.3s; border-radius: 12px; background: var(--op-bg); border: 1.5px solid color-mix(in srgb, var(--op) 35%, transparent); color: var(--op); font-family: var(--ja); font-size: 22px; font-weight: 800; transform: rotate(var(--r, 0deg)); box-shadow: 0 3px 0 color-mix(in srgb, var(--op) 25%, transparent); animation: dr-drop 0.4s cubic-bezier(0.3, 1.5, 0.6, 1) backwards; }
+.won .dr-tile { transform: none; background: var(--ok-bg); border-color: color-mix(in srgb, var(--ok) 45%, transparent); color: var(--ok-ink); box-shadow: none; }
+.won .dr-tiles { gap: 4px; transition: gap 0.45s; }
+.dr-wrong { position: relative; margin: 0; font-family: var(--ja); font-size: 22px; font-weight: 700; color: var(--no-ink); text-decoration: underline wavy color-mix(in srgb, var(--no) 70%, transparent); text-underline-offset: 6px; transition: opacity 0.5s; }
+.won .dr-wrong { opacity: 0.35; text-decoration: line-through; text-decoration-color: var(--no); text-decoration-thickness: 2px; }
+.dr-glue { display: flex; align-items: center; gap: 10px; }
+.dr-glue b { font-family: var(--ja); font-size: 24px; font-weight: 800; color: var(--op); }
+.dr-pieces { display: grid; gap: 8px; justify-items: start; }
+.dr-piece { display: inline-block; padding: 8px 14px; border-radius: 12px; background: var(--soft); font-family: var(--ja); font-size: 19px; font-weight: 700; color: var(--text); animation: dr-in 0.35s both; transition: transform 0.45s cubic-bezier(0.5, 0, 0.3, 1), opacity 0.45s; }
+.dr-pieces { transition: gap 0.45s; }
+.won .dr-pieces { gap: 0; }
+.won .dr-piece { background: var(--ok-bg); color: var(--ok-ink); }
+.won .dr-pieces .dr-piece:first-child { border-radius: 12px 12px 0 0; }
+.won .dr-pieces .dr-piece:not(:first-child) { border-radius: 0 0 12px 12px; }
+.dr-down { font-style: normal; font-size: 18px; color: var(--op); margin-left: 18px; animation: dr-blink 1.2s infinite; }
+.dr-frame { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 14px; background: var(--op-bg); }
+.dr-frame b { font-family: var(--ja); font-size: 22px; font-weight: 800; color: var(--op); display: inline-flex; align-items: center; gap: 2px; }
+.dr-slot { display: inline-block; width: 64px; height: 30px; margin: 0 4px; border: 2px dashed var(--op); border-radius: 8px; vertical-align: middle; transition: background 0.4s; }
+.won .dr-slot { background: var(--op); }
+.won .dr-putcard > .dr-piece { background: var(--ok-bg); color: var(--ok-ink); transform: translateY(6px); }
+.op-fix .dr-new { background: var(--ok-bg); color: var(--ok-ink); }
+.op-fix .is-right .dr-new { box-shadow: inset 0 -3px 0 var(--ok); }
+.dr-half { margin: 0; font-family: var(--ja); font-size: 22px; font-weight: 800; color: var(--text); }
+.dr-caret { display: inline-block; width: 3px; height: 1.1em; margin-left: 4px; vertical-align: -0.15em; background: var(--op); animation: dr-blink 0.9s step-end infinite; }
+.won .dr-caret { animation: none; opacity: 0; }
+@keyframes dr-drop { from { transform: translateY(-14px) rotate(var(--r, 0deg)); opacity: 0; } }
 .dr .back { background: none; border: 0; padding: 0; font-size: 20px; color: var(--muted); cursor: pointer; }
 .dr-title { margin: 22px 0 18px; font-family: var(--serif); font-size: 30px; font-weight: 800; letter-spacing: 0.04em; }
 .dr-input { display: flex; gap: 8px; margin-top: 14px; padding: 6px; border-radius: 999px; background: var(--card); box-shadow: var(--shadow); border: 1.5px solid var(--line); }

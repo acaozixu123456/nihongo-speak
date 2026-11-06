@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { LEVELS, TIERS, TIER_NAME, seedKey, tierOf, type DrillOp, type DrillStep, type Ladder } from "@/lib/drill-model";
-import { DRILL_PATH, PATH_ITEMS } from "@/content/drill-path";
-import { DAYS_TO_CLEAR, cleared, diff, dueAgain, fastDays, fastMs, findSeed, judge, loadLadder, nextOnPath, prefetchLadder, once, readSeeds, saveSeed, type Seed } from "@/lib/client/drill";
+import { CHAINED, LEVELS, TIERS, TIER_NAME, seedKey, tierOf, type DrillOp, type DrillStep, type Ladder } from "@/lib/drill-model";
+import { BUILD_PATH, DRILL_PATH, PATH_ITEMS } from "@/content/drill-path";
+import { DAYS_TO_CLEAR, cleared, dueAgain, fastDays, fastMs, findSeed, judge, loadLadder, marked as splitMark, nextOnPath, prefetchLadder, once, readSeeds, saveSeed, type Seed } from "@/lib/client/drill";
 import { flowOf } from "@/lib/client/fluency";
 import { chime, confetti, verdict, type Kind } from "@/lib/client/fx";
 import { play, preload, stop as stopAudio, ttsUrl, unlock } from "@/lib/client/player";
@@ -31,7 +31,10 @@ type Run = { i: number; ok: boolean; ms: number | null };
 // Said right, from memory, and soon enough for its length.
 const fastRun = (l: Ladder, r: Run) => r.ok && r.ms !== null && r.ms <= fastMs(l.steps[r.i].ja, tierOf(l));
 
-const OP_MARK: Record<DrillOp, string> = { base: "●", sub: "⇄", form: "形", add: "＋" };
+const OP_MARK: Record<DrillOp, string> = { base: "●", sub: "⇄", form: "形", add: "＋", build: "組", fix: "直", join: "繋", put: "入", finish: "…" };
+// The level-up screen names what the next level does.
+const OP_NAME: Partial<Record<DrillOp, string>> = { build: "組み立てる", fix: "直す", join: "つなぐ", put: "入れる", finish: "最後まで" };
+const LV_NAME = ["", "", "広げる", "形を変える", "長くする"];
 
 // Mixed up, so the order gives nothing away.
 const shuffle = (xs: number[]) => {
@@ -257,7 +260,12 @@ export default function Drill() {
     if (!step || !ladder) return;
     verdict(kind, peeked, false);
     setResult({ kind, heard, ms, peek: peeked });
-    setCombo((c) => (kind === "right" ? c + 1 : 0));
+    setCombo((c) => {
+      const n = kind === "right" ? c + 1 : 0;
+      // 5, 10, 15… right in a row: a little burst.
+      if (n >= 5 && n % 5 === 0) setTimeout(() => confetti(n >= 10 ? 36 : 18), 120);
+      return n;
+    });
     let quick = false;
     if (lv === SPEED) {
       // Said again after a miss or the answer, or after the cue was looked at: right, but not from
@@ -415,7 +423,7 @@ export default function Drill() {
                 ))}
               </div>
             )}
-            {DRILL_PATH.map((stage) => (
+            {[...BUILD_PATH, ...DRILL_PATH].map((stage) => (
               <section key={stage.name} className="dr-stage">
                 <h2>
                   {stage.name}
@@ -440,11 +448,13 @@ export default function Drill() {
 
   if (mode === "up") {
     const to = lv + 1;
+    const firstOp = to <= LEVELS ? ladder.steps.find((x) => x.lv === to)?.op : undefined;
+    const name = firstOp && OP_NAME[firstOp] ? OP_NAME[firstOp] : LV_NAME[to];
     return (
       <main className="dr dr-upwrap">
         <div className="dr-up">
           <span>{to > LEVELS ? "⚡" : `Lv${to}`}</span>
-          <b>{to > LEVELS ? "スピード" : ["", "", "広げる", "形を変える", "長くする"][to]}</b>
+          <b>{to > LEVELS ? "スピード" : name}</b>
         </div>
       </main>
     );
@@ -535,12 +545,14 @@ export default function Drill() {
   if (!step) return null;
   const speed = lv === SPEED;
   const prev = i > 0 ? ladder.steps[i - 1].ja : "";
-  const [same1, changed, same2] = diff(prev, step.ja);
+  const chained = CHAINED.includes(step.op);
+  const [same1, changed, same2] = splitMark(step, prev);
+  const won = result?.kind === "right";
   const total = speed ? queue.length : ladder.steps.length;
   const count = speed ? pos + (result ? 1 : 0) : done;
 
   return (
-    <main className={`dr dr-play op-${speed ? "speed" : step.op}`}>
+    <main className={`dr dr-play op-${speed ? "speed" : step.op === "finish" ? "join" : step.op === "put" ? "form" : step.op}`}>
       <div className="dr-top">
         <button className="dr-x" aria-label="閉じる" onClick={home}>×</button>
         <div className="dr-lvs" aria-label={speed ? "スピード" : `レベル${lv}`}>
@@ -550,7 +562,7 @@ export default function Drill() {
           <i className={speed ? "n bolt" : "bolt"}>⚡</i>
         </div>
         {combo >= 2 ? (
-          <span className="dr-combo" key={combo}>{combo} 連</span>
+          <span className="dr-combo" key={combo}>{combo >= 5 ? "🔥 " : ""}{combo} 連</span>
         ) : tierOf(ladder) > 1 ? (
           <span className="dr-tier sm">{TIER_NAME[tierOf(ladder)]}</span>
         ) : (
@@ -562,7 +574,7 @@ export default function Drill() {
         <i style={{ width: `${Math.min(100, (count / Math.max(1, total)) * 100)}%` }} />
       </div>
 
-      <section className="dr-card">
+      <section className={`dr-card${won ? " won" : ""}`} key={`${lv}-${pos}`}>
         {speed ? (
           <div className="dr-zhcue">
             <b lang="zh-Hans">{step.zh}</b>
@@ -579,15 +591,17 @@ export default function Drill() {
               )
             )}
           </div>
-        ) : (
+        ) : chained ? (
           <>
-            {prev && <p className="dr-prev">{prev}</p>}
+            {prev && step.op !== "base" && <p className="dr-prev">{prev}</p>}
             <div className="dr-cue">
               <span className="dr-op" aria-hidden>{OP_MARK[step.op]}</span>
               <b>{step.op === "base" ? ladder.seed : step.cue}</b>
               <small lang="zh-Hans">{step.op === "base" ? step.zh : step.cue_zh}</small>
             </div>
           </>
+        ) : (
+          <BuildCard step={step} />
         )}
         {speed && !result && <div className="dr-clock" key={`${pos}-${queue.length}`} style={{ animationDuration: `${fastMs(step.ja, tierOf(ladder))}ms` }} aria-hidden />}
       </section>
@@ -689,6 +703,95 @@ export default function Drill() {
         )}
       </div>
     </main>
+  );
+}
+
+// A card that builds its sentence instead of changing the one before: words without their particles to
+// put together, a sentence said wrong to fix, short sentences to join, a sentence to put in a frame, or
+// the start of one to finish. On a right answer the pieces fly together (CSS .won).
+function BuildCard({ step }: { step: DrillStep }) {
+  const parts = step.parts?.length ? step.parts : [step.cue];
+  // Tiles in an order that isn't the sentence's (the model may give them in order).
+  const [tiles] = useState(() => {
+    if (step.op !== "build" || parts.length < 2) return parts;
+    for (let k = 0; k < 6; k++) {
+      const t = shuffle(parts.map((_, x) => x)).map((x) => parts[x]);
+      if (t.join() !== parts.join()) return t;
+    }
+    return [...parts].reverse();
+  });
+  const head = (
+    <span className="dr-op" aria-hidden>
+      {OP_MARK[step.op]}
+    </span>
+  );
+  if (step.op === "build")
+    return (
+      <div className="dr-build">
+        {head}
+        <div className="dr-tiles">
+          {tiles.map((w, k) => (
+            <span key={k} className="dr-tile" style={{ animationDelay: `${k * 0.07}s`, ["--r" as string]: `${((k * 37) % 7) - 3}deg` }}>
+              {w}
+            </span>
+          ))}
+        </div>
+        <small lang="zh-Hans">{step.zh}</small>
+      </div>
+    );
+  if (step.op === "fix")
+    return (
+      <div className="dr-fixcard">
+        {head}
+        <p className="dr-wrong">{parts[0]}</p>
+        <small lang="zh-Hans">{step.cue_zh}</small>
+      </div>
+    );
+  if (step.op === "join")
+    return (
+      <div className="dr-joincard">
+        <div className="dr-glue">
+          {head}
+          <b>{step.cue}</b>
+        </div>
+        <div className="dr-pieces">
+          {parts.map((p, k) => (
+            <span key={k} className="dr-piece" style={{ animationDelay: `${k * 0.1}s` }}>
+              {p}
+            </span>
+          ))}
+        </div>
+        <small lang="zh-Hans">{step.cue_zh}</small>
+      </div>
+    );
+  if (step.op === "put") {
+    const [a, ...rest] = step.cue.split(/[〜～]/);
+    const b = rest.join("〜");
+    return (
+      <div className="dr-putcard">
+        <span className="dr-piece">{parts[0]}</span>
+        <i className="dr-down" aria-hidden>↓</i>
+        <div className="dr-frame">
+          {head}
+          <b>
+            {a}
+            <span className="dr-slot" aria-label="ここに入れる" />
+            {rest.length ? b : ""}
+          </b>
+        </div>
+        <small lang="zh-Hans">{step.cue_zh}</small>
+      </div>
+    );
+  }
+  return (
+    <div className="dr-finishcard">
+      {head}
+      <p className="dr-half">
+        {parts[0]}
+        <span className="dr-caret" aria-hidden />
+      </p>
+      <small lang="zh-Hans">{step.cue_zh}</small>
+    </div>
   );
 }
 

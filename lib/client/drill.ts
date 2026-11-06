@@ -2,8 +2,8 @@
 
 import { bare, closeness, type Kind } from "./fx";
 import type { SttResult } from "./recorder";
-import { TIERS, seedKey, tierOf, type DrillStep, type Ladder } from "@/lib/drill-model";
-import { PATH_ITEMS, type PathItem } from "@/content/drill-path";
+import { CHAINED, TIERS, seedKey, tierOf, type DrillStep, type Ladder } from "@/lib/drill-model";
+import { BUILD_ITEMS, FORM_ITEMS, PATH_ITEMS, type PathItem } from "@/content/drill-path";
 import { dayKey } from "@/lib/progress-model";
 
 // 型ドリル on the phone: the ladder asked for, what was said judged at once (no AI wait), and the words
@@ -65,6 +65,15 @@ function changeSaid(said: string, step: DrillStep, prev: DrillStep) {
   return !has(KANA.test(old || "あ") ? l + old + r : old);
 }
 
+// A card that builds its sentence (組み立てる, 直す, つなぐ…): the part it practises (会議に, 作ると,
+// 遅れていて) must be in what was said, by its letters or its reading.
+function markSaid(said: string, step: DrillStep) {
+  if (!step.mark) return true;
+  const s = bare(said.normalize("NFKC"));
+  const h = hira(said);
+  return s.includes(bare(step.mark)) || h.includes(hira(step.mark)) || (!!step.mark_kana && h.includes(hira(step.mark_kana)));
+}
+
 // Said vs the step's sentence: by the letters (kanji or kana, whichever the recogniser wrote), and by
 // Azure's check against the sentence when the letters differ only in how they are written. Three things
 // keep a near miss from passing as right: the kana ending must be the one asked for (食べます when
@@ -77,9 +86,13 @@ export function judge(r: SttResult, step: DrillStep, prev?: DrillStep): Kind {
   let kind: Kind = c >= 0.85 || (sounded && c >= 0.5) ? "right" : c >= 0.6 || (!!s && s.completeness >= 70 && c >= 0.35) ? "close" : "wrong";
   if (kind === "right") {
     const end = hira(step.ja).match(/[ぁ-ゖー]{1,3}$/)?.[0] ?? "";
+    const chained = CHAINED.includes(step.op);
     if (end && !hira(r.text).endsWith(end)) kind = "close";
-    else if (prev && near(r.text, prev) > c) kind = "close";
-    else if (prev && step.op !== "base" && !changeSaid(r.text, step, prev)) kind = "close";
+    else if (chained && prev && near(r.text, prev) > c) kind = "close";
+    else if (chained && prev && step.op !== "base" && !changeSaid(r.text, step, prev)) kind = "close";
+    // The wrong sentence read out as it was shown: not fixed.
+    else if (step.op === "fix" && step.parts?.[0] && closeness(r.text, step.parts[0]) > closeness(r.text, step.ja)) kind = "close";
+    else if (!chained && !markSaid(r.text, step)) kind = "close";
   }
   return kind;
 }
@@ -196,14 +209,25 @@ export function saveSeed(l: Ladder, fast: number | null, at: number, typed = l.s
 }
 
 // What to practise next: anything fast on an earlier day and due for its second check (on the list or
-// typed by the learner, latest first), else the first on the list never opened, else the first not yet
-// cleared.
+// typed by the learner, latest first), else, taking turns between the first list and the 組み立て one
+// (a 組み立て one after anything else, a first-list one after a 組み立て one), the first never opened,
+// else the first not yet cleared.
 export function nextOnPath(list: Seed[]): PathItem | null {
   const due = list.find((s) => dueAgain(s));
   if (due) return PATH_ITEMS.find((p) => findSeed([due], p.seed)) ?? { seed: due.seed, zh: due.meaning };
-  return (
-    PATH_ITEMS.find((p) => !findSeed(list, p.seed)) ??
-    PATH_ITEMS.find((p) => !cleared(findSeed(list, p.seed))) ??
-    null
-  );
+  const first = (items: PathItem[]) => items.find((p) => !findSeed(list, p.seed)) ?? items.find((p) => !cleared(findSeed(list, p.seed)));
+  const form = first(FORM_ITEMS);
+  const build = first(BUILD_ITEMS);
+  const last = list[0];
+  const afterBuild = !!last && BUILD_ITEMS.some((p) => findSeed([last], p.seed));
+  return (afterBuild ? form ?? build : build ?? form) ?? null;
+}
+
+// The sentence split for showing what this card practised: the change from the sentence before, or the
+// part a building card is about.
+export function marked(step: DrillStep, prev = ""): [string, string, string] {
+  if (CHAINED.includes(step.op)) return diff(prev, step.ja);
+  const at = step.mark ? step.ja.indexOf(step.mark) : -1;
+  if (at < 0) return ["", step.ja, ""];
+  return [step.ja.slice(0, at), step.mark!, step.ja.slice(at + step.mark!.length)];
 }

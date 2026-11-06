@@ -25,7 +25,27 @@ const cases: [string, DrillStep, DrillStep, string][] = [
   ["サーバーで確認します", st("サーバに確認します", "さーばにかくにんします"), st("サーバで確認します", "さーばでかくにんします"), "right"],
   ["サーバーに確認します", st("サーバに確認します", "さーばにかくにんします"), st("サーバで確認します", "さーばでかくにんします"), "close"],
 ];
+// Cards that build their sentence: the part practised (mark) must be in it; a fix read out wrong as
+// shown isn't fixed.
+const b = (ja: string, kana: string, op: DrillStep["op"], mark: string, mark_kana: string, parts: string[] = []): DrillStep => ({ lv: 2, op, cue: "", cue_zh: "", ja, kana, zh: "", parts, mark, mark_kana });
+const built: [string, DrillStep, string][] = [
+  ["明日会議に参加します", b("明日、会議に参加します", "あしたかいぎにさんかします", "build", "会議に", "かいぎに"), "right"],
+  ["明日会議を参加します", b("明日、会議に参加します", "あしたかいぎにさんかします", "build", "会議に", "かいぎに"), "close"],
+  ["会議に参加しました", b("会議に参加しました", "かいぎにさんかしました", "fix", "会議に", "かいぎに", ["会議を参加しました"]), "right"],
+  ["会議を参加しました", b("会議に参加しました", "かいぎにさんかしました", "fix", "会議に", "かいぎに", ["会議を参加しました"]), "close"],
+  ["チームを作ると言っていました", b("チームを作ると言っていました", "ちーむをつくるといっていました", "fix", "作ると", "つくると", ["チームを作りたいですと言っていました"]), "right"],
+  ["チームを作りたいですと言っていました", b("チームを作ると言っていました", "ちーむをつくるといっていました", "fix", "作ると", "つくると", ["チームを作りたいですと言っていました"]), "close"],
+  ["電車が遅れていて会議に遅れそうです", b("電車が遅れていて、会議に遅れそうです", "でんしゃがおくれていてかいぎにおくれそうです", "join", "遅れていて", "おくれていて"), "right"],
+  ["電車が遅れています会議に遅れそうです", b("電車が遅れていて、会議に遅れそうです", "でんしゃがおくれていてかいぎにおくれそうです", "join", "遅れていて", "おくれていて"), "close"],
+  ["パンを使う予定です", b("パンを使う予定です", "ぱんをつかうよていです", "put", "使う予定", "つかうよてい"), "right"],
+  ["パンを使い予定です", b("パンを使う予定です", "ぱんをつかうよていです", "put", "使う予定", "つかうよてい"), "close"],
+];
 let bad = 0;
+for (const [said, cur, want] of built) {
+  const got = judge({ text: said, scores: { completeness: 95, accuracy: 90, fluency: 90, pron: 90 } } as never, cur);
+  if (got !== want) bad++;
+  console.log(got === want ? "ok  " : "FAIL", want.padEnd(5), got.padEnd(5), said, "←", cur.ja);
+}
 for (const [said, cur, prev, want] of [...cases].map(([s, p, c, w]) => [s, c, p, w] as const)) {
   const got = judge({ text: said, scores: { completeness: 95, accuracy: 90, fluency: 90, pron: 90 } } as never, cur, prev);
   if (got !== want) bad++;
