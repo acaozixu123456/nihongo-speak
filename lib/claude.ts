@@ -31,14 +31,18 @@ const ZH_RULE = `
 // …and still writes some of them in Japanese now and then. Such an answer is asked for once more, with
 // the fields named; the second answer is used only if it is better. Long writing (radio scripts,
 // scenarios) isn't asked again: it would not fit in the request's time.
+// The SDK refuses a plain request with this much room (it could outlast a quiet connection), so a large
+// one is read as a stream. The answer is the same.
+const PLAIN_MAX = 21000;
+const ask: typeof client.messages.parse = ((params: Parameters<typeof client.messages.parse>[0], options?: Parameters<typeof client.messages.parse>[1]) =>
+  params.max_tokens > PLAIN_MAX ? client.messages.stream(params, options).finalMessage() : client.messages.parse(params, options)) as unknown as typeof client.messages.parse;
 const parse: typeof client.messages.parse = (async (params: Parameters<typeof client.messages.parse>[0], options?: Parameters<typeof client.messages.parse>[1]) => {
   const system = `${params.system ?? ""}${ZH_RULE}`;
-  const first = await client.messages.parse({ ...params, system }, options);
+  const first = await ask({ ...params, system }, options);
   const bad = params.model === MODEL && params.max_tokens > 4000 ? [] : japaneseZh(first.parsed_output);
   if (!bad.length) return first;
   console.warn("Chinese fields in Japanese, asking again:", bad.join(" "));
-  const again = await client.messages
-    .parse({ ...params, system: `${system}\n前回は ${bad.join("、")} を日本語で書いてしまいました。これらは必ず中国語（簡体字）で書くこと。` }, options)
+  const again = await ask({ ...params, system: `${system}\n前回は ${bad.join("、")} を日本語で書いてしまいました。これらは必ず中国語（簡体字）で書くこと。` }, options)
     .catch(() => null);
   return again && japaneseZh(again.parsed_output).length < bad.length ? again : first;
 }) as unknown as typeof client.messages.parse;
