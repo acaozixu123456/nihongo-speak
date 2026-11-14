@@ -2594,3 +2594,30 @@ body:has(.ko) { background: #f6f0e4; }
 .dr-hint { padding: 6px 14px; border: 1.5px dashed var(--line); border-radius: 999px; background: none; color: var(--muted); font-family: var(--ja); font-size: 14px; font-weight: 700; cursor: pointer; }
 .dr-hinted { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px; background: var(--op-bg); color: var(--op); font-family: var(--ja); font-size: 17px; font-weight: 800; }
 .dr-hinted i { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--op); color: #fff; font-style: normal; font-size: 13px; }
+
+/* 型ドリル 返す: 森先生 says a line (heard, not shown; 字 shows it), answered with the word or grammar point */
+.dr.op-reply { --op: #0f7a8a; --op-bg: #d9eef2; }
+.re-who { display: flex; align-items: center; gap: 10px; }
+.re-av { flex: none; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: var(--op); color: #fff; font-family: var(--ja); font-size: 16px; font-weight: 800; }
+.re-play { flex: none; width: 46px; height: 46px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; background: var(--op-bg); color: var(--op); font-size: 17px; cursor: pointer; transition: background 0.2s, color 0.2s; }
+.re-play.on { background: var(--op); color: #fff; }
+.re-play.tap { animation: re-tap 1s ease-in-out infinite; }
+@keyframes re-tap { 50% { box-shadow: 0 0 0 8px var(--op-bg); } }
+.re-play .dr-wave { height: 20px; gap: 3px; }
+.re-play .dr-wave i { width: 4px; background: #fff; }
+.re-gap { flex: 1; }
+.re-ji { flex: none; padding: 5px 12px; border: 1.5px dashed var(--line); border-radius: 999px; background: none; color: var(--muted); font-family: var(--ja); font-size: 14px; font-weight: 700; cursor: pointer; }
+.re-ask { flex: 1; min-width: 0; margin: 0; font-family: var(--ja); font-size: 18px; font-weight: 700; line-height: 1.5; animation: dr-in 0.25s both; }
+.re-ask small { display: block; font-family: var(--sans); font-size: 13px; font-weight: 400; color: var(--muted); }
+.re-zh { display: block; margin-top: 16px; padding-top: 14px; border-top: 1.5px dashed var(--line); font-family: var(--sans); font-size: 21px; font-weight: 700; line-height: 1.5; }
+.re-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+.re-tags span { padding: 3px 11px; border-radius: 999px; background: var(--op-bg); color: var(--op); font-family: var(--ja); font-size: 14px; font-weight: 800; }
+.re-tags i { padding: 3px 11px; border-radius: 999px; background: var(--op); color: #fff; font-style: normal; font-family: var(--ja); font-size: 14px; font-weight: 800; }
+.re-listen { color: var(--op); }
+.re-said.was { font-size: 16px; font-weight: 500; color: var(--muted); cursor: default; }
+.re-better { margin-top: 6px; padding: 8px 12px; border-radius: 14px; background: var(--ok-bg); color: var(--ok-ink); }
+.is-wrong .re-said.was, .is-close .re-said.was { text-decoration: line-through; text-decoration-color: var(--no); }
+.dr-score.sub { margin-top: -4px; }
+.dr-score.sub b { font-size: 24px; }
+.dr-score.sub span { font-size: 15px; }
+@media (prefers-reduced-motion: reduce) { .re-play.tap { animation: none; } }

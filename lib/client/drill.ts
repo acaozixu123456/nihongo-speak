@@ -2,15 +2,15 @@
 
 import { bare, closeness, type Kind } from "./fx";
 import type { SttResult } from "./recorder";
-import { CHAINED, TIERS, seedKey, tierOf, type DrillStep, type Ladder } from "@/lib/drill-model";
+import { CHAINED, TIERS, replyPass, seedKey, tierOf, type DrillReply, type DrillStep, type Ladder } from "@/lib/drill-model";
 import { BUILD_ITEMS, FORM_ITEMS, PATH_ITEMS, type PathItem } from "@/content/drill-path";
 import { dayKey } from "@/lib/progress-model";
 
 // 型ドリル on the phone: the ladder asked for, what was said judged at once (no AI wait), and the words
 // practised kept with how fast they came by the end.
 
-async function fetchLadder(seed: string, fresh: boolean, tier: number): Promise<Ladder> {
-  const ask = () => fetch("/api/kata", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seed, fresh, tier }) });
+async function fetchLadder(seed: string, fresh: boolean, tier: number, replies = false): Promise<Ladder> {
+  const ask = () => fetch("/api/kata", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seed, fresh, tier, ...(replies ? { replies } : {}) }) });
   // The connection cut (screen locked while it was being made): the server kept the ladder, so asking
   // once more gets it at once.
   const res = await ask().catch(() => new Promise<Response>((ok) => setTimeout(ok, 1500)).then(ask)).catch(() => null);
@@ -32,6 +32,25 @@ export function loadLadder(seed: string, fresh = false, tier = 1): Promise<Ladde
   const p = fetchLadder(seed, fresh, tier);
   asked.set(k, p);
   p.catch(() => asked.get(k) === p && asked.delete(k));
+  return p;
+}
+
+// A ladder kept from before 返す: its rounds are written now (once; asked again only after a failure),
+// and the ladder with them is the one kept for this visit.
+const filling = new Map<string, Promise<Ladder>>();
+export function withReplies(seed: string, l: Ladder): Promise<Ladder> {
+  if (l.replies?.length) return Promise.resolve(l);
+  const tier = tierOf(l);
+  const k = `${seedKey(seed)}@${tier}#${l.made}`;
+  const had = filling.get(k);
+  if (had) return had;
+  const p = fetchLadder(seed, false, tier, true).then((got) => {
+    if (!got.replies?.length) throw new Error("出题失败");
+    asked.set(`${seedKey(seed)}@${tier}`, Promise.resolve(got));
+    return got;
+  });
+  filling.set(k, p);
+  p.catch(() => filling.get(k) === p && filling.delete(k));
   return p;
 }
 
@@ -97,6 +116,37 @@ export function judge(r: SttResult, step: DrillStep, prev?: DrillStep): Kind {
   return kind;
 }
 
+// ---- 返す ----
+
+// An answer given in Chinese is judged like a card that builds its sentence: the letters, the ending,
+// and the word or grammar point (mark) in it.
+export const replyStep = (r: DrillReply): DrillStep => ({ lv: 0, op: "finish", cue: "", cue_zh: "", ja: r.ja, kana: r.kana, zh: r.zh, mark: r.mark, mark_kana: r.mark_kana });
+
+// A question about the learner: 森先生 decides (the word or grammar point used, the sentence finished).
+export type OwnCheck = { kind: Kind; better: string; fix_zh: string };
+export async function checkOwn(seed: string, r: DrillReply, said: string): Promise<OwnCheck> {
+  try {
+    const res = await fetch("/api/kata/reply", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seed, ask: r.ask, said, ja: r.ja }) });
+    const d = (await res.json()) as { used?: boolean; answered?: boolean; better?: string; fix_zh?: string };
+    if (!res.ok || typeof d.used !== "boolean") throw new Error("judge");
+    const better = (d.better ?? "").trim();
+    // Made natural without a letter changed: nothing to show.
+    const same = !better || bare(better) === bare(said);
+    return { kind: d.used && d.answered ? "right" : d.used || d.answered ? "close" : "wrong", better: same ? "" : better, fix_zh: same ? "" : (d.fix_zh ?? "").trim() };
+  } catch {
+    // No answer from her: the word or grammar point heard in it is all that can be told here.
+    const s = bare(said.normalize("NFKC"));
+    const h = hira(said);
+    const core = bare(seedKey(seed).split(/[・〜]/)[0]);
+    const used = [r.mark, r.mark_kana, core].some((x) => x.length > 1 && (s.includes(bare(x)) || h.includes(hira(x))));
+    return { kind: used ? "right" : "close", better: "", fix_zh: "" };
+  }
+}
+
+// From the end of her line to the first sound of the answer: the ladder's pace, and a little more to
+// think of something true to say.
+export const replyFastMs = (r: DrillReply, tier = 1) => fastMs(r.ja, tier) + (r.own ? 1500 : 0);
+
 // What changed from the step before: [same start, changed, same end].
 export function diff(prev: string, cur: string): [string, string, string] {
   if (!prev) return ["", cur, ""];
@@ -120,7 +170,9 @@ export const fastMs = (ja: string, tier = 1) => Math.round((2000 + 60 * ja.lengt
 // Per word or grammar point: the highest tier opened (升级), and for each tier its ladder, the best
 // number said fast in a speed round on it (a new ladder starts over), and the days a whole speed round
 // at this tier came fast (any of its ladders).
-export type TierRun = { fast: number; total: number; made: number; days?: string[] };
+// re: 返す rounds played on this ladder (the next one takes the other round). byRe: a day here was earned
+// in 返す, so the tier clears on its days alone (see cleared).
+export type TierRun = { fast: number; total: number; made: number; days?: string[]; re?: number; byRe?: boolean };
 export type Seed = { seed: string; meaning: string; tier: number; tiers: Record<number, TierRun>; plays: number; last: number };
 const KEY = "nihongo-speak:drill-seeds";
 
@@ -168,13 +220,16 @@ export const once = (s: Seed | undefined, tier = s?.tier ?? 1) => {
   return !!r && r.total > 0 && r.fast >= r.total;
 };
 
-// Days a whole speed round at this tier has to come fast before 升级: on one day it can still be
-// short-term memory; on a second, separate day it has stuck (successive relearning).
+// Days it takes before 升级: on one day it can still be short-term memory; on a second, separate day it
+// has stuck (successive relearning). A day is a 返す round passed: new sentences, answered on hearing
+// 森先生. For a ladder with no 返す (made before it, and none could be written) it is a whole speed
+// round said fast, as it was.
 export const DAYS_TO_CLEAR = 2;
 export const fastDays = (s: Seed | undefined, tier = s?.tier ?? 1) => s?.tiers[tier]?.days?.length ?? 0;
 
-// Fast all through on two separate days: its 升级 is open.
-export const cleared = (s: Seed | undefined, tier = s?.tier ?? 1) => once(s, tier) && fastDays(s, tier) >= DAYS_TO_CLEAR;
+const clearedRun = (r: TierRun | undefined) => !!r && (r.days?.length ?? 0) >= DAYS_TO_CLEAR && (!!r.byRe || (r.total > 0 && r.fast >= r.total));
+// Two separate days: its 升级 is open.
+export const cleared = (s: Seed | undefined, tier = s?.tier ?? 1) => clearedRun(s?.tiers[tier]);
 
 // Fast all through on an earlier day, not yet on a second: due for the check today.
 export const dueAgain = (s: Seed | undefined, today = dayKey()) => {
@@ -183,7 +238,8 @@ export const dueAgain = (s: Seed | undefined, today = dayKey()) => {
 };
 
 // After a round. fast: how many were said fast in the speed round (null: the levels only).
-export function saveSeed(l: Ladder, fast: number | null, at: number, typed = l.seed) {
+// re: a 返す round, with how many of its lines were answered right.
+export function saveSeed(l: Ladder, fast: number | null, at: number, typed = l.seed, re?: { right: number; total: number }) {
   const list = readSeeds();
   const tier = tierOf(l);
   // Kept under what was typed or tapped (a path item), so its chip finds it again.
@@ -192,21 +248,37 @@ export function saveSeed(l: Ladder, fast: number | null, at: number, typed = l.s
   const same = was?.made === l.made;
   const today = dayKey();
   const days = [...(was?.days ?? [])];
-  // This session's speed round came fast all through: today counts.
-  if (fast !== null && fast >= l.steps.length && !days.includes(today)) days.push(today);
-  const run = { fast: Math.max(same ? was!.fast : 0, fast ?? 0), total: l.steps.length, made: l.made, days: days.slice(-5) };
-  // Fast all through on two days: its 升级 opens, so the chip and the next-up card lead there.
-  const up = run.total > 0 && run.fast >= run.total && run.days.length >= DAYS_TO_CLEAR ? tier + 1 : tier;
+  // Today counts: its 返す round passed, or, on a ladder with no 返す, its speed round came fast all through.
+  const passed = re ? re.right >= replyPass(re.total) : !l.replies?.length && fast !== null && fast >= l.steps.length;
+  if (passed && !days.includes(today)) days.push(today);
+  const run: TierRun = {
+    fast: Math.max(same ? was!.fast : 0, fast ?? 0),
+    total: l.steps.length,
+    made: l.made,
+    days: days.slice(-5),
+    re: (same ? (was!.re ?? 0) : 0) + (re ? 1 : 0),
+    byRe: !!was?.byRe || (!!re && passed),
+  };
+  // Two days: its 升级 opens, so the chip and the next-up card lead there.
+  const up = clearedRun(run) ? tier + 1 : tier;
   const next: Seed = {
     seed: old?.seed ?? typed,
     meaning: l.meaning_zh,
     tier: Math.min(TIERS, Math.max(old?.tier ?? 1, up)),
     tiers: { ...(old?.tiers ?? {}), [tier]: run },
-    plays: (old?.plays ?? 0) + (fast === null ? 1 : 0),
+    plays: (old?.plays ?? 0) + (fast === null && !re ? 1 : 0),
     last: at,
   };
   writeSeeds([next, ...list.filter((s) => s !== old)]);
 }
+
+// The 返す round to play now: the one not played yet on this ladder, taking turns after that.
+export const replyRound = (l: Ladder, s: Seed | undefined): DrillReply[] | null => {
+  const n = l.replies?.length ?? 0;
+  if (!n) return null;
+  const run = s?.tiers[tierOf(l)];
+  return l.replies![(run?.made === l.made ? (run.re ?? 0) : 0) % n];
+};
 
 // What to practise next: anything fast on an earlier day and due for its second check (on the list or
 // typed by the learner, latest first), else, taking turns between the first list and the 組み立て one

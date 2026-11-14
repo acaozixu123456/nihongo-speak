@@ -352,6 +352,18 @@ export function recordDrill(sec: number, ms?: number) {
   );
 }
 
+// 型ドリル 返す, one line answered (first try): its reaction time when it was right from hearing alone, and
+// for a question about the learner whether the word or grammar point came out.
+export function recordReply(a: { ms?: number; own: boolean; ok: boolean }) {
+  write(
+    bumpStats(read(), (s) => ({
+      ...s,
+      ...(a.ms === undefined ? {} : { drillReMsSum: (s.drillReMsSum ?? 0) + a.ms, drillReMsN: (s.drillReMsN ?? 0) + 1 }),
+      ...(a.own ? { drillReOwn: (s.drillReOwn ?? 0) + 1, drillReOwnOk: (s.drillReOwnOk ?? 0) + (a.ok ? 1 : 0) } : {}),
+    })),
+  );
+}
+
 // A sentence the learner asked to hear again: kept for today, to be said out loud after work.
 export function recordStuck(line: StuckLine) {
   write(
