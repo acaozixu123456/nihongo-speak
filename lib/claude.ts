@@ -1523,7 +1523,7 @@ ${REPLY_RULES}`,
 // point came out and the sentence was finished. better: their own sentence made natural, only when it
 // needed it.
 const ReplyCheckSchema = z.object({
-  used: z.boolean().describe("入力した語・文法を使って答えたか。活用・否定・過去・普通体など形が変わっていてもよい。似た別の文法で言った場合は false"),
+  used: z.boolean().describe("入力した語・文法を正しい形で使って答えたか。活用・否定・過去・普通体や、後ろに続く形（〜たいと思います、〜たいんです など）が変わっていてもよい。その語・文法そのものの助詞や活用を間違えた場合（に参加する →「会議を参加しました」、〜たい →「勉強するたい」）と、似た別の文法で言った場合は false"),
   answered: z.boolean().describe("質問への答えになっていて意味が通じ、文を最後まで言えたか（途中で止まっていない）"),
   better: z.string().describe("学習者の発言を、内容はそのまま、学習者の語をできるだけ残して、正しく自然な日本語に直した文。入力した語・文法を使う。直す所がなければ空文字。何を言いたいのか分からないときも空文字"),
   fix_zh: z.string().describe("better で何を直したかを中国語で一言（簡体字、15字以内）。better が空なら空文字"),
