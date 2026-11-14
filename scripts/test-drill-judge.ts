@@ -1,6 +1,6 @@
 // Checks 型ドリル's judge on the cases a one-place change gets wrong. Run: npx tsx scripts/test-drill-judge.ts
-import { judge } from "../lib/client/drill";
-import type { DrillStep } from "../lib/drill-model";
+import { judge, replyStep } from "../lib/client/drill";
+import type { DrillReply, DrillStep } from "../lib/drill-model";
 
 const st = (ja: string, kana: string, op: DrillStep["op"] = "sub"): DrillStep => ({ lv: 1, op, cue: "", cue_zh: "", ja, kana, zh: "" });
 const cases: [string, DrillStep, DrillStep, string][] = [
@@ -40,6 +40,15 @@ const built: [string, DrillStep, string][] = [
   ["パンを使う予定です", b("パンを使う予定です", "ぱんをつかうよていです", "put", "使う予定", "つかうよてい"), "right"],
   ["パンを使い予定です", b("パンを使う予定です", "ぱんをつかうよていです", "put", "使う予定", "つかうよてい"), "close"],
 ];
+// 返す, an answer given in Chinese: the word or grammar point (mark) must be in it.
+const re = (ja: string, kana: string, mark: string, mark_kana: string): DrillStep => replyStep({ own: false, ask: "", ask_zh: "", zh: "", ja, kana, mark, mark_kana } as DrillReply);
+built.push(
+  ["行きたいですけど仕事があります", re("行きたいですけど、仕事があります。", "いきたいですけどしごとがあります", "行きたいです", "いきたいです"), "right"],
+  ["いきたいですけど、仕事があります。", re("行きたいですけど、仕事があります。", "いきたいですけどしごとがあります", "行きたいです", "いきたいです"), "right"],
+  ["行きますけど仕事があります", re("行きたいですけど、仕事があります。", "いきたいですけどしごとがあります", "行きたいです", "いきたいです"), "close"],
+  ["まだです見たいです", re("まだです。見たいです。", "まだですみたいです", "見たいです", "みたいです"), "right"],
+  ["はい会議を参加します", re("はい、会議に参加します。", "はいかいぎにさんかします", "会議に参加", "かいぎにさんか"), "close"],
+);
 let bad = 0;
 for (const [said, cur, want] of built) {
   const got = judge({ text: said, scores: { completeness: 95, accuracy: 90, fluency: 90, pron: 90 } } as never, cur);

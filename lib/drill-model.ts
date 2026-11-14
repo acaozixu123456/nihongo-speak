@@ -21,8 +21,18 @@ export type DrillStep = {
 };
 // A card that changes the sentence before it, so that sentence is shown above it.
 export const CHAINED: DrillOp[] = ["base", "sub", "form", "add"];
+// 返す: after the ladder, 森先生 says a line and the learner answers it with the word or grammar point,
+// in a sentence the ladder never had. own false: what to answer is given in Chinese (zh) and the answer
+// is ja. own true: about the learner themselves, any true answer (ja is one way to say it).
+// mark: the part of ja that is the word or grammar point, as it was conjugated there.
+export type DrillReply = { own: boolean; ask: string; ask_zh: string; zh: string; ja: string; kana: string; mark: string; mark_kana: string };
+// A round of 返す: half answered from the Chinese, half about the learner. One missed still passes.
+export const REPLY_GIVEN = 3;
+export const REPLY_OWN = 3;
+export const replyPass = (n: number) => Math.max(1, n - 1);
 // tier: 1 the first ladder; 2 and 3 the 升级 ones (中級, 会話) for something already said fast.
-export type Ladder = { seed: string; meaning_zh: string; made: number; tier?: number; steps: DrillStep[] };
+// replies: the 返す rounds, one for each of the two days it takes to clear the tier.
+export type Ladder = { seed: string; meaning_zh: string; made: number; tier?: number; steps: DrillStep[]; replies?: DrillReply[][] };
 
 export const LEVELS = 4;
 export const TIERS = 3;

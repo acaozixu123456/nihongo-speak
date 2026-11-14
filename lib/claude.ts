@@ -1350,7 +1350,32 @@ const LadderSchema = z.object({
     )
     .describe("16段。lv1 4段、lv2 4段、lv3 4段、lv4 4段"),
 });
-export type LadderDraft = z.infer<typeof LadderSchema>;
+
+// 返す: lines 森先生 says after the ladder, each answered with the word or grammar point in a sentence
+// the ladder never had; half with the answer given in Chinese, half about the learner themselves.
+const ReplyItem = z.object({
+  own: z.boolean().describe("false＝答える内容を中国語で渡す。true＝学習者自身のことを聞く（答えは自由）"),
+  ask: z.string().describe("森先生が学習者に言う一言（質問や声かけ）。日本語の話し言葉、1文、20字以内"),
+  ask_zh: z.string().describe("ask の中国語訳（簡体字）"),
+  zh: z.string().describe("own=false：学習者に「こう答えて」と伝える中国語（簡体字）。ja の内容を全部、同じ順で、短く自然に。own=true：空文字"),
+  ja: z.string().describe("答えの日本語。入力した語・文法を必ず含む。own=true のときは答え方の一例"),
+  kana: z.string().describe("ja の読みを全部ひらがなで（句読点なし）"),
+  mark: z.string().describe("ja の中で入力した語・文法にあたる短い部分を、活用した形のまま（行きたいです／会議に参加／それで）。ja にそのまま含まれる文字列"),
+  mark_kana: z.string().describe("mark の読みを全部ひらがなで"),
+});
+const RepliesSchema = z.object({ replies: z.array(ReplyItem).describe("12個。own=false を6個、own=true を6個") });
+const LadderWithReplies = LadderSchema.extend(RepliesSchema.shape);
+export type ReplyDraft = z.infer<typeof ReplyItem>;
+export type LadderDraft = z.infer<typeof LadderSchema> & { replies?: ReplyDraft[] };
+
+const REPLY_RULES = `【返す】はしごのあとの練習を replies に12個作る。森先生が一言言い、学習者はそれを聞いて、入力した語・文法を使ってすぐ答える。実際の会話と同じで、文字は見ない。
+- はしごの文（steps の ja）と同じ文・ほとんど同じ文は使わない。場面も語も新しくする。12個の中でも場面を重ねない。
+- own=false を6個：ask は同僚・上司・店の人・友達が実際に言いそうな短い質問や声かけ。zh に答える内容を中国語で書き、ja はその日本語（はしごの lv2〜lv3 くらいの長さ）。ask を聞いたら入力した語・文法で答えるのが自然になるようにする。できれば ask の中に同じ語・文法か近い形を入れる（明日の飲み会、行きますか。→ 行きたいですけど、仕事があります。／来週の会議、参加しますか。→ はい、参加します。）。
+- own=true を6個：学習者自身の仕事・生活・予定・好み・経験について、入力した語・文法で答えるのが自然な質問（〜たいです → 週末、何がしたいですか。／に参加する → 最近、どんな会議に参加しましたか。／〜ので → 今日は早く帰りますか。どうしてですか。）。だれでも自分のことで答えられる質問にする。下のメモの細かい出来事を知らないと答えられない質問や、はい・いいえだけで終わる質問にしない。ja は答え方の一例（N4 の語で短く）。
+- 入力がつなぐ言葉（それで、でも、例えば、だから、そのあと、結局、実は〜んです、〜て など）のときは、ask は「どうしたんですか。」「それで、どうなりましたか。」「例えば？」のように続きを促し、答えは短い二文でよい（つなぐ言葉を二文目の頭か文の間に入れる）。
+- ask は聞いて分かる易しさにする：N5〜N4 の語、20字以内、1文。固有名詞や社内の言葉は出さない。
+- 文体は丁寧体（です・ます）。会話の升级（普通体や敬語を練習するはしご）のときは、ask の相手に合わせる（同僚には普通体、上司・お客さんには敬語）。
+- mark は ja の中の、入力した語・文法にあたる部分（活用した形のまま、ja にそのまま含まれる）。kana・mark_kana は全部ひらがな。`;
 
 // The rules for each level of the ladder, by tier: 1 the first time (from two words), 2 and 3 the
 // 升级 ladders for something already said fast (longer and joined; then real talk, casual and keigo).
@@ -1448,7 +1473,7 @@ export async function drillLadder(seed: string, context: string, tier = 1, kind?
   const top = Math.min(LADDER_TOP, Math.max(1, tier));
   const rules = kind && top === 1 ? LADDER_KINDS[kind] : LADDER_TIERS[top];
   const res = await parse({
-    ...smart(9000),
+    ...smart(12000),
     system: `あなたは日本語の先生、森先生です。学習者は日本に住んでIT企業で働いている中国人で、日本語は N4〜N3。
 学習者が入力した単語や文法で、パターン・ドリル（FSI式）の「はしご」を作ります。先生が手がかりを一つ出し、学習者はすぐ文を丸ごと声に出して言います。base/sub/form/add の段は前の段の文から一か所だけ変えていくので、変えたところだけ考えればいい。build/fix/join/put/finish の段は、手がかり（parts）から文を組み立てる段です。
 
@@ -1461,9 +1486,55 @@ ${rules}
 - cue は短く、入れる語句そのもの。form の段の cue は形の名前ではなく、新しい文の動詞の終わりをそのまま書く（食べます → cue「〜ません」→ 食べません）。cue_zh は何をするかを短く、入れる語も中国語で（换成 面包、加上 和朋友一起、改成否定、改成过去）。
 - 固有名詞（会社名・人名）、社内の略語やシステム名（IF、STG など）は出さない。
 - add で「〜の」を名詞の前に重ねない（「先週の売上のエラーの詳細」のようにしない）。足すのは時・場所・相手・理由・目的など、文の別の部分。
-- kana は ja の読みを全部ひらがなで書く（カタカナ語もひらがな）。`,
+- kana は ja の読みを全部ひらがなで書く（カタカナ語もひらがな）。
+
+${REPLY_RULES}`,
     messages: [{ role: "user", content: context }],
-    output_config: { effort: "medium", format: zodOutputFormat(LadderSchema) },
+    output_config: { effort: "medium", format: zodOutputFormat(LadderWithReplies) },
+  });
+  checkStop(res.stop_reason);
+  if (!res.parsed_output) throw new Error(`AI 返回格式不对（${res.stop_reason}）`);
+  return res.parsed_output;
+}
+
+// 返す for a ladder made before it had any: the same twelve lines, written knowing the ladder's sentences.
+export async function drillReplies(seed: string, tier: number, sentences: string[], context: string): Promise<ReplyDraft[]> {
+  const res = await parse({
+    ...smart(4000),
+    system: `あなたは日本語の先生、森先生です。学習者は日本に住んでIT企業で働いている中国人で、日本語は N4〜N3。
+学習者は下の語・文法のパターン・ドリル（はしご）を練習しました${tier >= 3 ? "（会話の升级：普通体と敬語の切り替え）" : tier === 2 ? "（中級の升级：長くつながった丁寧体の文）" : ""}。
+
+入力：${seed}
+
+${REPLY_RULES}`,
+    messages: [{ role: "user", content: `はしごの文（steps の ja）：\n${sentences.map((x) => `- ${x}`).join("\n")}\n\n${context}` }],
+    output_config: { effort: "low", format: zodOutputFormat(RepliesSchema) },
+  });
+  checkStop(res.stop_reason);
+  if (!res.parsed_output) throw new Error(`AI 返回格式不对（${res.stop_reason}）`);
+  return res.parsed_output.replies;
+}
+
+// 返す, a question about the learner themselves: any true answer is right as long as the word or grammar
+// point came out and the sentence was finished. better: their own sentence made natural, only when it
+// needed it.
+const ReplyCheckSchema = z.object({
+  used: z.boolean().describe("入力した語・文法を使って答えたか。活用・否定・過去・普通体など形が変わっていてもよい。似た別の文法で言った場合は false"),
+  answered: z.boolean().describe("質問への答えになっていて意味が通じ、文を最後まで言えたか（途中で止まっていない）"),
+  better: z.string().describe("学習者の発言を、内容はそのまま、学習者の語をできるだけ残して、正しく自然な日本語に直した文。入力した語・文法を使う。直す所がなければ空文字。何を言いたいのか分からないときも空文字"),
+  fix_zh: z.string().describe("better で何を直したかを中国語で一言（簡体字、15字以内）。better が空なら空文字"),
+});
+export type ReplyCheck = z.infer<typeof ReplyCheckSchema>;
+
+export async function replyCheck(a: { seed: string; ask: string; said: string; ja: string }): Promise<ReplyCheck> {
+  const res = await parse({
+    ...smart(1500),
+    system: `${COACH}
+学習者は「${a.seed}」を練習したところです。森先生の質問を聞いて、自分の本当のことを、この語・文法を使って声に出して答えました。内容は自由で、答え方の一例と違ってよい。
+見るのは二つだけ：この語・文法が使えたか、文を最後まで言えたか。
+学習者の発言は音声認識の結果です。同音の漢字違い、ひらがなと漢字の違い、句読点、「えーと」などは間違いとして扱わない。小さな不自然さだけなら better は空文字にする（直すのは、文法・助詞・活用の間違いや、通じにくい所があるときだけ）。`,
+    messages: [{ role: "user", content: `質問：${a.ask}\n答え方の一例：${a.ja}\n学習者が言ったこと：${a.said}` }],
+    output_config: { effort: "low", format: zodOutputFormat(ReplyCheckSchema) },
   });
   checkStop(res.stop_reason);
   if (!res.parsed_output) throw new Error(`AI 返回格式不对（${res.stop_reason}）`);

@@ -48,6 +48,13 @@ export type DayStats = {
   // trend doesn't show a slowdown that isn't one.
   drillZhMsSum?: number;
   drillZhMsN?: number;
+  // 返す: from the end of 森先生's line to the first sound of a right answer (ms, scaled the same way), and
+  // of the questions about the learner, how many were asked and how many got the word or grammar point
+  // out at the first try.
+  drillReMsSum?: number;
+  drillReMsN?: number;
+  drillReOwn?: number;
+  drillReOwnOk?: number;
   stuck?: StuckLine[]; // sentences replayed in 摸鱼模式, to say out loud later
   learned?: Learned[]; // what was practised this day (练一练, review, 瞬间说, shadowing), for 今日
 };

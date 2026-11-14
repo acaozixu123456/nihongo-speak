@@ -2,15 +2,17 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { CHAINED, LEVELS, TIERS, TIER_NAME, seedKey, tierOf, type DrillOp, type DrillStep, type Ladder } from "@/lib/drill-model";
+import { ASK_VOICE } from "@/content/kokoro-patterns";
+import { CHAINED, LEVELS, TIERS, TIER_NAME, replyPass, seedKey, tierOf, type DrillOp, type DrillReply, type DrillStep, type Ladder } from "@/lib/drill-model";
 import { BUILD_PATH, DRILL_PATH, PATH_ITEMS } from "@/content/drill-path";
-import { DAYS_TO_CLEAR, cleared, dueAgain, fastDays, fastMs, findSeed, judge, loadLadder, marked as splitMark, nextOnPath, prefetchLadder, once, readSeeds, saveSeed, type Seed } from "@/lib/client/drill";
+import { DAYS_TO_CLEAR, cleared, dueAgain, fastDays, fastMs, findSeed, judge, loadLadder, marked as splitMark, nextOnPath, prefetchLadder, readSeeds, replyRound, saveSeed, withReplies, type Seed } from "@/lib/client/drill";
 import { flowOf } from "@/lib/client/fluency";
 import { chime, confetti, verdict, type Kind } from "@/lib/client/fx";
 import { play, preload, stop as stopAudio, ttsUrl, unlock } from "@/lib/client/player";
 import { recordDrill, recordSpeech, useProgress, wavSeconds } from "@/lib/client/progress";
 import { transcribe } from "@/lib/client/recorder";
 import { readSilent, writeSilent } from "@/lib/client/silent";
+import ReplyRound, { type ReplyRun } from "./DrillReply";
 import DrillTime from "./DrillTime";
 import HoldButton, { type MicPhase } from "./HoldButton";
 import Info from "./Info";
@@ -24,7 +26,7 @@ const FLUSH = 15; // seconds counted before they are saved
 const scaled = (ms: number, ja: string) => Math.round((ms * (2000 + 60 * 12)) / (2000 + 60 * ja.length));
 const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 
-type Mode = "home" | "loading" | "play" | "up" | "done";
+type Mode = "home" | "loading" | "play" | "up" | "reply" | "done";
 type Result = { kind: Kind; heard: string; ms: number | null; peek?: boolean };
 type Run = { i: number; ok: boolean; ms: number | null };
 
@@ -49,7 +51,10 @@ const shuffle = (xs: number[]) => {
 // 型ドリル: type a word or grammar point; 森先生 gives one change at a time (swap a word, change the
 // form, say more) and the whole sentence is said out loud at once, four levels from two words up. Then
 // a speed round of every sentence from its Chinese alone, mixed up, with no sentence before it to copy
-// from (the cue a tap away, and then not counted fast), again until each comes in time.
+// from (the cue a tap away, and then not counted fast), again until each comes in time. Last, 返す
+// (DrillReply.tsx): 森先生 says a line and it is answered with the word or grammar point, in sentences
+// the ladder never had. A 返す round passed is what counts as a day toward 升级; on the second day it is
+// played straight away, without the ladder first.
 export default function Drill() {
   const [mode, setMode] = useState<Mode>("home");
   const [seeds, setSeeds] = useState<Seed[]>([]);
@@ -64,7 +69,12 @@ export default function Drill() {
   const [combo, setCombo] = useState(0);
   const [done, setDone] = useState(0); // steps said right in the levels
   const [lastRuns, setLastRuns] = useState<Run[]>([]);
-  const t = useRef({ shown: 0, live: 0, again: new Set<number>(), ok: new Set<number>(), runs: [] as Run[], typed: "", card: 0, next: 0 as ReturnType<typeof setTimeout> | 0, act: 0, pend: 0, sess: 0 }).current;
+  // 返す: the round being played, how it went, and whether it was played without the ladder before it
+  // (the second day's check).
+  const [round, setRound] = useState<DrillReply[] | null>(null);
+  const [reRuns, setReRuns] = useState<ReplyRun[] | null>(null);
+  const [direct, setDirect] = useState(false);
+  const t = useRef({ shown: 0, live: 0, again: new Set<number>(), ok: new Set<number>(), runs: [] as Run[], typed: "", card: 0, next: 0 as ReturnType<typeof setTimeout> | 0, act: 0, pend: 0, sess: 0, replied: false }).current;
   const progress = useProgress();
   const [sess, setSess] = useState(0); // seconds this word, for the done screen
   const [mic, setMic] = useState<MicPhase>("idle");
@@ -79,7 +89,7 @@ export default function Drill() {
   // Practice time: while a card or level-up is on screen, the page is in view and something happened
   // in the last 45 s. Saved every 15 s, and when leaving play or the page.
   useEffect(() => {
-    if (mode !== "play" && mode !== "up") return;
+    if (mode !== "play" && mode !== "up" && mode !== "reply") return;
     const flush = () => {
       if (t.pend) recordDrill(t.pend);
       t.pend = 0;
@@ -120,7 +130,7 @@ export default function Drill() {
   // On the done screen, the ladder its main button opens is made now (升级, or the next on the list),
   // so the tap starts at once instead of a 30-90 s wait.
   useEffect(() => {
-    if (mode !== "done" || !ladder || !lastRuns.every((r) => fastRun(ladder, r))) return;
+    if (mode !== "done" || !ladder || !passedNow(ladder)) return;
     const tier = tierOf(ladder);
     if (cleared(findSeed(seeds, t.typed), tier) && tier < TIERS) return prefetchLadder(t.typed, tier + 1);
     const after = nextOnPath(seeds);
@@ -140,6 +150,11 @@ export default function Drill() {
     setHint(false);
   }, [pos, queue, mode, t]);
 
+  // Today counts toward 升级: this session's 返す round passed, or, on a ladder with none, its speed
+  // round came fast all through.
+  const passedNow = (l: Ladder) =>
+    reRuns ? reRuns.filter((x) => x.kind === "right").length >= replyPass(reRuns.length) : !l.replies?.length && lastRuns.length > 0 && lastRuns.every((r) => fastRun(l, r));
+
   // A word or grammar point at its tier: the highest opened unless one is given (升级, or 新しい文 at this one).
   async function open(seed: string, fresh = false, tier?: number) {
     const s = seed.trim();
@@ -149,11 +164,24 @@ export default function Drill() {
     setMode("loading");
     t.typed = s;
     try {
-      const l = await loadLadder(s, fresh, tier ?? findSeed(readSeeds(), s)?.tier ?? 1);
+      const rec = findSeed(readSeeds(), s);
+      let l = await loadLadder(s, fresh, tier ?? rec?.tier ?? 1);
+      // Due for its second day: 返す straight away (new sentences, nothing warmed up first). Not in 声なし,
+      // which is the ladder said in the head.
+      const due = !fresh && tier === undefined && dueAgain(rec) && !readSilent();
+      // A ladder kept from before 返す gets its rounds: waited for when they are all there is to play,
+      // else written while the ladder is practised.
+      if (due && !l.replies?.length) l = await withReplies(s, l).catch(() => l);
+      else if (!l.replies?.length) withReplies(s, l).then((got) => t.typed === s && setLadder((cur) => (cur && cur.made === got.made ? got : cur)), () => {});
       // Every sentence's voice fetched now, so a right answer is heard at once.
       preload(l.steps.map((x) => ttsUrl(x.ja, VOICE)));
       setLadder(l);
-      startLevels(l);
+      setLastRuns([]);
+      setReRuns(null);
+      t.replied = false;
+      t.sess = 0;
+      quietRun.current = false;
+      if (!(due && startReply(l, true))) startLevels(l);
     } catch (e) {
       setError(e instanceof Error ? e.message : "出题失败");
       setSeeds(readSeeds());
@@ -169,9 +197,33 @@ export default function Drill() {
     setCombo(0);
     setDone(0);
     t.runs = [];
-    t.sess = 0;
     quietRun.current = false;
     goLevel(l, 1);
+  }
+
+  // 返す on this ladder: the round not played yet. false when it has none.
+  function startReply(l: Ladder, alone: boolean) {
+    const next = replyRound(l, findSeed(readSeeds(), t.typed));
+    if (!next) return false;
+    preload(next.map((x) => ttsUrl(x.ask, ASK_VOICE)));
+    t.replied = true;
+    t.act = Date.now();
+    setRound(next);
+    setDirect(alone);
+    setResult(null);
+    setReveal(null);
+    setMode("reply");
+    return true;
+  }
+
+  function replied(runs: ReplyRun[]) {
+    if (!ladder) return;
+    const right = runs.filter((x) => x.kind === "right").length;
+    saveSeed(ladder, null, Date.now(), t.typed, { right, total: runs.length });
+    if (right >= replyPass(runs.length)) confetti(70);
+    setReRuns(runs);
+    setSeeds(readSeeds());
+    setMode("done");
   }
 
   function goLevel(l: Ladder, n: number) {
@@ -202,8 +254,16 @@ export default function Drill() {
     setMode("play");
   }
 
-  function hear(s: DrillStep) {
-    return play(ttsUrl(s.ja, VOICE)).catch(() => {});
+  const say = (ja: string) => play(ttsUrl(ja, VOICE)).catch(() => {});
+  const hear = (s: DrillStep) => say(s.ja);
+
+  // After a 返す round that didn't pass: the ladder once more, and 返す (its other round) after it.
+  function ladderAgain(l: Ladder) {
+    setReRuns(null);
+    setLastRuns([]);
+    setDirect(false);
+    t.replied = false;
+    startLevels(l);
   }
 
   async function onRecorded(wav: Blob) {
@@ -324,8 +384,15 @@ export default function Drill() {
       // (声なし), it isn't the mouth being fast: kept as practised, not toward 定着.
       if (quietRun.current) saveSeed(ladder, null, Date.now(), t.typed);
       else saveSeed(ladder, fast + (ladder.steps.length - r.length), Date.now(), t.typed);
-      if (fast === r.length) confetti(70);
       setSeeds(readSeeds());
+      // Then 返す, once a session, said aloud.
+      if (!t.replied && !quietRun.current && !silent && ladder.replies?.length) {
+        chime(true);
+        setMode("up");
+        t.next = setTimeout(() => startReply(ladder, false) || setMode("done"), 1500);
+        return;
+      }
+      if (fast === r.length) confetti(70);
       setMode("done");
       return;
     }
@@ -453,21 +520,32 @@ export default function Drill() {
     return (
       <main className="dr dr-upwrap">
         <div className="dr-up">
-          <span>{to > LEVELS ? "⚡" : `Lv${to}`}</span>
-          <b>{to > LEVELS ? "スピード" : name}</b>
+          <span>{lv === SPEED ? "返" : to > LEVELS ? "⚡" : `Lv${to}`}</span>
+          <b>{lv === SPEED ? "返す" : to > LEVELS ? "スピード" : name}</b>
         </div>
       </main>
     );
+  }
+
+  if (mode === "reply") {
+    if (!round) return null;
+    return <ReplyRound key={`${ladder.made}-${round[0]?.ask}`} ladder={ladder} round={round} onAct={() => (t.act = Date.now())} onClose={home} onDone={replied} />;
   }
 
   if (mode === "done") {
     const fast = lastRuns.filter((r) => fastRun(ladder, r));
     const all = fast.length === lastRuns.length;
     const tier = tierOf(ladder);
-    // Every sentence of this ladder fast (this round or one before it): the next tier opens.
-    const up = all && cleared(findSeed(seeds, t.typed), tier) && tier < TIERS;
+    const right = reRuns?.filter((x) => x.kind === "right").length ?? 0;
+    // Today counted (返す passed; on a ladder with none, every sentence fast).
+    const passed = passedNow(ladder);
+    // …and it was the second day: the next tier opens.
+    const up = passed && cleared(findSeed(seeds, t.typed), tier) && tier < TIERS;
     const days = Math.min(DAYS_TO_CLEAR, fastDays(findSeed(seeds, t.typed), tier));
     const after = nextOnPath(seeds);
+    // Where the main button goes once today is done: the next on the list (one never opened, or one due
+    // for its second day), not this word again.
+    const onward = after && seedKey(after.seed) !== seedKey(t.typed) && (findSeed(seeds, after.seed) === undefined || dueAgain(findSeed(seeds, after.seed)));
     return (
       <main className="dr">
         <button className="back" aria-label="戻る" onClick={home}>←</button>
@@ -475,13 +553,22 @@ export default function Drill() {
           {ladder.seed}
           {tier > 1 && <span className="dr-tier">{TIER_NAME[tier]}</span>}
         </h1>
-        <div className={`dr-score${all ? " all" : ""}`}>
-          <b>⚡ {fast.length}</b>
-          <span>/ {lastRuns.length}</span>
-          {sess > 0 && <em aria-label="練習時間">⏱ {clock(sess)}</em>}
-          {quietRun.current && <em aria-label="声なし">🔇</em>}
-        </div>
-        {all && tier < TIERS && !quietRun.current && (
+        {reRuns && (
+          <div className={`dr-score${passed ? " all" : ""}`} aria-label={`返す ${right}/${reRuns.length}`}>
+            <b>返 {right}</b>
+            <span>/ {reRuns.length}</span>
+            {sess > 0 && <em aria-label="練習時間">⏱ {clock(sess)}</em>}
+          </div>
+        )}
+        {lastRuns.length > 0 && (
+          <div className={`dr-score${all ? " all" : ""}${reRuns ? " sub" : ""}`}>
+            <b>⚡ {fast.length}</b>
+            <span>/ {lastRuns.length}</span>
+            {!reRuns && sess > 0 && <em aria-label="練習時間">⏱ {clock(sess)}</em>}
+            {quietRun.current && <em aria-label="声なし">🔇</em>}
+          </div>
+        )}
+        {passed && tier < TIERS && !quietRun.current && (
           <div className={`dr-days${up ? " met" : ""}`} aria-label={`定着 ${days}/${DAYS_TO_CLEAR}`}>
             <span>定着</span>
             {Array.from({ length: DAYS_TO_CLEAR }, (_, k) => (
@@ -489,11 +576,21 @@ export default function Drill() {
             ))}
             {!up && <b>明日 ↑{TIER_NAME[tier + 1]}</b>}
             <Info label="升级条件">
-              隔天再来一次，全部又快又对才升级。研究：同一天练到熟只是短期记忆，分开两天都能做到才算记住（Rawson &amp; Dunlosky，连续再学习）；有点难但大多能答对时学得最好。
+              「返す」过关（6 句里对 5 句）算一天，分开两天都过关才升级。「返す」是听森先生说一句、用这个型回一句，句子都是阶梯里没练过的：在新句子里用得出来才算会（de Jong &amp; Perfetti 2011）。同一天练到熟只是短期记忆，隔天还能做到才算记住（Rawson &amp; Dunlosky，连续再学习）。
             </Info>
           </div>
         )}
         <div className="dr-list">
+          {reRuns?.map((x, k) => (
+            <button key={`re${k}`} className="dr-row" onClick={() => say((x.r.own && (x.better || x.said)) || x.r.ja)}>
+              <i className={x.kind === "right" ? "ok" : x.kind === "close" ? "mid" : "no"} aria-hidden>{x.fast ? "⚡" : x.kind === "right" ? "✓" : x.kind === "close" ? "△" : "✕"}</i>
+              <span>
+                {(x.r.own && (x.better || x.said)) || x.r.ja}
+                <small>{x.r.ask}</small>
+              </span>
+              {x.ms !== null && <em>{(x.ms / 1000).toFixed(1)}s</em>}
+            </button>
+          ))}
           {lastRuns.map((r) => {
             const s = ladder.steps[r.i];
             const ok = fastRun(ladder, r);
@@ -510,12 +607,7 @@ export default function Drill() {
           })}
         </div>
         <div className="dr-foot">
-          {!all ? (
-            <>
-              <button className="dr-go" onClick={speedAgain}>⚡ もう一回</button>
-              <button className="ko-on" onClick={() => open(t.typed, true, tier)}>＋ 新しい文</button>
-            </>
-          ) : up ? (
+          {up ? (
             <>
               <button
                 className="dr-go dr-up-go"
@@ -525,10 +617,24 @@ export default function Drill() {
               </button>
               <button className="ko-on" onClick={() => open(t.typed, true, tier)}>＋ 新しい文</button>
             </>
+          ) : reRuns && !passed ? (
+            <>
+              {/* 返す not passed: the ladder when it was played without it, else the other round. */}
+              {direct ? (
+                <button className="dr-go" onClick={() => ladderAgain(ladder)}>▶ はしご</button>
+              ) : (
+                <button className="dr-go" onClick={() => startReply(ladder, false)}>返 もう一回</button>
+              )}
+              <button className="ko-on" onClick={home}>一覧</button>
+            </>
+          ) : !reRuns && !all ? (
+            <>
+              <button className="dr-go" onClick={speedAgain}>⚡ もう一回</button>
+              <button className="ko-on" onClick={() => open(t.typed, true, tier)}>＋ 新しい文</button>
+            </>
           ) : (
             <>
-              {/* Next on the list: one never opened, or one due for its second day (not this word). */}
-              {after && seedKey(after.seed) !== seedKey(t.typed) && (findSeed(seeds, after.seed) === undefined || dueAgain(findSeed(seeds, after.seed))) ? (
+              {onward ? (
                 <button className="dr-go" onClick={() => open(after.seed)}>▶ {after.seed}</button>
               ) : (
                 <button className="dr-go" onClick={() => open(t.typed, true, tier)}>＋ 新しい文</button>
@@ -800,8 +906,8 @@ function BuildCard({ step }: { step: DrillStep }) {
 function Chip({ seed, rec, onOpen }: { seed: string; rec?: Seed; onOpen: () => void }) {
   const run = rec?.tiers[rec.tier];
   const full = cleared(rec);
-  // Fast all through once: one more day to go.
-  const half = !full && once(rec);
+  // One day done: one more to go.
+  const half = !full && fastDays(rec) >= 1;
   return (
     <button className={`dr-seed${rec ? " seen" : ""}${full ? " full" : ""}${half ? " half" : ""}`} onClick={onOpen}>
       <b>{seed}</b>
