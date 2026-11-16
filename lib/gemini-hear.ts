@@ -113,9 +113,10 @@ function hedged<T>(go: () => Promise<T>, after: number): Promise<T> {
   });
 }
 
-export function piece(clip: string, mimeType = "audio/mp3"): Promise<{ text: string; kana: string }> {
+// timeoutMs: one try's limit; hedgeMs: when a second try starts alongside a slow first one.
+export function piece(clip: string, mimeType = "audio/mp3", timeoutMs = 25000, hedgeMs = 9000): Promise<{ text: string; kana: string }> {
   const parts = [{ text: PIECE }, { inlineData: { mimeType, data: clip } }];
-  return hedged(() => ask(parts, pieceSchema, 25000), 9000);
+  return hedged(() => ask(parts, pieceSchema, timeoutMs), hedgeMs);
 }
 
 const styleOf = (id: string) => {

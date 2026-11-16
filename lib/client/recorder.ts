@@ -142,6 +142,8 @@ export function wavBytes(samples: Float32Array, rate: number): ArrayBuffer {
 
 export type SttResult = {
   text: string;
+  // The reading of text in kana, when the recogniser gives one.
+  kana?: string;
   scores?: {
     pron: number;
     accuracy: number;

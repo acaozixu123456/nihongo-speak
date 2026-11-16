@@ -1,5 +1,5 @@
 import { synthesize } from "@/lib/azure";
-import { FLASH, FLASH_LITE, geminiConfigured, geminiVoice, synthesizeGemini } from "@/lib/gemini-tts";
+import { FLASH, FLASH_LITE, geminiConfigured, geminiVoice, speaksChinese, synthesizeGemini } from "@/lib/gemini-tts";
 import { synthesizeVertex, vertexConfigured } from "@/lib/vertex-tts";
 import { agreed, bothReadings } from "@/lib/reading";
 import { burst } from "@/lib/quota";
@@ -61,7 +61,7 @@ async function speak(text: string, voice: string): Promise<{ audio: BodyInit; en
   // reading it goes to Azure, which reads kanji in Japanese, rather than to Gemini as it is.
   let gemini = geminiVoice(voice);
   let said = text;
-  if (gemini && KANJI_ONLY.test(text)) {
+  if (gemini && !speaksChinese(gemini) && KANJI_ONLY.test(text)) {
     const kana = await reading(text);
     if (kana) said = kana;
     else gemini = null;
