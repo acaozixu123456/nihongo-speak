@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { recognize, synthesize } from "@/lib/azure";
+import { synthesize } from "@/lib/azure";
+import { recognize } from "@/lib/stt";
 import { retellHelp, retellHelpLines, type HelpHow } from "@/lib/claude";
-import { helpFromAudio, piece, type Help } from "@/lib/gemini-hear";
+import { helpFromAudio, type Help } from "@/lib/gemini-hear";
 import { withAdded } from "@/lib/help-prompt";
 import { byChars } from "@/lib/say-match";
 import { synthesizeVertex, vertexConfigured } from "@/lib/vertex-tts";
@@ -30,7 +31,6 @@ async function voice(text: string): Promise<string> {
 }
 
 const str = (s: unknown, n: number) => (typeof s === "string" ? s.slice(0, n) : "");
-const nonEmpty = (p: Promise<string>) => p.then((t) => t.trim() || Promise.reject(new Error("nothing heard")));
 
 export async function POST(request: Request) {
   const b = (await request.json().catch(() => ({}))) as Body;
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     const ja = str(b.sentence, 300);
     let said = "";
     if (audio.length > 2000) {
-      said = await Promise.any([nonEmpty(piece(audio, "audio/wav").then((r) => r.text)), nonEmpty(recognize(wav()).then((r) => r.text))]).catch(() => "");
+      said = await recognize(wav()).then((r) => r.text).catch(() => "");
     }
     const say = clauseAfter(ja, said);
     const t1 = Date.now();
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
       audio.length > 2000
         ? await Promise.any([
             helpFromAudio(audio, ctx).then((h) => ({ ...h, by: "gemini" })),
-            recognize(wav()).then((r) => retellHelp(r.text, ctx)).then((h) => ({ ...h, by: "azure+haiku" })),
+            recognize(wav()).then((r) => retellHelp(r.text, ctx)).then((h) => ({ ...h, by: "stt+haiku" })),
           ])
         : { ...(await retellHelp("", ctx)), by: "haiku" };
   } catch (e) {

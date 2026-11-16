@@ -17,11 +17,17 @@ const VOICES: Record<string, string> = {
   Shiori: "Despina",
   // 森先生 (components/Sensei.tsx): not an Azure voice, so Azure falls back to the next one in her list.
   Mori: "Gacrux",
+  // Chinese narration (摸鱼模式, 心で答える hints). Azure's zh voices stopped with its trial on 2026-11-16.
+  Xiaoxiao: "Kore",
 };
+
+// Gemini voices that speak Chinese; every other one speaks Japanese.
+const ZH = new Set(["Kore"]);
+export const speaksChinese = (voice: string) => ZH.has(voice);
 
 // "ja-JP-Masaru:DragonHDLatestNeural|ja-JP-KeitaNeural" → "Charon". Null for voices with no match.
 export function geminiVoice(voiceId: string) {
-  const name = /^ja-JP-([A-Za-z]+)/.exec(voiceId.split("|")[0])?.[1]?.replace(/Neural$/, "");
+  const name = /^(?:ja-JP|zh-CN)-([A-Za-z]+)/.exec(voiceId.split("|")[0])?.[1]?.replace(/Neural$/, "");
   return (name && VOICES[name]) || null;
 }
 
@@ -71,7 +77,7 @@ export const request = (text: string, voice: string) => ({
   contents: [{ parts: [{ text }] }],
   generationConfig: {
     responseModalities: ["AUDIO"],
-    speechConfig: { languageCode: "ja-JP", voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
+    speechConfig: { languageCode: speaksChinese(voice) ? "cmn-CN" : "ja-JP", voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
   },
 });
 

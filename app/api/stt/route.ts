@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { recognize } from "@/lib/azure";
+import { recognize } from "@/lib/stt";
 
 export async function POST(request: Request) {
   const ref = new URL(request.url).searchParams.get("ref") ?? undefined;

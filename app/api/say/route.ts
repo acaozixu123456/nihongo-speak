@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { recognize } from "@/lib/azure";
+import { recognize } from "@/lib/stt";
 import { sayCheck, type SayCheck } from "@/lib/claude";
 import { piece } from "@/lib/gemini-hear";
 import { byChars } from "@/lib/say-match";

@@ -83,6 +83,8 @@ export type WordScore = { word: string; accuracy: number; errorType: string };
 
 export type RecognitionResult = {
   text: string;
+  // The reading of text (kana only), when the recogniser gives one (Gemini does).
+  kana?: string;
   scores?: {
     pron: number;
     accuracy: number;
@@ -147,7 +149,8 @@ const displayOf = (d: AzureResult) => (d.RecognitionStatus === "Success" ? (d.NB
 // separate plain recognition: an assessment run reports the reference's words, not what was actually said,
 // so a different answer used to look word-perfect. The plain run goes to the second (paid) resource when
 // there is one, so the free resource isn't hit twice at once.
-export async function recognize(wav: ArrayBuffer, referenceText?: string): Promise<RecognitionResult> {
+// Only used when Gemini (lib/stt.ts) can't answer: the Azure trial ended on 2026-11-16.
+export async function recognizeAzure(wav: ArrayBuffer, referenceText?: string): Promise<RecognitionResult> {
   if (!referenceText) return { text: displayOf(await stt(wav, config())) };
 
   const [plain, assessed] = await Promise.allSettled([stt(wav, hdConfig() ?? config()), stt(wav, config(), referenceText)]);

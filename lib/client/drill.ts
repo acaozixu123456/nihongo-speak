@@ -94,24 +94,27 @@ function markSaid(said: string, step: DrillStep) {
 }
 
 // Said vs the step's sentence: by the letters (kanji or kana, whichever the recogniser wrote), and by
-// Azure's check against the sentence when the letters differ only in how they are written. Three things
-// keep a near miss from passing as right: the kana ending must be the one asked for (食べます when
-// 食べました is wanted), the changed part must be the one asked for, and saying the step before again
-// (the change left out) isn't the answer.
+// the reading the recogniser gives (Gemini) or Azure's check against the sentence (until 2026-11-16)
+// when the letters differ only in how they are written. Three things keep a near miss from passing as
+// right: the kana ending must be the one asked for (食べます when 食べました is wanted), the changed
+// part must be the one asked for, and saying the step before again (the change left out) isn't the answer.
 export function judge(r: SttResult, step: DrillStep, prev?: DrillStep): Kind {
-  const c = near(r.text, step);
+  const heardKana = r.kana ? hira(r.kana) : "";
+  const nearR = (s: DrillStep) => Math.max(near(r.text, s), heardKana && s.kana ? closeness(heardKana, hira(s.kana)) : 0);
+  const c = nearR(step);
   const s = r.scores;
   const sounded = !!s && s.completeness >= 85 && s.accuracy >= 70;
   let kind: Kind = c >= 0.85 || (sounded && c >= 0.5) ? "right" : c >= 0.6 || (!!s && s.completeness >= 70 && c >= 0.35) ? "close" : "wrong";
   if (kind === "right") {
     const end = hira(step.ja).match(/[ぁ-ゖー]{1,3}$/)?.[0] ?? "";
     const chained = CHAINED.includes(step.op);
-    if (end && !hira(r.text).endsWith(end)) kind = "close";
-    else if (chained && prev && near(r.text, prev) > c) kind = "close";
+    if (end && !hira(r.text).endsWith(end) && !heardKana.endsWith(end)) kind = "close";
+    else if (chained && prev && nearR(prev) > c) kind = "close";
+    // By the letters only: a reading has no kanji, so the old part (会社で) is never "still there" in it.
     else if (chained && prev && step.op !== "base" && !changeSaid(r.text, step, prev)) kind = "close";
     // The wrong sentence read out as it was shown: not fixed.
     else if (step.op === "fix" && step.parts?.[0] && closeness(r.text, step.parts[0]) > closeness(r.text, step.ja)) kind = "close";
-    else if (!chained && !markSaid(r.text, step)) kind = "close";
+    else if (!chained && !markSaid(r.text, step) && !(r.kana && markSaid(r.kana, step))) kind = "close";
   }
   return kind;
 }
