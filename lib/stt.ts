@@ -15,12 +15,13 @@ export async function recognize(wav: ArrayBuffer, referenceText?: string): Promi
   if (!voiced(wav)) return { text: "" };
   const t0 = Date.now();
   try {
-    // A short answer comes back in a few seconds; a try that hangs gets a second one alongside it.
+    // A short answer comes back in about 2 s, but about one request in three gets none for 15 s or
+    // more: after 2.5 s without one a second try starts alongside, after 5 s a third.
     // Room for a little thinking plus the words and their reading at a fast talker's pace, and no
     // more: an answer that runs away is cut in a few seconds and tried again, not left until the timeout.
     // (400 + 50/s was too little: the thoughts alone used it up and the answer came back as "{".)
     const seconds = Math.max(0, wav.byteLength - 44) / 2 / (new DataView(wav).getUint32(24, true) || 16000);
-    const r = await piece(Buffer.from(wav).toString("base64"), "audio/wav", 15000, 4000, Math.min(4096, Math.round(1200 + seconds * 60)));
+    const r = await piece(Buffer.from(wav).toString("base64"), "audio/wav", 12000, 2500, Math.min(4096, Math.round(1200 + seconds * 60)), 3);
     const text = r.text.trim();
     return { text, ...(text && { kana: r.kana.trim() }), ms: Date.now() - t0 };
   } catch (e) {

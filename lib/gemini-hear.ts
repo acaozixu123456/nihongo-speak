@@ -38,11 +38,18 @@ type Reply = {
 // same thing is an answer that never ends (seen 2026-11-23: one 3 s clip timed out on every try while
 // others took 3 s), so a second try is given a little freedom. maxTokens: room for the thoughts and the
 // answer together; a short clip given little room fails fast instead of running to the timeout.
-type Gen = { temperature?: number; maxTokens?: number };
+// place: which Vertex location answers. A request to the global one now and then gets no answer at all
+// until its timeout (measured 2026-11-23: about one in three, whatever the recording, and two sent
+// together both hung), so a second try goes to Tokyo, where the app runs, instead of the same door.
+type Gen = { temperature?: number; maxTokens?: number; place?: string };
+// Given up (and not asked again) if the model isn't served there.
+let tokyo: string | null = "asia-northeast1";
+const urlOf = (project: string, place: string) =>
+  `https://${place === "global" ? "" : `${place}-`}aiplatform.googleapis.com/v1/projects/${project}/locations/${place}/publishers/google/models/${MODEL}:generateContent`;
 
 async function ask<T>(parts: object[], schema: object, timeoutMs: number, gen: Gen = {}): Promise<T> {
   const { project, token } = await vertexAccess();
-  const url = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/${MODEL}:generateContent`;
+  let url = urlOf(project, gen.place ?? "global");
   const send = (t: object | null) =>
     fetch(url, {
       method: "POST",
@@ -63,9 +70,16 @@ async function ask<T>(parts: object[], schema: object, timeoutMs: number, gen: G
       signal: AbortSignal.timeout(timeoutMs),
     });
   let res = await send(thinking);
+  if (gen.place && gen.place !== "global" && !res.ok && res.status !== 429) {
+    console.warn(`Gemini hear: ${gen.place} refused (${res.status}), back to global: ${(await res.text()).slice(0, 200)}`);
+    tokyo = null;
+    url = urlOf(project, "global");
+    res = await send(thinking);
+  }
   // "Resource exhausted": Vertex's shared capacity for the model is busy for a moment (seen on
   // production when a telling of nine pieces went out at once). Waiting a little is enough.
   for (let i = 0; res.status === 429 && i < 3; i++) {
+    console.warn(`Gemini hear: 429, waiting (${i + 1})`);
     await new Promise((r) => setTimeout(r, 1000 * 2 ** i + Math.random() * 500));
     res = await send(thinking);
   }
@@ -96,43 +110,59 @@ const pieceSchema = {
 const PIECE = `日本語学習者の発話の一部分の録音です。学習者の間違いを見つけるための記録なので：
 - text：聞こえた音のとおりに一字一句書く。文法や言葉の間違い（時制・活用・助詞など）、言い直し、言いかけ、「えっと」「あの」もそのまま。直したり補ったりしない。聞き取れない音は書かない。
 - 無音・雑音・息の音だけで、はっきりした日本語の声がなければ text も kana も空文字。ありそうな文を想像して書かない。
-- kana：text の読みを、ひらがな・カタカナ・「ー」だけで、ひと続きに書く。`;
+- kana：text の読みを、ひらがな・カタカナ・「ー」だけで、ひと続きに書く（句読点や空白は入れない）。助詞の「は」「へ」「を」は「わ」「え」「お」に変えず、そのまま書く。`;
 
 // Now and then a request hangs until its timeout (a telling of ten pieces failed outright twice in four
-// tries). If one hasn't answered in `after` ms a second starts alongside it and the first answer wins;
-// one that fails before the second went out is tried again straight away.
-// go is told which try it is (0, then 1).
-function hedged<T>(go: (n: number) => Promise<T>, after: number): Promise<T> {
+// tries). If none has answered `after` ms after the last one went out, another starts alongside (up to
+// `tries` in all) and the first answer wins; one that fails is replaced straight away.
+// go is told which try it is (0, 1, ...).
+function hedged<T>(go: (n: number) => Promise<T>, after: number, tries = 2): Promise<T> {
   return new Promise<T>((ok, fail) => {
+    const t0 = Date.now();
     let sent = 0;
     let failed = 0;
+    let over = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (over || sent >= tries) return;
+        console.warn(`hear: no answer after ${Date.now() - t0} ms, try ${sent + 1} alongside`);
+        start();
+      }, after);
+    };
     const start = () => {
-      go(sent++).then(
+      const n = sent++;
+      arm();
+      go(n).then(
         (v) => {
+          if (over) return;
+          over = true;
           clearTimeout(timer);
+          if (n) console.warn(`hear: try ${n + 1} answered first, ${Date.now() - t0} ms`);
           ok(v);
         },
         (e) => {
-          console.warn("hear, one try failed:", e);
+          if (over) return;
+          console.warn("hear, one try failed:", e instanceof Error ? e.message : e);
           failed++;
-          if (sent < 2) {
-            clearTimeout(timer);
-            start();
-          } else if (failed === 2) fail(e);
+          if (sent < tries) start();
+          else if (failed === sent) {
+            over = true;
+            fail(e);
+          }
         },
       );
     };
     start();
-    timer = setTimeout(() => sent < 2 && start(), after);
   });
 }
 
-// timeoutMs: one try's limit; hedgeMs: when a second try starts alongside a slow first one;
-// maxTokens: room for the answer, when the caller knows how long the clip is.
-export function piece(clip: string, mimeType = "audio/mp3", timeoutMs = 25000, hedgeMs = 9000, maxTokens?: number): Promise<{ text: string; kana: string }> {
+// timeoutMs: one try's limit; hedgeMs: when another try starts alongside slow ones; maxTokens: room for
+// the answer, when the caller knows how long the clip is; tries: how many in all.
+export function piece(clip: string, mimeType = "audio/mp3", timeoutMs = 25000, hedgeMs = 9000, maxTokens?: number, tries = 2): Promise<{ text: string; kana: string }> {
   const parts = [{ text: PIECE }, { inlineData: { mimeType, data: clip } }];
-  return hedged((n) => ask(parts, pieceSchema, timeoutMs, { temperature: n ? 0.4 : 0, maxTokens }), hedgeMs);
+  return hedged((n) => ask(parts, pieceSchema, timeoutMs, { temperature: n ? 0.4 : 0, maxTokens, place: n === 1 && tokyo ? tokyo : "global" }), hedgeMs, tries);
 }
 
 const styleOf = (id: string) => {
