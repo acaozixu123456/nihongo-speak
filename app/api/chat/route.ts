@@ -20,6 +20,8 @@ type Body = {
   todo?: number;
   // The tasks already ticked on the phone (from 0).
   done?: number[];
+  // The tasks the talk has made impossible (from 0).
+  skipped?: number[];
 };
 
 type Plan = Awaited<ReturnType<typeof scenePlan>>;
@@ -62,7 +64,8 @@ export async function POST(request: Request) {
       return NextResponse.json(await hint(scenario, body.history, { wantZh, todo, round }));
     }
     const ticked = Array.isArray(body.done) ? body.done.filter((i) => typeof i === "number").slice(0, 8) : [];
-    return NextResponse.json(await roleplayReply(scenario, body.history, round, ticked));
+    const gone = Array.isArray(body.skipped) ? body.skipped.filter((i) => typeof i === "number").slice(0, 8) : [];
+    return NextResponse.json(await roleplayReply(scenario, body.history, round, ticked, gone));
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: e instanceof Error ? e.message : "AI 出错了" }, { status: 502 });

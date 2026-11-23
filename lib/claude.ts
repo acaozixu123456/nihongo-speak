@@ -95,11 +95,13 @@ ${
 - まだ言えていないことは、学習者が自分から切り出すもの。あなたはその中身を先に口にしない：提案しない、申し出ない、「〜しましょうか」「〜のほうがよろしいですか」と聞かない。
   例：まだ「拜托提前处理一下」が残っているとき、×「もう少し早いほうがよろしいですか」 ○「ほかに何かございますか」「以上でよろしいでしょうか」。
   例：まだ「说请假的理由」が残っているとき、×「ご家族の用事ですか」 ○「そうなんだ。どうしたの？」。
+- 残っていることが「ある状況になったら言うこと」（例：「感应没反应时，请店员再帮忙确认」「想点的菜卖完了，换一个」）なら、その状況をあなたが役として起こす（「あれ、反応しませんね…」）。学習者の台詞は言わない。状況が起きないまま「何かございますか」と聞いても学習者は言えない。
+- 会話でもう決まったことと合わない話を出さない（学習者が現金で払うと言ったのに PayPay の話をする、など）。学習者の選んだことで、残っていることがもう成り立たなくなったら（現金で払うなら「感応しない」は起きない）、無理にそこへ戻さず、その番号を skip に入れて先へ進む。
 - 水を向けるときは、中身を言わない開いた一言だけ（「ほかには？」「それで？」「何かありますか」）。学習者が黙っても、代わりに言わない。
 - 学習者が言ったことをそのまま繰り返さない。あいづちは短く（「はい」「かしこまりました」「なるほど」）。復唱は数字や日時の確認が要るときだけ。
 - 質問は、まだ言えていないことへ向かうものだけにする。それと関係のない細かい確認（型番、エラー表示、担当者名など）を重ねて会話を横道にそらさない。
 - 順番は問わない。学習者が一度にいくつか言ってもよい。
-- 全部言えたら${twist ? "、そして今回の展開に学習者が答えたら（twist_done）" : ""}、そこで終わり：新しい質問はせず、役として会話を締める一言だけを言い、finished を true にする。
+- 全部言えたら（skip に入れたものは言えたものとして数える）${twist ? "、そして今回の展開に学習者が答えたら（twist_done）" : ""}、そこで終わり：新しい質問はせず、役として会話を締める一言だけを言い、finished を true にする。
 - 言えていないことが残っている間は finished にしない。ただし学習者の発話が8回に達したら、締めて finished を true にする。`
     : "- 場面の目的が自然に終わったら、会話を締めくくる一言を言う。"
 }`;
@@ -126,6 +128,9 @@ const ReplySchema = z.object({
     .describe(
       "「学習者がこの会話で言うこと」のうち、済んだものの番号（1から）。前から済んでいるものに、一番新しい発言（heard）で新しく済んだものを足す。学習者が自分の言葉で言って相手に通じたら済み。文法や言葉が少し違っていてもよい。あなたの質問への答えになっていなくても、言っていれば入れる。「確認する」「問う」という項目は、学習者がそれを質問した、またはあなたの答えを繰り返して確かめた（「木曜日の夕方ですね」など）なら済み。一つの項目に二つの中身（時間と費用など）があるときは、何回かの発言に分かれていても、両方に触れていれば済み。あなたが言った内容に「はい」と答えただけのもの、学習者がまだ触れていないものは入れない。リストが無い場面では空配列",
     ),
+  skip: z
+    .array(z.number())
+    .describe("学習者の選んだことで、もう成り立たなくなった項目の番号（1から）。ふつうは空配列。学習者がまだ言っていないだけのものは入れない"),
   twist_done: z.boolean().describe("「今回の展開」がある回だけ：あなたがその展開をもう出していて、学習者がそれに答えたら true。展開が無い回、まだ出していない、まだ答えていないなら false"),
   ja: z.string().describe("役としての日本語の返答。done に全部の番号が入って会話が終わるとき（展開がある回は twist_done も true のとき）は、質問をせず、締める一言だけ"),
   zh: z.string().describe("返答の自然な中国語訳"),
@@ -133,16 +138,19 @@ const ReplySchema = z.object({
 });
 
 // ticked: the tasks already counted as said (from 0), so the partner only has to judge the newest line.
-export async function roleplayReply(s: Talk, history: Turn[], round = 1, ticked: number[] = []) {
+// gone: the tasks the talk has made impossible (from 0); they no longer stand in the way of the end.
+export async function roleplayReply(s: Talk, history: Turn[], round = 1, ticked: number[] = [], gone: number[] = []) {
   const n = s.talk.tasks?.length ?? 0;
-  const before = [...new Set(ticked)].filter((i) => Number.isInteger(i) && i >= 0 && i < n);
-  const open = Array.from({ length: n }, (_, i) => i).filter((i) => !before.includes(i));
+  const valid = (i: number) => Number.isInteger(i) && i >= 0 && i < n;
+  const before = [...new Set(ticked)].filter(valid);
+  const out = [...new Set(gone)].filter((i) => valid(i) && !before.includes(i));
+  const open = Array.from({ length: n }, (_, i) => i).filter((i) => !before.includes(i) && !out.includes(i));
   const twist = round > 1 && !!s.talk.twist?.ja;
   // Everything was already said before this line: this reply is the goodbye.
   const said = n > 0 && !open.length;
   const state = !n
     ? ""
-    : `\n\n【いまの状態】済んだもの：${before.map((i) => i + 1).join("、") || "なし"} ／ まだ：${open.map((i) => i + 1).join("、") || "なし"}${
+    : `\n\n【いまの状態】済んだもの：${before.map((i) => i + 1).join("、") || "なし"} ／ まだ：${open.map((i) => i + 1).join("、") || "なし"}${out.length ? ` ／ もう成り立たない（触れない）：${out.map((i) => i + 1).join("、")}` : ""}${
         said ? (twist ? "\n学習者が言うことは全部済んでいる。今回の展開に学習者がもう答えていたら、この返答で会話を締める（質問しない）。" : "\n全部済んでいる。この返答で会話を締める（質問しない）。finished は true。") : ""
       }`;
   const res = await parse({
@@ -160,10 +168,11 @@ export async function roleplayReply(s: Talk, history: Turn[], round = 1, ticked:
   // said so. But a reply that asks something isn't a goodbye (seen on production: the last task ticked
   // and 「いつ頃までに準備できそうですか？」 as the closing line): the talk goes on one more line, and the
   // reply after that closes it whatever it says.
-  const all = n > 0 && done.length === n && (!twist || r.twist_done);
+  const skipped = [...new Set([...out, ...(r.skip ?? []).map((x) => Math.round(x) - 1).filter((i) => valid(i) && !done.includes(i))])].sort((a, b) => a - b);
+  const all = n > 0 && done.length + skipped.length === n && (!twist || r.twist_done);
   const asks = /[？?]/.test(r.ja) || /(か|かな|かね)。?$/.test(r.ja.trim());
   const finished = n ? (said && (!twist || r.twist_done)) || ((r.finished || all) && !asks) : r.finished;
-  return { ja: r.ja, zh: r.zh, finished, done };
+  return { ja: r.ja, zh: r.zh, finished, done, skipped };
 }
 
 // Help in two steps: the first words to get going (the rest is still the learner's to find), the whole
@@ -204,7 +213,7 @@ export async function hint(s: Talk, history: Turn[], a: { wantZh?: string; todo?
 
 // A scene written before scenes had tasks (重来一次, kept on the phone): three things to get said and
 // the second round's turn, from its role-play settings.
-const PLAN_TASKS = "学習者がこの会話で言うことを3つ、会話が進む順に。それぞれ一つの発話で言えること（例：「说昨天做了什么」「约好修理时间」）。中国語（簡体字）、12字以内、動詞で始める";
+const PLAN_TASKS = "学習者がこの会話で言うことを3つ、会話が進む順に。3つは互いに独立で、学習者が何を選んでも全部言えること（「付款方式を言う」のあとに「感応しないとき…」のように、特定の選び方や特定の出来事でしか言えないものは入れない）。それぞれ一つの発話で言えること（例：「说昨天做了什么」「约好修理时间」）。中国語（簡体字）、12字以内、動詞で始める";
 const PLAN_TWIST = {
   zh: "2回目に起きる展開を学習者に予告する一言（中国語・簡体字、10字以内）。例：「想点的菜卖完了」「课长追问期限」",
   ja: "その展開を相手役がどう入れるかの指示（日本語、1〜2文）。相手役が言うセリフの例を「」で入れる。難しすぎない、実際によくある展開にする",
