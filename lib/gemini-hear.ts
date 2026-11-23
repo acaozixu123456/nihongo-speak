@@ -27,10 +27,17 @@ let thinking: object | null = { thinkingLevel: "minimal" };
 type Reply = {
   candidates?: {
     content?: { parts?: { text?: string; thought?: boolean }[] };
+    finishReason?: string;
   }[];
 };
 
-async function ask<T>(parts: object[], schema: object, timeoutMs: number): Promise<T> {
+// temperature: 0 writes down the same thing every time, which is wanted, but for some recordings that
+// same thing is an answer that never ends (seen 2026-11-23: one 3 s clip timed out on every try while
+// others took 3 s), so a second try is given a little freedom. maxTokens: room for the answer; a short
+// clip given little room fails fast instead of running to the timeout.
+type Gen = { temperature?: number; maxTokens?: number };
+
+async function ask<T>(parts: object[], schema: object, timeoutMs: number, gen: Gen = {}): Promise<T> {
   const { project, token } = await vertexAccess();
   const url = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/${MODEL}:generateContent`;
   const send = (t: object | null) =>
@@ -43,8 +50,8 @@ async function ask<T>(parts: object[], schema: object, timeoutMs: number): Promi
       body: JSON.stringify({
         contents: [{ role: "user", parts }],
         generationConfig: {
-          temperature: 0,
-          maxOutputTokens: 4096,
+          temperature: gen.temperature ?? 0,
+          maxOutputTokens: gen.maxTokens ?? 4096,
           responseMimeType: "application/json",
           responseSchema: schema,
           ...(t && { thinkingConfig: t }),
@@ -70,7 +77,11 @@ async function ask<T>(parts: object[], schema: object, timeoutMs: number): Promi
     .filter((p) => !p.thought && p.text)
     .map((p) => p.text)
     .join("");
-  return JSON.parse(out) as T;
+  try {
+    return JSON.parse(out) as T;
+  } catch {
+    throw new Error(`Gemini hear: answer cut or not JSON (${reply.candidates?.[0]?.finishReason ?? "?"}, ${out.length} chars): ${out.slice(0, 60)} … ${out.slice(-30)}`);
+  }
 }
 
 const pieceSchema = {
@@ -87,14 +98,14 @@ const PIECE = `日本語学習者の発話の一部分の録音です。学習�
 // Now and then a request hangs until its timeout (a telling of ten pieces failed outright twice in four
 // tries). If one hasn't answered in `after` ms a second starts alongside it and the first answer wins;
 // one that fails before the second went out is tried again straight away.
-function hedged<T>(go: () => Promise<T>, after: number): Promise<T> {
+// go is told which try it is (0, then 1).
+function hedged<T>(go: (n: number) => Promise<T>, after: number): Promise<T> {
   return new Promise<T>((ok, fail) => {
     let sent = 0;
     let failed = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const start = () => {
-      sent++;
-      go().then(
+      go(sent++).then(
         (v) => {
           clearTimeout(timer);
           ok(v);
@@ -114,10 +125,11 @@ function hedged<T>(go: () => Promise<T>, after: number): Promise<T> {
   });
 }
 
-// timeoutMs: one try's limit; hedgeMs: when a second try starts alongside a slow first one.
-export function piece(clip: string, mimeType = "audio/mp3", timeoutMs = 25000, hedgeMs = 9000): Promise<{ text: string; kana: string }> {
+// timeoutMs: one try's limit; hedgeMs: when a second try starts alongside a slow first one;
+// maxTokens: room for the answer, when the caller knows how long the clip is.
+export function piece(clip: string, mimeType = "audio/mp3", timeoutMs = 25000, hedgeMs = 9000, maxTokens?: number): Promise<{ text: string; kana: string }> {
   const parts = [{ text: PIECE }, { inlineData: { mimeType, data: clip } }];
-  return hedged(() => ask(parts, pieceSchema, timeoutMs), hedgeMs);
+  return hedged((n) => ask(parts, pieceSchema, timeoutMs, { temperature: n ? 0.4 : 0, maxTokens }), hedgeMs);
 }
 
 const styleOf = (id: string) => {
