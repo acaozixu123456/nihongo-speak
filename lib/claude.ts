@@ -114,10 +114,10 @@ const ReplySchema = z.object({
   done: z
     .array(z.number())
     .describe(
-      "「学習者がこの会話で言うこと」のうち、済んだものの番号（1から）。前から済んでいるものに、一番新しい発言（heard）で新しく済んだものを足す。学習者が自分の言葉で言って相手に通じたら済み。文法や言葉が少し違っていてもよい。あなたが言った内容に「はい」と答えただけのもの、学習者がまだ触れていないものは入れない。リストが無い場面では空配列",
+      "「学習者がこの会話で言うこと」のうち、済んだものの番号（1から）。前から済んでいるものに、一番新しい発言（heard）で新しく済んだものを足す。学習者が自分の言葉で言って相手に通じたら済み。文法や言葉が少し違っていてもよい。あなたの質問への答えになっていなくても、言っていれば入れる。あなたが言った内容に「はい」と答えただけのもの、学習者がまだ触れていないものは入れない。リストが無い場面では空配列",
     ),
   twist_done: z.boolean().describe("「今回の展開」がある回だけ：あなたがその展開をもう出していて、学習者がそれに答えたら true。展開が無い回、まだ出していない、まだ答えていないなら false"),
-  ja: z.string().describe("役としての日本語の返答"),
+  ja: z.string().describe("役としての日本語の返答。done に全部の番号が入って会話が終わるとき（展開がある回は twist_done も true のとき）は、質問をせず、締める一言だけ"),
   zh: z.string().describe("返答の自然な中国語訳"),
   finished: z.boolean().describe("場面の会話が終わったら true"),
 });
@@ -127,7 +127,14 @@ export async function roleplayReply(s: Talk, history: Turn[], round = 1, ticked:
   const n = s.talk.tasks?.length ?? 0;
   const before = [...new Set(ticked)].filter((i) => Number.isInteger(i) && i >= 0 && i < n);
   const open = Array.from({ length: n }, (_, i) => i).filter((i) => !before.includes(i));
-  const state = n ? `\n\n【いまの状態】済んだもの：${before.map((i) => i + 1).join("、") || "なし"} ／ まだ：${open.map((i) => i + 1).join("、") || "なし"}` : "";
+  const twist = round > 1 && !!s.talk.twist?.ja;
+  // Everything was already said before this line: this reply is the goodbye.
+  const said = n > 0 && !open.length;
+  const state = !n
+    ? ""
+    : `\n\n【いまの状態】済んだもの：${before.map((i) => i + 1).join("、") || "なし"} ／ まだ：${open.map((i) => i + 1).join("、") || "なし"}${
+        said ? (twist ? "\n学習者が言うことは全部済んでいる。今回の展開に学習者がもう答えていたら、この返答で会話を締める（質問しない）。" : "\n全部済んでいる。この返答で会話を締める（質問しない）。finished は true。") : ""
+      }`;
   const res = await parse({
     model: MODEL,
     max_tokens: 2000,
@@ -139,10 +146,14 @@ export async function roleplayReply(s: Talk, history: Turn[], round = 1, ticked:
   if (!res.parsed_output) throw new Error("AI 返回格式不对，请重试");
   const r = res.parsed_output;
   const done = [...new Set([...before, ...r.done.map((x) => Math.round(x) - 1).filter((i) => i >= 0 && i < n)])].sort((a, b) => a - b);
-  // Everything said (and, in a later round, its new turn answered) is the end, whether or not the partner said so.
-  const twist = round > 1 && !!s.talk.twist?.ja;
+  // Everything said (and, in a later round, its new turn answered) is the end, whether or not the partner
+  // said so. But a reply that asks something isn't a goodbye (seen on production: the last task ticked
+  // and 「いつ頃までに準備できそうですか？」 as the closing line): the talk goes on one more line, and the
+  // reply after that closes it whatever it says.
   const all = n > 0 && done.length === n && (!twist || r.twist_done);
-  return { ja: r.ja, zh: r.zh, finished: r.finished || all, done };
+  const asks = /[？?]/.test(r.ja) || /(か|かな|かね)。?$/.test(r.ja.trim());
+  const finished = n ? (said && (!twist || r.twist_done)) || ((r.finished || all) && !asks) : r.finished;
+  return { ja: r.ja, zh: r.zh, finished, done };
 }
 
 // Help in two steps: the first words to get going (the rest is still the learner's to find), the whole
