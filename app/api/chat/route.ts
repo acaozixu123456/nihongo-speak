@@ -15,6 +15,8 @@ type Body = {
   round?: number;
   // The task still open that a hint should help with (its number, from 0).
   todo?: number;
+  // The tasks already ticked on the phone (from 0).
+  done?: number[];
 };
 
 type Plan = Awaited<ReturnType<typeof scenePlan>>;
@@ -46,7 +48,8 @@ export async function POST(request: Request) {
       const wantZh = typeof body.wantZh === "string" ? body.wantZh.slice(0, 200) : undefined;
       return NextResponse.json(await hint(scenario, body.history, { wantZh, todo, round }));
     }
-    return NextResponse.json(await roleplayReply(scenario, body.history, round));
+    const ticked = Array.isArray(body.done) ? body.done.filter((i) => typeof i === "number").slice(0, 8) : [];
+    return NextResponse.json(await roleplayReply(scenario, body.history, round, ticked));
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: e instanceof Error ? e.message : "AI 出错了" }, { status: 502 });

@@ -182,7 +182,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
     setHintOpen(false);
     setBusy("ai");
     try {
-      const reply = await post<Reply>("/api/chat", { scenarioId: scenario.id, talk, history: history(next), round });
+      const reply = await post<Reply>("/api/chat", { scenarioId: scenario.id, talk, history: history(next), round, done });
       if (run.current !== id) return;
       const list = [...next, { role: "assistant" as const, text: reply.ja, zh: reply.zh }];
       setMessages(list);
@@ -193,8 +193,8 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
       hear(list.length - 1, reply.ja);
       const all = tasks.length > 0 && now.length >= tasks.length;
       const turns = list.filter((m) => m.role === "user").length;
-      // First round: everything said is the end. Later rounds wait for the partner to close, since its new turn comes after.
-      if (reply.finished || turns >= MAX_TURNS || (all && (round === 1 || !twist))) finish(list, all);
+      // The server ends the round when everything is said (and, in a later round, its new turn answered).
+      if (reply.finished || turns >= MAX_TURNS) finish(list, all);
     } catch (e) {
       if (run.current === id) setError(e instanceof Error ? e.message : "AI 出错了");
     } finally {

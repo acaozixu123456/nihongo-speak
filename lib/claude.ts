@@ -89,7 +89,7 @@ ${
 進め方：
 - まだ言えていないことがあれば、学習者がそれを言いたくなる自然な一言や質問で水を向ける。学習者の代わりに言ってしまわない。
 - 順番は問わない。学習者が一度にいくつか言ってもよい。
-- 全部言えたら${twist ? "（今回の展開にも学習者が答えたら）" : ""}、新しい質問はせず、役として会話を締める一言を言い、finished を true にする。
+- 全部言えたら${twist ? "、そして今回の展開に学習者が答えたら（twist_done）" : ""}、そこで終わり：新しい質問はせず、役として会話を締める一言だけを言い、finished を true にする。
 - 言えていないことが残っている間は finished にしない。ただし学習者の発話が8回に達したら、締めて finished を true にする。`
     : "- 場面の目的が自然に終わったら、会話を締めくくる一言を言う。"
 }`;
@@ -107,38 +107,48 @@ function checkStop(stop: string | null) {
   if (stop === "refusal") throw new Error("模型拒绝了这次请求，请换个说法再试");
 }
 
-// done comes first so the partner settles what has been said before deciding what to say next.
+// heard and done come first, so the partner settles what the newest line got across before deciding
+// what to say next (asked for done alone, Haiku ticked a task a turn late, or for a bare はい).
 const ReplySchema = z.object({
+  heard: z.string().describe("学習者の一番新しい発言が相手に何を伝えたか、一言で（日本語、20字以内）。「はい」「お願いします」だけなら「返事のみ」"),
   done: z
     .array(z.number())
     .describe(
-      "「学習者がこの会話で言うこと」のうち、ここまでの会話全体で済んだものの番号（1から）。学習者が日本語で言って相手に通じたら済み。文法や言葉が少し違っていてもよい。あなたが言っただけのこと、学習者がまだ触れていないことは入れない。リストが無い場面では空配列",
+      "「学習者がこの会話で言うこと」のうち、済んだものの番号（1から）。前から済んでいるものに、一番新しい発言（heard）で新しく済んだものを足す。学習者が自分の言葉で言って相手に通じたら済み。文法や言葉が少し違っていてもよい。あなたが言った内容に「はい」と答えただけのもの、学習者がまだ触れていないものは入れない。リストが無い場面では空配列",
     ),
+  twist_done: z.boolean().describe("「今回の展開」がある回だけ：あなたがその展開をもう出していて、学習者がそれに答えたら true。展開が無い回、まだ出していない、まだ答えていないなら false"),
   ja: z.string().describe("役としての日本語の返答"),
   zh: z.string().describe("返答の自然な中国語訳"),
   finished: z.boolean().describe("場面の会話が終わったら true"),
 });
 
-export async function roleplayReply(s: Talk, history: Turn[], round = 1) {
+// ticked: the tasks already counted as said (from 0), so the partner only has to judge the newest line.
+export async function roleplayReply(s: Talk, history: Turn[], round = 1, ticked: number[] = []) {
+  const n = s.talk.tasks?.length ?? 0;
+  const before = [...new Set(ticked)].filter((i) => Number.isInteger(i) && i >= 0 && i < n);
+  const open = Array.from({ length: n }, (_, i) => i).filter((i) => !before.includes(i));
+  const state = n ? `\n\n【いまの状態】済んだもの：${before.map((i) => i + 1).join("、") || "なし"} ／ まだ：${open.map((i) => i + 1).join("、") || "なし"}` : "";
   const res = await parse({
     model: MODEL,
     max_tokens: 2000,
-    system: roleplaySystem(s, round),
+    system: roleplaySystem(s, round) + state,
     messages: toMessages(history),
     output_config: { format: zodOutputFormat(ReplySchema) },
   });
   checkStop(res.stop_reason);
   if (!res.parsed_output) throw new Error("AI 返回格式不对，请重试");
   const r = res.parsed_output;
-  const n = s.talk.tasks?.length ?? 0;
-  const done = [...new Set(r.done.map((x) => Math.round(x) - 1).filter((i) => i >= 0 && i < n))].sort((a, b) => a - b);
-  return { ja: r.ja, zh: r.zh, finished: r.finished, done };
+  const done = [...new Set([...before, ...r.done.map((x) => Math.round(x) - 1).filter((i) => i >= 0 && i < n)])].sort((a, b) => a - b);
+  // Everything said (and, in a later round, its new turn answered) is the end, whether or not the partner said so.
+  const twist = round > 1 && !!s.talk.twist?.ja;
+  const all = n > 0 && done.length === n && (!twist || r.twist_done);
+  return { ja: r.ja, zh: r.zh, finished: r.finished || all, done };
 }
 
 // Help in two steps: the first words to get going (the rest is still the learner's to find), the whole
 // line only when asked again. One line, short enough to say in one breath.
 const HintSchema = z.object({
-  ja: z.string().describe("学習者が次に言う日本語。1文、30字以内、N4の語彙と文法。相手の最後の発話への返事として自然なもの"),
+  ja: z.string().describe("学習者が次に言う日本語。必ず1文で30字以内（長くなるなら言う内容を減らす）。N4の語彙と文法。相手の最後の発話への返事として自然なもの"),
   start: z.string().describe("ja の出だし。ja の先頭から最初の文節の切れ目まで、一字一句同じ（2〜7字）。例：ja「昨日はログイン画面を直しました。」→「昨日は」"),
   zh: z.string().describe("ja の自然な中国語訳"),
 });
@@ -591,7 +601,8 @@ export function checkTurn(s: Talk, history: Turn[], known?: string[]) {
     TurnCheckSchema,
     `${COACH}
 学習者はロールプレイで会話をしています。学習者の最後の発言だけを見て、その場面で自然かどうかを判定してください。
-言い方の違いだけで減点しない。丁寧さが相手や場面に合っているかは見る。${knownLine(known)}`,
+言い方の違いだけで減点しない。丁寧さが相手や場面に合っているかは見る。
+better は、学習者が言った内容のまま、言い方だけを直した1文（40字以内）。学習者が言っていない情報を足さない。学習者はこの文をあとで声に出して言い直す。${knownLine(known)}`,
     `場面：${s.talk.setup}
 相手：${s.talk.aiRole}
 学習者の役：${s.talk.userRole}
