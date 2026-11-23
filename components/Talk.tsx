@@ -50,7 +50,7 @@ const store = (key: string, v: unknown) => {
   } catch {}
 };
 type Phase = "brief" | "live" | "end";
-type Reply = { ja: string; zh: string; finished: boolean; done: number[] };
+type Reply = { ja: string; zh: string; finished: boolean; done: number[]; skipped?: number[] };
 
 // The partner is told to close after 8 things said; one more and the round ends here whatever it does.
 const MAX_TURNS = 9;
@@ -82,6 +82,8 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
   const [round, setRound] = useState(1);
   const [messages, setMessages] = useState<Message[]>([]);
   const [done, setDone] = useState<number[]>([]);
+  // Tasks the talk made impossible (paid in cash, so the card reader never fails): set aside, not failed.
+  const [skipped, setSkipped] = useState<number[]>([]);
   const [notes, setNotes] = useState<Record<number, TurnCheck>>({});
   const [shownZh, setShownZh] = useState<Set<number>>(new Set());
   // The partner's lines whose words are on screen. A new line is heard first (blurred, like 聞く), and
@@ -207,7 +209,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
     if (voice) voice.then(show);
     else show();
   }
-  const todo = tasks.findIndex((_, i) => !done.includes(i));
+  const todo = tasks.findIndex((_, i) => !done.includes(i) && !skipped.includes(i));
 
   function start() {
     unlock();
@@ -221,6 +223,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
     setPhase("live");
     setMessages([first]);
     setDone([]);
+    setSkipped([]);
     setNotes({});
     setFeedback(null);
     setReviewing(false);
@@ -268,16 +271,18 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
     setHintOpen(false);
     setBusy("ai");
     try {
-      const reply = await post<Reply>("/api/chat", { scenarioId: scenario.id, talk, history: history(next), round, done, twist: nowTwist });
+      const reply = await post<Reply>("/api/chat", { scenarioId: scenario.id, talk, history: history(next), round, done, skipped, twist: nowTwist });
       if (run.current !== id) return;
       const list = [...next, { role: "assistant" as const, text: reply.ja, zh: reply.zh }];
       setMessages(list);
       const now = [...new Set([...done, ...(reply.done ?? [])])];
       if (now.length > done.length) verdict("right", false, false);
       setDone(now);
+      const gone = [...new Set([...skipped, ...(reply.skipped ?? [])])].filter((i) => !now.includes(i));
+      setSkipped(gone);
       recordTalkTurn();
       hear(list.length - 1, reply.ja);
-      const all = tasks.length > 0 && now.length >= tasks.length;
+      const all = tasks.length > 0 && now.length + gone.length >= tasks.length && now.length > 0;
       const turns = list.filter((m) => m.role === "user").length;
       // The server ends the round when everything is said (and, in a later round, its new turn answered).
       if (reply.finished || turns >= MAX_TURNS) finish(list, all);
@@ -423,8 +428,8 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
           {tasks.length > 0 ? (
             <ol className="tk-tasks">
               {tasks.map((t, i) => (
-                <li key={t} className={done.includes(i) ? "ok" : ""}>
-                  <i aria-hidden>{done.includes(i) ? "✓" : i + 1}</i>
+                <li key={t} className={done.includes(i) ? "ok" : skipped.includes(i) ? "gone" : ""}>
+                  <i aria-hidden>{done.includes(i) ? "✓" : skipped.includes(i) ? "–" : i + 1}</i>
                   {t}
                 </li>
               ))}
@@ -532,8 +537,8 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
           {tasks.length > 0 && (
             <ol className="tk-tasks tk-result">
               {tasks.map((t, i) => (
-                <li key={t} className={done.includes(i) ? "ok" : ""}>
-                  <i aria-hidden>{done.includes(i) ? "✓" : ""}</i>
+                <li key={t} className={done.includes(i) ? "ok" : skipped.includes(i) ? "gone" : ""}>
+                  <i aria-hidden>{done.includes(i) ? "✓" : skipped.includes(i) ? "–" : ""}</i>
                   {t}
                 </li>
               ))}
@@ -644,13 +649,13 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
                 <>
                   <span className="tk-pips" aria-label={`任务 ${done.length}/${tasks.length}`}>
                     {tasks.map((t, i) => (
-                      <i key={t} className={done.includes(i) ? "ok" : i === todo ? "now" : ""} />
+                      <i key={t} className={done.includes(i) ? "ok" : skipped.includes(i) ? "gone" : i === todo ? "now" : ""} />
                     ))}
                   </span>
                   <b key={todo}>{todo >= 0 ? tasks[todo] : (twist?.zh ?? "")}</b>
                 </>
               )}
-              <button className="text-btn" onClick={() => finish(messages, tasks.length > 0 && done.length >= tasks.length)} disabled={!!busy}>
+              <button className="text-btn" onClick={() => finish(messages, tasks.length > 0 && done.length > 0 && done.length + skipped.length >= tasks.length)} disabled={!!busy}>
                 结束
               </button>
             </div>
