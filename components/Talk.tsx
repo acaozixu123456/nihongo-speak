@@ -9,12 +9,17 @@ import { closeness, sfx, verdict } from "@/lib/client/fx";
 import { npc } from "@/lib/client/game";
 import { play, stop, ttsUrl, unlock } from "@/lib/client/player";
 import { transcribe } from "@/lib/client/recorder";
+import { useHydrated } from "@/lib/client/hydrated";
 import {
+  addCards,
   knownTags,
   recordFeedback,
   recordPoints,
   recordSpeech,
+  recordTalkFixes,
+  recordTalkRound,
   recordTalkTurn,
+  talkLevel,
   useProgress,
   wavSeconds,
 } from "@/lib/client/progress";
@@ -24,7 +29,26 @@ import FeedbackCard, { Star } from "./FeedbackCard";
 import Note from "./Note";
 
 type Message = Turn & { zh?: string };
-type Plan = { tasks: string[]; twist?: { zh: string; ja: string } };
+type Twist = { zh: string; ja: string };
+type Plan = { tasks: string[]; twist?: Twist };
+// A talk left in the middle (the phone locked, another tab opened), kept on the phone to go on with.
+type Kept = { id: string; round: number; twist?: Twist; messages: Message[]; done: number[]; notes: Record<number, TurnCheck>; at: number };
+const LIVE = "nihongo-speak:talk-live";
+const KEEP_MS = 12 * 3600 * 1000;
+const twistKey = (id: string) => `nihongo-speak:talk-twist:${id}`;
+const stored = <T,>(key: string): T | null => {
+  try {
+    return JSON.parse(localStorage.getItem(key) ?? "null") as T | null;
+  } catch {
+    return null;
+  }
+};
+const store = (key: string, v: unknown) => {
+  try {
+    if (v === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, JSON.stringify(v));
+  } catch {}
+};
 type Phase = "brief" | "live" | "end";
 type Reply = { ja: string; zh: string; finished: boolean; done: number[] };
 
@@ -50,7 +74,9 @@ async function post<T>(url: string, body: unknown): Promise<T> {
 
 // The scene's conversation, as a small job to get done: three things to get said (ticked off as the
 // partner hears them), help that starts with the first words only, and when the talk is over the
-// lines that came out wrong are said again before a second round with one new turn in it.
+// lines that came out wrong are said again. Each scene is a ladder kept in the progress: the second
+// round brings the scene's own twist, every later one a new twist and a partner who asks a little more;
+// the lines corrected go into the review and are recalled from their Chinese before the next round.
 export default function Talk({ scenario, active }: { scenario: Scenario; active: boolean }) {
   const [phase, setPhase] = useState<Phase>("brief");
   const [round, setRound] = useState(1);
@@ -75,6 +101,15 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
   const [error, setError] = useState("");
   const bottom = useRef<HTMLDivElement>(null);
   const progress = useProgress();
+  const hydrated = useHydrated();
+  const sp = progress.scenarios[scenario.id];
+  // The round that comes next on this scene's ladder.
+  const level = hydrated ? talkLevel(progress, scenario.id) : 1;
+  const [nowTwist, setNowTwist] = useState<Twist | undefined>();
+  const [fresh, setFresh] = useState<(Twist & { level: number }) | null>(null);
+  const [twisting, setTwisting] = useState(false);
+  const [recalled, setRecalled] = useState<Set<number>>(new Set());
+  const restored = useRef<Record<number, TurnCheck>>({});
 
   // A scene written before scenes had tasks is given some the first time its talk is opened.
   const own = scenario.talk.tasks?.length ? { tasks: scenario.talk.tasks, twist: scenario.talk.twist } : null;
@@ -97,7 +132,32 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
   }, [active, scenario.id]);
   const talk = useMemo(() => (plan ? { ...scenario.talk, tasks: plan.tasks, twist: plan.twist } : scenario.talk), [scenario.talk, plan]);
   const tasks = plan?.tasks ?? [];
-  const twist = plan?.twist;
+  // The next round's twist: none the first time, the scene's own the second, then one written for the round.
+  const upTwist = level < 2 ? undefined : level === 2 ? plan?.twist : fresh?.level === level ? fresh : undefined;
+  const twist = phase === "live" ? nowTwist : upTwist;
+  useEffect(() => {
+    if (!active || !hydrated || !plan || level < 3 || fresh?.level === level || twisting) return;
+    const kept = stored<Twist & { level: number }>(twistKey(scenario.id));
+    if (kept?.level === level && kept.zh && kept.ja) {
+      setFresh(kept);
+      return;
+    }
+    let live = true;
+    setTwisting(true);
+    post<Twist>("/api/chat", { scenarioId: scenario.id, talk: scenario.talk, history: [], mode: "twist", round: level, past: sp?.twists ?? [] })
+      .then((t) => {
+        const made = { ...t, level };
+        store(twistKey(scenario.id), made);
+        if (live) setFresh(made);
+      })
+      // No new twist this time: the scene's own again rather than no round at all.
+      .catch(() => live && plan.twist && setFresh({ ...plan.twist, level }))
+      .finally(() => live && setTwisting(false));
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, hydrated, plan, level, scenario.id]);
   const card = { p: progress, voice: talk.aiVoice, scenarioId: scenario.id };
 
   useEffect(() => {
@@ -116,6 +176,26 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
     [],
   );
 
+  // Back on a talk that was left in the middle: it goes on from where it stopped.
+  useEffect(() => {
+    if (!hydrated) return;
+    const k = stored<Kept>(LIVE);
+    if (!k || k.id !== scenario.id || Date.now() - k.at > KEEP_MS || !k.messages?.some((m) => m.role === "user")) return;
+    restored.current = k.notes ?? {};
+    setRound(k.round);
+    setNowTwist(k.twist);
+    setMessages(k.messages);
+    setDone(k.done ?? []);
+    setNotes(k.notes ?? {});
+    setSeen(new Set(k.messages.map((_, i) => i)));
+    setPhase("live");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, scenario.id]);
+  useEffect(() => {
+    if (phase !== "live" || !messages.some((m) => m.role === "user")) return;
+    store(LIVE, { id: scenario.id, round, twist: nowTwist, messages, done, notes, at: Date.now() } satisfies Kept);
+  }, [phase, messages, done, notes, round, nowTwist, scenario.id]);
+
   const history = (list: Message[]): Turn[] => list.map(({ role, text }) => ({ role, text }));
   const say = (text: string) => (here.current ? play(ttsUrl(text, talk.aiVoice), 1).catch(() => {}) : undefined);
   const reveal = (i: number) => setSeen((prev) => (prev.has(i) ? prev : new Set(prev).add(i)));
@@ -129,11 +209,15 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
   }
   const todo = tasks.findIndex((_, i) => !done.includes(i));
 
-  function start(n = 1) {
+  function start() {
     unlock();
     run.current++;
+    store(LIVE, null);
+    restored.current = {};
     const first: Message = { role: "assistant", text: talk.opening.ja, zh: talk.opening.zh };
-    setRound(n);
+    setRound(level);
+    setNowTwist(upTwist);
+    saved.current = -1;
     setPhase("live");
     setMessages([first]);
     setDone([]);
@@ -153,6 +237,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
   // The round is over: it counts as talked through, and the whole of it goes to the teacher's page.
   function finish(list: Message[], all: boolean) {
     setHintOpen(false);
+    store(LIVE, null);
     if (!list.some((m) => m.role === "user")) {
       stop();
       setPhase("brief");
@@ -161,6 +246,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
     }
     setPhase("end");
     recordFeedback(scenario.id);
+    recordTalkRound(scenario.id, { all, twist: nowTwist?.zh });
     if (all) setTimeout(() => sfx("win"), 600);
     const id = run.current;
     setReviewing(true);
@@ -182,7 +268,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
     setHintOpen(false);
     setBusy("ai");
     try {
-      const reply = await post<Reply>("/api/chat", { scenarioId: scenario.id, talk, history: history(next), round, done });
+      const reply = await post<Reply>("/api/chat", { scenarioId: scenario.id, talk, history: history(next), round, done, twist: nowTwist });
       if (run.current !== id) return;
       const list = [...next, { role: "assistant" as const, text: reply.ja, zh: reply.zh }];
       setMessages(list);
@@ -234,6 +320,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
           history: history(messages),
           mode: "hint",
           round,
+          twist: nowTwist,
           ...(want ? { wantZh: want } : todo >= 0 ? { todo } : {}),
         }),
       );
@@ -261,7 +348,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
         .map((m, i) => ({ said: m.text, note: m.role === "user" ? notes[i] : undefined }))
         .filter((x) => x.note && x.note.verdict !== "good" && x.note.better)
         .slice(0, REDO_MAX)
-        .map((x) => ({ said: x.said, better: x.note!.better, kana: x.note!.better_kana ?? "" })),
+        .map((x) => ({ said: x.said, better: x.note!.better, kana: x.note!.better_kana ?? "", zh: x.note!.better_zh ?? "" })),
     [messages, notes],
   );
   const again = phase === "end" ? redo[redoAt] : undefined;
@@ -275,6 +362,19 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
     return () => clearTimeout(t);
   }, [phase, round]);
   const pending = phase === "end" && !waited && messages.some((m, i) => m.role === "user" && !notes[i]);
+
+  // Once every line has its check, the corrected ones are kept: asked again in the review from tomorrow,
+  // and shown (in Chinese, to be said from memory) before this scene's next round.
+  const saved = useRef(-1);
+  useEffect(() => {
+    if (phase !== "end" || pending || saved.current === run.current) return;
+    saved.current = run.current;
+    const fixes = redo.filter((x, i) => x.zh && redo.findIndex((y) => y.better === x.better) === i).map((x) => ({ ja: x.better, zh: x.zh }));
+    if (!fixes.length) return;
+    recordTalkFixes(scenario.id, fixes);
+    addCards(fixes.map((f) => ({ ...f, voice: talk.aiVoice, scenarioId: scenario.id })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, pending, redo]);
 
   async function onRedo(wav: Blob) {
     if (!again) return;
@@ -314,7 +414,11 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
         <div className="card tk-brief">
           <div className="tk-who">
             {who}
-            {round > 1 && twist && phase === "live" && <span className="tk-round">第 {round} 遍 · {twist.zh}</span>}
+            {(phase === "live" ? round : level) > 1 && (
+              <span className="tk-round">
+                第 {phase === "live" ? round : level} 遍{twist ? ` · ${twist.zh}` : ""}
+              </span>
+            )}
           </div>
           {tasks.length > 0 ? (
             <ol className="tk-tasks">
@@ -329,6 +433,26 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
             <Note wait text="准备任务…" />
           ) : (
             <div className="tk-goal">{talk.goalZh}</div>
+          )}
+          {phase === "brief" && twisting && <Note wait text="准备这一遍…" />}
+          {phase === "brief" && hydrated && !!sp?.fixes?.length && (
+            <div className="tk-recall">
+              <div className="label">上次改的，先说说看</div>
+              {sp.fixes.map((f, i) => (
+                <button
+                  key={f.ja}
+                  className={recalled.has(i) ? "on" : ""}
+                  onClick={() => {
+                    unlock();
+                    setRecalled((prev) => new Set(prev).add(i));
+                    say(f.ja);
+                  }}
+                >
+                  <span>{f.zh}</span>
+                  {recalled.has(i) && <b className="ja">{f.ja}</b>}
+                </button>
+              ))}
+            </div>
           )}
         </div>
       )}
@@ -361,6 +485,8 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
                 talk={talk}
                 history={history(messages.slice(0, i + 1))}
                 voice={talk.aiVoice}
+                given={restored.current[i]}
+                open={phase === "end"}
                 onResult={(c) => setNotes((prev) => (prev[i] === c ? prev : { ...prev, [i]: c }))}
               />
             </div>
@@ -443,11 +569,48 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
           ) : (
             <>
               {(reviewing || pending) && <Note wait text="老师在看这段对话…" />}
-              {feedback && <FeedbackCard bare feedback={feedback} area="scene" title={scenario.titleZh} />}
+              {feedback && (
+                <FeedbackCard bare feedback={feedback} area="scene" title={scenario.titleZh}>
+                  <div className="card tk-review">
+                    <div className="label">老师的点评</div>
+                    <p className="tk-rv-good">
+                      <i aria-hidden>✓</i>
+                      {feedback.overall_zh}
+                    </p>
+                    {feedback.fix.better ? (
+                      <div className="tk-rv-fix">
+                        <p>
+                          <i aria-hidden>!</i>
+                          {feedback.focus_zh}
+                        </p>
+                        {feedback.fix.you_said && <div className="tk-said">{feedback.fix.you_said}</div>}
+                        <button className="tk-rv-line ja" aria-label="听这句" onClick={() => { unlock(); say(feedback.fix.better); }}>
+                          {feedback.fix.better}
+                        </button>
+                        {feedback.fix.zh && <div className="zh">{feedback.fix.zh}</div>}
+                        {feedback.fix.why_zh && feedback.fix.why_zh !== feedback.focus_zh && <div className="small-text">{feedback.fix.why_zh}</div>}
+                        {feedback.fix.zh && <Star {...card} ja={feedback.fix.better} zh={feedback.fix.zh} />}
+                      </div>
+                    ) : (
+                      feedback.focus_zh && <p className="tk-rv-next">{feedback.focus_zh}</p>
+                    )}
+                    {feedback.phrases[0] && (
+                      <div className="tk-rv-keep">
+                        <div className="label">记住这句</div>
+                        <button className="tk-rv-line ja" aria-label="听这句" onClick={() => { unlock(); say(feedback.phrases[0].ja); }}>
+                          {feedback.phrases[0].ja}
+                        </button>
+                        <div className="zh">{feedback.phrases[0].zh}</div>
+                        <Star {...card} ja={feedback.phrases[0].ja} zh={feedback.phrases[0].zh} reading={feedback.phrases[0].reading} />
+                      </div>
+                    )}
+                  </div>
+                </FeedbackCard>
+              )}
               <div className="tk-go" hidden={pending}>
-                <button className="primary" onClick={() => start(round + 1)}>
+                <button className="primary" onClick={() => start()} disabled={twisting}>
                   再来一遍
-                  {twist && <small>这次：{twist.zh}</small>}
+                  <small>第 {level} 遍{upTwist ? `：${upTwist.zh}` : ""}</small>
                 </button>
                 <Link href="/scenes" className="btn">返回</Link>
               </div>
@@ -461,7 +624,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
 
       {active && phase === "brief" && (
         <div className="sticky-cta">
-          <button className="primary" onClick={() => start(1)} disabled={planning}>开始对话</button>
+          <button className="primary" onClick={() => start()} disabled={planning || twisting || !hydrated}>开始对话</button>
         </div>
       )}
 
@@ -484,7 +647,7 @@ export default function Talk({ scenario, active }: { scenario: Scenario; active:
                       <i key={t} className={done.includes(i) ? "ok" : i === todo ? "now" : ""} />
                     ))}
                   </span>
-                  <b key={todo}>{todo >= 0 ? tasks[todo] : (twist && round > 1 ? twist.zh : "")}</b>
+                  <b key={todo}>{todo >= 0 ? tasks[todo] : (twist?.zh ?? "")}</b>
                 </>
               )}
               <button className="text-btn" onClick={() => finish(messages, tasks.length > 0 && done.length >= tasks.length)} disabled={!!busy}>

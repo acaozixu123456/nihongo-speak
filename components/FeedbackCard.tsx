@@ -30,7 +30,7 @@ export default function FeedbackCard({
   feedback: Feedback;
   area: "call" | "scene";
   title: string;
-  // Only the link, for a page that has its own ending around it.
+  // Nothing of its own (the page shows the review itself, as children): only the note for the 先生 page is kept.
   bare?: boolean;
   children?: React.ReactNode;
 }) {
@@ -57,7 +57,7 @@ export default function FeedbackCard({
       <i>›</i>
     </Link>
   );
-  if (bare) return link;
+  if (bare) return <>{children}</>;
   return (
     <div className="fb-done">
       <div className="fb-done-t">结束了，辛苦了</div>

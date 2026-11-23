@@ -228,6 +228,21 @@ main:has(.tk-now) { padding-bottom: calc(env(safe-area-inset-bottom) + 150px); }
 .tk-better.won { color: var(--ok-ink); }
 .tk-better em { display: inline-grid; place-items: center; width: 24px; height: 24px; margin-left: 8px; border-radius: 50%; background: var(--ok); color: #fff; font-style: normal; font-size: 14px; vertical-align: 2px; animation: tk-pop 0.4s cubic-bezier(.2, .8, .3, 1.4) both; }
 .tk-redo .text-btn { display: block; margin-left: auto; padding: 4px 0; font-size: 13px; }
+.tk-recall { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line, #e6e0d4); display: grid; gap: 8px; }
+.tk-recall button { display: block; width: 100%; text-align: left; padding: 10px 12px; border: none; border-radius: 12px; background: var(--soft); color: var(--text); font-size: 15px; cursor: pointer; }
+.tk-recall button b { display: block; margin-top: 4px; font-size: 18px; font-weight: 700; color: var(--good); }
+.tk-review { margin: 14px 0; padding: 16px 18px; }
+.tk-review p { display: flex; gap: 10px; margin: 8px 0 0; font-size: 15px; line-height: 1.6; }
+.tk-review p i { flex: none; width: 22px; height: 22px; margin-top: 1px; display: grid; place-items: center; border-radius: 50%; font-style: normal; font-size: 13px; font-weight: 700; color: #fff; background: var(--good); }
+.tk-rv-fix p i { background: var(--accent); }
+.tk-rv-fix, .tk-rv-keep { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line, #e6e0d4); }
+.tk-rv-fix .tk-said { margin: 10px 0 2px 32px; }
+.tk-rv-line { display: block; width: 100%; text-align: left; margin-top: 6px; padding: 0; border: none; background: none; color: var(--text); font-size: 20px; font-weight: 700; line-height: 1.5; cursor: pointer; }
+.tk-rv-fix .tk-rv-line, .tk-rv-fix .zh, .tk-rv-fix .small-text, .tk-rv-fix .star { margin-left: 32px; width: auto; }
+.tk-review .zh { margin-top: 2px; font-size: 13px; color: var(--muted); }
+.tk-review .star { margin-top: 8px; }
+.tk-rv-next { color: var(--muted); }
+.sp-kata + .sp-scene { margin-top: 14px; }
 .tk-go { display: flex; gap: 10px; align-items: stretch; margin-top: 16px; }
 .tk-go[hidden] { display: none; }
 .tk-go .primary { flex: 1; padding: 11px 16px; font-size: 16px; line-height: 1.3; }

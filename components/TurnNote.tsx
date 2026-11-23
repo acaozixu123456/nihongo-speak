@@ -19,22 +19,30 @@ export default function TurnNote({
   history,
   voice,
   onResult,
+  given,
+  open,
 }: {
   scenarioId: string;
   talk: Scenario["talk"];
   history: Turn[];
   voice: string;
   onResult?: (check: TurnCheck) => void;
+  // A check made before the page was left: shown as it is, not asked for again.
+  given?: TurnCheck;
+  // The talk is over: the why is shown without a tap.
+  open?: boolean;
 }) {
   const p = useProgress();
   // Fixed when the line is said, so later progress changes don't ask again.
   const [known] = useState(() => knownTags(p));
   const [why, setWhy] = useState(false);
   const body = { kind: "turn", scenarioId, talk, history, known };
-  const { data, error, retry } = useCoach<TurnCheck>(body);
+  const asked = useCoach<TurnCheck>(given ? null : body);
+  const { error, retry } = asked;
+  const data = given ?? asked.data;
 
   useEffect(() => {
-    if (!data) return;
+    if (!data || given) return;
     onResult?.(data);
     const key = JSON.stringify([scenarioId, history]);
     if (recorded.has(key)) return;
@@ -69,7 +77,7 @@ export default function TurnNote({
         </button>
         <button className="tn-why" aria-label="为什么" aria-expanded={why} onClick={() => setWhy(!why)}>?</button>
       </div>
-      {why && <div className="small-text">{data.why_zh}</div>}
+      {(why || open) && <div className="small-text">{data.why_zh}</div>}
     </div>
   );
 }

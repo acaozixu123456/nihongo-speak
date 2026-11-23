@@ -20,6 +20,12 @@ export type ScenarioProgress = {
   listened?: boolean;
   shadow?: Record<number, number>; // line index -> best score
   talked?: number; // conversations finished with feedback
+  // 会話 as a ladder: rounds in which every task got said. The next round is cleared + 1: the second
+  // brings the scene's own twist, later ones a new twist each time and a partner who asks more.
+  cleared?: number;
+  talkAt?: number; // when the last round ended (ms)
+  twists?: string[]; // the twists already met (their Chinese), so the next one is different
+  fixes?: { ja: string; zh: string }[]; // last round's corrected lines, recalled before the next round
 };
 
 export type XpKind = "scene" | "diary" | "review" | "quick" | "bonus";
@@ -312,7 +318,17 @@ export function merge(a: Progress, b: Progress): Progress {
     const o = scenarios[id] ?? {};
     const shadow: Record<number, number> = { ...o.shadow };
     for (const [line, score] of Object.entries(s.shadow ?? {})) shadow[+line] = max(shadow[+line], score);
-    scenarios[id] = { listened: o.listened || s.listened, shadow, talked: max(o.talked, s.talked) };
+    // The copy that talked last knows the twists met and the lines corrected.
+    const late = (s.talkAt ?? 0) > (o.talkAt ?? 0) ? s : o;
+    scenarios[id] = {
+      listened: o.listened || s.listened,
+      shadow,
+      talked: max(o.talked, s.talked),
+      ...((o.cleared || s.cleared) && { cleared: max(o.cleared, s.cleared) }),
+      ...(late.talkAt && { talkAt: late.talkAt }),
+      ...(late.twists && { twists: late.twists }),
+      ...(late.fixes && { fixes: late.fixes }),
+    };
   }
 
   const removedCards = [...new Set([...a.removedCards, ...b.removedCards])];
