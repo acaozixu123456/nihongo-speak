@@ -33,6 +33,7 @@ export function buildScenario(g: Generated, category: "work" | "life", id: strin
       goalZh: g.talk.goalZh,
       setup: g.talk.setup,
       opening: g.talk.opening,
+      ...(g.plan ?? {}),
     },
   };
 }
