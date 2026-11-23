@@ -663,6 +663,57 @@ export function recordFeedback(id: string) {
   write(gainXp(updateScenario(read(), id, (s) => ({ ...s, talked: (s.talked ?? 0) + 1 })), XP.feedback, "scene"));
 }
 
+// A round of a scene's conversation is over. all: every task got said, so the next round is one step
+// up. twist: the turn this round had.
+export function recordTalkRound(id: string, r: { all: boolean; twist?: string }) {
+  write(
+    updateScenario(read(), id, (s) => ({
+      ...s,
+      cleared: (s.cleared ?? 0) + (r.all ? 1 : 0),
+      talkAt: Date.now(),
+      twists: r.twist ? [...(s.twists ?? []).filter((t) => t !== r.twist), r.twist].slice(-8) : s.twists,
+      fixes: [],
+    })),
+  );
+}
+
+export function recordTalkFixes(id: string, fixes: { ja: string; zh: string }[]) {
+  write(updateScenario(read(), id, (s) => ({ ...s, fixes: fixes.slice(0, 3) })));
+}
+
+// Lines corrected in a conversation go into the review by themselves (asked again from tomorrow), unless
+// they are there already or were taken out before.
+export function addCards(cards: Omit<Card, "id" | "due" | "step">[]) {
+  const p = read();
+  const fresh = cards
+    .filter((c) => c.ja && c.zh)
+    .map((c) => ({ ...c, id: cardId(c.ja), due: addDays(dayKey(), 1), step: 0 }))
+    .filter((c, i, all) => !p.cards.some((x) => x.id === c.id) && !p.removedCards.includes(c.id) && all.findIndex((x) => x.id === c.id) === i);
+  if (fresh.length) write({ ...p, cards: [...p.cards, ...fresh] });
+}
+
+// Days before a scene's next round is worth more than doing it now: 1 after the first, then 3, 7, 14.
+const TALK_GAPS = [1, 3, 7, 14];
+export const talkLevel = (p: Progress, id: string) => (p.scenarios[id]?.cleared ?? 0) + 1;
+
+// The scene whose conversation to do now: one whose next round has come due (the longest overdue
+// first), else the first never talked through, else the one talked longest ago.
+export function talkNext(p: Progress): { scenario: Scenario; level: number; due: boolean } | null {
+  const all = allScenarios(p);
+  if (!all.length) return null;
+  const now = Date.now();
+  const of = (s: Scenario) => p.scenarios[s.id] ?? {};
+  const overdue = (s: Scenario) => {
+    const sp = of(s);
+    if (!sp.talkAt) return -1;
+    const gap = TALK_GAPS[Math.min((sp.cleared ?? 0) - 1, TALK_GAPS.length - 1)] ?? 0;
+    return (now - sp.talkAt) / 86400000 - gap;
+  };
+  const due = all.filter((s) => overdue(s) >= 0).sort((a, b) => overdue(b) - overdue(a))[0];
+  const pick = due ?? all.find((s) => !of(s).talkAt) ?? [...all].sort((a, b) => (of(a).talkAt ?? 0) - (of(b).talkAt ?? 0))[0];
+  return { scenario: pick, level: talkLevel(p, pick.id), due: !!due };
+}
+
 // ---- Phone-call characters ----
 
 // What a character learned about the learner in this call, for the next one.

@@ -2,14 +2,17 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import type { Scenario } from "@/content/scenarios";
 import { resolveTalk } from "@/lib/talk";
-import { hint, roleplayReply, scenePlan, type Turn } from "@/lib/claude";
+import { hint, roleplayReply, scenePlan, sceneTwist, type Turn } from "@/lib/claude";
 import { getJson, kvReady, setJson } from "@/lib/kv";
 
 type Body = {
   scenarioId: string;
   talk?: Scenario["talk"];
   history: Turn[];
-  mode?: "reply" | "hint" | "plan";
+  mode?: "reply" | "hint" | "plan" | "twist";
+  // The turn this round takes, when it isn't the scene's own (third round on), and for "twist" the ones already met.
+  twist?: { zh: string; ja: string };
+  past?: string[];
   wantZh?: string;
   // Which telling of the scene this is: from the second on, its twist comes in.
   round?: number;
@@ -38,11 +41,21 @@ export async function POST(request: Request) {
   if (!Array.isArray(body.history)) return NextResponse.json({ error: "bad request" }, { status: 400 });
   // A practice talk is a few dozen turns; anything longer is someone filling Haiku's context.
   body.history = body.history.slice(-40).map((t) => ({ role: t.role === "user" ? "user" : "assistant", text: String(t.text ?? "").slice(0, 1000) }));
-  const scenario = resolveTalk(body);
+  let scenario = resolveTalk(body);
   if (!scenario) return NextResponse.json({ error: "unknown scenario" }, { status: 404 });
-  const round = body.round === 2 || body.round === 3 ? body.round : body.round && body.round > 3 ? 3 : 1;
+  const round = typeof body.round === "number" && body.round >= 1 ? Math.min(9, Math.floor(body.round)) : 1;
+  const short = (v: unknown, max: number): v is string => typeof v === "string" && v.length > 0 && v.length <= max;
+  if (body.twist && short(body.twist.zh, 60) && short(body.twist.ja, 400)) {
+    scenario = { talk: { ...scenario.talk, twist: { zh: body.twist.zh, ja: body.twist.ja } } };
+  }
   try {
     if (body.mode === "plan") return NextResponse.json(await plan(scenario));
+    if (body.mode === "twist") {
+      const kept = await plan(scenario).catch(() => null);
+      const s = kept ? { talk: { ...scenario.talk, tasks: kept.tasks } } : scenario;
+      const past = [kept?.twist.zh, ...(Array.isArray(body.past) ? body.past : [])].filter((x): x is string => short(x, 60)).slice(-9);
+      return NextResponse.json(await sceneTwist(s, past, round));
+    }
     if (body.mode === "hint") {
       const todo = typeof body.todo === "number" ? scenario.talk.tasks?.[body.todo] : undefined;
       const wantZh = typeof body.wantZh === "string" ? body.wantZh.slice(0, 200) : undefined;

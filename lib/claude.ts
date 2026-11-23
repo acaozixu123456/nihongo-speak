@@ -80,7 +80,12 @@ ${twist}
 - 役になりきって、実際の日本の職場・生活と同じ自然な話し方で答える。教科書的すぎる表現は避ける。
 - 短く話す：1回の発話は1〜2文、合わせて45字まで。質問は1回に1つだけ。
 - まず学習者が言ったことに短く反応する（あいづち、復唱、一言の感想）。それから先へ進む。
-- 語彙と文法はN4〜N3。話し方は自然なまま（よく使う縮約形はそのまま使ってよい）。
+${
+  round >= 3
+    ? `- 学習者はこの場面に慣れてきた（${round}回目）。語彙と文法はN3、実際の相手と同じ自然な言い方で、1回の発話は60字まででよい。
+- 学習者の答えが一言だけなら、理由や詳しいことを一度だけ聞く（「どうしてですか」「具体的には？」など）。`
+    : "- 語彙と文法はN4〜N3。話し方は自然なまま（よく使う縮約形はそのまま使ってよい）。"
+}
 - 学習者の日本語が不自然でも、会話の中では直さない。意味が通じなければ、実際の相手のように聞き返す。
 - 学習者の発言は音声認識の結果なので、多少の誤認識は文脈から補って理解する。
 ${
@@ -225,6 +230,27 @@ export async function scenePlan(s: Talk) {
   const plan = planOf(p);
   if (!plan) throw new Error("AI 返回格式不对，请重试");
   return plan;
+}
+
+// From the third round on, a turn the scene hasn't taken before, so the same talk is never quite the same.
+const TwistSchema = z.object({ zh: z.string().describe(PLAN_TWIST.zh.replace("2回目に", "今回")), ja: z.string().describe(PLAN_TWIST.ja) });
+export async function sceneTwist(s: Talk, past: string[], round: number) {
+  const t = await haikuFirst(
+    TwistSchema,
+    `あなたは日本語教材の作者です。学習者は日本に住んで働いている中国人、レベルはJLPT N4〜N3。
+同じ場面のロールプレイを${round}回目に練習します。今回だけ起きる小さな展開を一つ決めてください。
+- 実際によくあること：条件が変わる、断られる、思っていない質問をされる、聞き返される、別の案を出される、など。
+- これまでの展開とは違う種類にする。回を重ねるほど、学習者が自分で考えて答える部分を少し増やす。
+- 場面の目的は変えない。学習者が言うことのリストはそのまま使う。`,
+    `場面：${s.talk.setup}
+相手役：${s.talk.aiRole}
+学習者の役：${s.talk.userRole}
+学習者が言うこと：${(s.talk.tasks ?? []).join("／") || s.talk.goalZh}
+これまでの展開：${past.join("／") || "（なし）"}`,
+    1000,
+  );
+  if (!t.zh.trim() || !t.ja.trim()) throw new Error("AI 返回格式不对，请重试");
+  return { zh: t.zh.trim().slice(0, 60), ja: t.ja.trim().slice(0, 400) };
 }
 
 // After a conversation: one thing to fix next time, with the line that shows it, and one phrase to
@@ -600,6 +626,7 @@ const TurnCheckSchema = z.object({
   verdict: z.enum(["good", "ok", "off"]).describe("good: この場面で自然。ok: 通じるが直したい所がある。off: 意味が通じない・場面に合わない"),
   better: z.string().describe("より自然な言い方（日本語、1文）。学習者が言おうとした内容のまま、直す所だけ直す。good なら空文字"),
   better_kana: z.string().describe("better の全文の読み（ひらがな）。good なら空文字"),
+  better_zh: z.string().describe("better の中国語訳（簡体字）。説明ではなく訳だけ。good なら空文字"),
   why_zh: z.string().describe("一言の説明（中国語、1文）。good なら褒める一言"),
   points: PointsSchema,
 });

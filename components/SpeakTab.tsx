@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { unlock } from "@/lib/client/player";
-import { nextStep, rehearsalToReport, useProgress } from "@/lib/client/progress";
+import { rehearsalToReport, talkNext, useProgress } from "@/lib/client/progress";
 import { useHydrated } from "@/lib/client/hydrated";
 import { current, heardToday, plan, quietPref, startRoute, useRoute } from "@/lib/client/route";
 import { retellBlocker, retellList } from "@/lib/client/retell-history";
@@ -12,7 +12,8 @@ import { RetellRow } from "./RetellRows";
 import { nextOnPath, readSeeds } from "@/lib/client/drill";
 import { dueHito, readHito } from "@/lib/client/hitokoto";
 
-// 話す: 型ドリル first (what the learner uses most: the next 型 on its list, one tap to start), then 私の一言
+// 話す: 型ドリル first (what the learner uses most: the next 型 on its list, one tap to start), then 场景对话
+// (the scene whose next round is due, one tap into its conversation), then 私の一言
 // (sentences from their own day, with the ones due today), then today's 三回話す; everything else (stories
 // to tell again, calls, scenes, 瞬間, 予行演習) folded under 更多.
 export default function SpeakTab() {
@@ -38,8 +39,8 @@ export default function SpeakTab() {
   const kata = hydrated ? nextOnPath(readSeeds()) : null;
   const mine = hydrated ? readHito() : [];
   const due = hydrated ? dueHito(mine).length : 0;
-  // The scene the learner is in the middle of (or the next one), opened at the step it has got to.
-  const scene = hydrated ? nextStep(p) : null;
+  // The scene whose conversation comes next: one whose next round has come due, else a new one.
+  const scene = hydrated ? talkNext(p) : null;
 
   return (
     <main className="page">
@@ -63,16 +64,25 @@ export default function SpeakTab() {
           </div>
         </section>
       )}
+      {hydrated && scene && (
+        <section className="lt-hero sp-hero sp-scene">
+          <div className="lt-body">
+            <div className="lt-tag">场景对话{scene.level > 1 ? ` · 第 ${scene.level} 遍` : ""}</div>
+            <div className="lt-title">{scene.scenario.title}</div>
+            <div className="lt-zh">{scene.scenario.titleZh}</div>
+            <Link href={`/s/${scene.scenario.id}?step=talk`} className="lt-go" onClick={unlock}>
+              ▶ 开始对话
+            </Link>
+            <Link href="/scenes" className="sp-due">全部场景</Link>
+          </div>
+        </section>
+      )}
       {hydrated && (
         <div className="pl-grid sp-mine">
           <Link href={due ? "/mine?go=1" : "/mine"} className="pl">
             <b>私の一言</b>
             {mine.length > 0 && <span>{mine[0].ja}</span>}
             {due > 0 ? <em className="new">{due}</em> : <em>＋</em>}
-          </Link>
-          <Link href={scene ? `/s/${scene.scenario.id}?step=${scene.step}` : "/scenes"} className="pl" onClick={unlock}>
-            <b>场景对话</b>
-            {scene && <span>{scene.scenario.titleZh}</span>}
           </Link>
         </div>
       )}
