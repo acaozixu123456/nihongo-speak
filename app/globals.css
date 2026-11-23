@@ -211,7 +211,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--text); }
 @keyframes tk-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .tk-pips { flex: none; display: flex; gap: 5px; }
 .tk-pips i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); transition: background 0.3s, transform 0.3s; }
-.tk-pips i.now { background: var(--accent-fill); }
+.tk-pips i.now { background: var(--text); }
 .tk-pips i.ok { background: var(--ok); transform: scale(1.15); }
 main:has(.tk-now) { padding-bottom: calc(env(safe-area-inset-bottom) + 150px); }
 
@@ -456,6 +456,10 @@ main.home { padding: 0 0 calc(env(safe-area-inset-bottom) + 100px); }
 .scene-where { font-size: 12px; color: var(--muted); letter-spacing: 0.06em; }
 /* The three steps read as one segmented control, not three buttons with one looking pressed. */
 .tabs.steps { margin: 4px 0 14px; padding: 3px; gap: 0; border-radius: 999px; background: var(--soft); top: 8px; }
+.tabs.steps { top: calc(env(safe-area-inset-top) + 8px); background: none; }
+.tabs.steps::after { content: ""; position: absolute; z-index: -1; inset: 0; border-radius: 999px; background: var(--soft); }
+/* What scrolls under the bar is covered up to the top of the screen (it showed around the pill and behind the clock). */
+.tabs.steps::before { content: ""; position: absolute; z-index: -1; left: -40px; right: -40px; top: -120px; bottom: -8px; background: linear-gradient(var(--bg) calc(100% - 8px), transparent); }
 .tabs.steps button { padding: 7px 2px; font-size: 14px; border: 0; background: none; color: var(--muted); }
 .tabs.steps button.on { background: var(--card); color: var(--text); font-weight: 500; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); }
 .tabs.steps button.did:not(.on) { color: var(--good); }
