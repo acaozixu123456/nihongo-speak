@@ -20,9 +20,12 @@ export type Heard = { runs: HeardRun[]; reaction: string; good: string; ms: [num
 const MODEL = "gemini-3.8-flash";
 // Pieces written down at once; a telling has up to a few dozen. 16 at once ran into 429s.
 const PARALLEL = 8;
-// Writing down what was heard needs no thinking; with the model's default it took ~8s a piece.
+// Writing down what was heard needs no thinking; with the model's default (medium) it took ~8s a piece,
+// and its thoughts count against maxOutputTokens. "low" is the least this model takes: it turns
+// "minimal" away, and for a week (found 2026-11-23 in the log) the setting was then dropped and every
+// recording was thought over at the default: 6 to 15 s for a 3 s clip, some never done in time.
 // Dropped (and not asked for again) if this model turns the setting away.
-let thinking: object | null = { thinkingLevel: "minimal" };
+let thinking: object | null = { thinkingLevel: "low" };
 
 type Reply = {
   candidates?: {
@@ -33,8 +36,8 @@ type Reply = {
 
 // temperature: 0 writes down the same thing every time, which is wanted, but for some recordings that
 // same thing is an answer that never ends (seen 2026-11-23: one 3 s clip timed out on every try while
-// others took 3 s), so a second try is given a little freedom. maxTokens: room for the answer; a short
-// clip given little room fails fast instead of running to the timeout.
+// others took 3 s), so a second try is given a little freedom. maxTokens: room for the thoughts and the
+// answer together; a short clip given little room fails fast instead of running to the timeout.
 type Gen = { temperature?: number; maxTokens?: number };
 
 async function ask<T>(parts: object[], schema: object, timeoutMs: number, gen: Gen = {}): Promise<T> {
