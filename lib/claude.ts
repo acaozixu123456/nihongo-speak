@@ -49,20 +49,50 @@ const parse: typeof client.messages.parse = (async (params: Parameters<typeof cl
 
 export type Turn = { role: "user" | "assistant"; text: string };
 
-export function roleplaySystem(s: Talk) {
+// The partner's side of a scene. With the scene's tasks it has something to steer towards and a point
+// where the talk is over (a talk with a goal teaches more than open chat); short turns with one
+// question each leave the speaking to the learner. From the second round on, the scene's twist goes in.
+export function roleplaySystem(s: Talk, round = 1) {
+  const tasks = s.talk.tasks ?? [];
+  const twist = round > 1 ? (s.talk.twist?.ja ?? "") : "";
   return `あなたは日本語の会話練習の相手です。学習者は日本に住んで働いている中国人で、日本語レベルはJLPT N4〜N3です。
 
 場面：${s.talk.setup}
 あなたの役：${s.talk.aiRole}
 学習者の役：${s.talk.userRole}
-
-ルール：
+${
+  tasks.length
+    ? `
+学習者がこの会話で言うこと（学習者の画面にも出ている。あなたは番号も中身も口にしない）：
+${tasks.map((t, i) => `${i + 1}. ${t}`).join("\n")}
+`
+    : ""
+}${
+    twist
+      ? `
+【今回は${round}回目】同じ場面をもう一度やっている。今回は次の展開を一つ入れる（学習者は予告を見ている）：
+${twist}
+会話の中ほどで自然に入れる。最初の一言では出さない。
+`
+      : ""
+  }
+話し方：
 - 役になりきって、実際の日本の職場・生活と同じ自然な話し方で答える。教科書的すぎる表現は避ける。
-- 1回の発話は1〜3文。学習者が話す番を多く作る。
-- 語彙と文法はN3程度に抑えるが、話し方は自然なまま（よく使う縮約形はそのまま使ってよい）。
+- 短く話す：1回の発話は1〜2文、合わせて45字まで。質問は1回に1つだけ。
+- まず学習者が言ったことに短く反応する（あいづち、復唱、一言の感想）。それから先へ進む。
+- 語彙と文法はN4〜N3。話し方は自然なまま（よく使う縮約形はそのまま使ってよい）。
 - 学習者の日本語が不自然でも、会話の中では直さない。意味が通じなければ、実際の相手のように聞き返す。
 - 学習者の発言は音声認識の結果なので、多少の誤認識は文脈から補って理解する。
-- 場面の目的が自然に終わったら、会話を締めくくる一言を言う。`;
+${
+  tasks.length
+    ? `
+進め方：
+- まだ言えていないことがあれば、学習者がそれを言いたくなる自然な一言や質問で水を向ける。学習者の代わりに言ってしまわない。
+- 順番は問わない。学習者が一度にいくつか言ってもよい。
+- 全部言えたら${twist ? "（今回の展開にも学習者が答えたら）" : ""}、新しい質問はせず、役として会話を締める一言を言い、finished を true にする。
+- 言えていないことが残っている間は finished にしない。ただし学習者の発話が8回に達したら、締めて finished を true にする。`
+    : "- 場面の目的が自然に終わったら、会話を締めくくる一言を言う。"
+}`;
 }
 
 function toMessages(history: Turn[]): Anthropic.MessageParam[] {
@@ -77,39 +107,52 @@ function checkStop(stop: string | null) {
   if (stop === "refusal") throw new Error("模型拒绝了这次请求，请换个说法再试");
 }
 
+// done comes first so the partner settles what has been said before deciding what to say next.
 const ReplySchema = z.object({
+  done: z
+    .array(z.number())
+    .describe(
+      "「学習者がこの会話で言うこと」のうち、ここまでの会話全体で済んだものの番号（1から）。学習者が日本語で言って相手に通じたら済み。文法や言葉が少し違っていてもよい。あなたが言っただけのこと、学習者がまだ触れていないことは入れない。リストが無い場面では空配列",
+    ),
   ja: z.string().describe("役としての日本語の返答"),
   zh: z.string().describe("返答の自然な中国語訳"),
   finished: z.boolean().describe("場面の会話が終わったら true"),
 });
 
-export async function roleplayReply(s: Talk, history: Turn[]) {
+export async function roleplayReply(s: Talk, history: Turn[], round = 1) {
   const res = await parse({
     model: MODEL,
     max_tokens: 2000,
-    system: roleplaySystem(s),
+    system: roleplaySystem(s, round),
     messages: toMessages(history),
     output_config: { format: zodOutputFormat(ReplySchema) },
   });
   checkStop(res.stop_reason);
   if (!res.parsed_output) throw new Error("AI 返回格式不对，请重试");
-  return res.parsed_output;
+  const r = res.parsed_output;
+  const n = s.talk.tasks?.length ?? 0;
+  const done = [...new Set(r.done.map((x) => Math.round(x) - 1).filter((i) => i >= 0 && i < n))].sort((a, b) => a - b);
+  return { ja: r.ja, zh: r.zh, finished: r.finished, done };
 }
 
+// Help in two steps: the first words to get going (the rest is still the learner's to find), the whole
+// line only when asked again. One line, short enough to say in one breath.
 const HintSchema = z.object({
-  suggestions: z
-    .array(z.object({ ja: z.string(), zh: z.string() }))
-    .describe("学習者が次に言えそうな日本語を2〜3案。短くて言いやすいものから"),
+  ja: z.string().describe("学習者が次に言う日本語。1文、30字以内、N4の語彙と文法。相手の最後の発話への返事として自然なもの"),
+  start: z.string().describe("ja の出だし。ja の先頭から最初の文節の切れ目まで、一字一句同じ（2〜7字）。例：ja「昨日はログイン画面を直しました。」→「昨日は」"),
+  zh: z.string().describe("ja の自然な中国語訳"),
 });
 
-export async function hint(s: Talk, history: Turn[], wantZh?: string) {
-  const ask = wantZh
-    ? `学習者は次にこう言いたい（中国語）：「${wantZh}」。この場面で自然な日本語の言い方を提案してください。`
-    : "学習者が次に何と言えばいいか詰まっています。この場面で自然な返答を提案してください。";
+export async function hint(s: Talk, history: Turn[], a: { wantZh?: string; todo?: string; round?: number } = {}) {
+  const ask = a.wantZh
+    ? `学習者は次にこう言いたい（中国語）：「${a.wantZh}」。この場面で自然な日本語の言い方を1つ。`
+    : a.todo
+      ? `学習者が次に何と言えばいいか詰まっています。まだ言えていないのは「${a.todo}」。相手の最後の発話に答えつつ、それを言う1文を。相手が別のことを聞いているなら、まずその質問への答えを。内容は場面に合う具体的なものを一つ決めて書く。`
+      : "学習者が次に何と言えばいいか詰まっています。この場面で自然な返答を1つ。";
   const res = await parse({
     model: MODEL,
     max_tokens: 2000,
-    system: `${roleplaySystem(s)}
+    system: `${roleplaySystem(s, a.round)}
 
 今は会話の外から、学習者のコーチとして手伝います。役としては答えません。`,
     messages: [
@@ -120,7 +163,46 @@ export async function hint(s: Talk, history: Turn[], wantZh?: string) {
   });
   checkStop(res.stop_reason);
   if (!res.parsed_output) throw new Error("AI 返回格式不对，请重试");
-  return res.parsed_output;
+  const h = res.parsed_output;
+  const ja = h.ja.trim();
+  // The opening must be the line's own first words: shown alone, then the line appears around it.
+  const start = h.start.trim().replace(/[…。、]+$/, "");
+  const ok = start.length >= 2 && start.length < ja.length && ja.startsWith(start);
+  return { ja, zh: h.zh, start: ok ? start : ja.slice(0, Math.min(4, Math.max(2, Math.floor(ja.length / 3)))) };
+}
+
+// A scene written before scenes had tasks (重来一次, kept on the phone): three things to get said and
+// the second round's turn, from its role-play settings.
+const PLAN_TASKS = "学習者がこの会話で言うことを3つ、会話が進む順に。それぞれ一つの発話で言えること（例：「说昨天做了什么」「约好修理时间」）。中国語（簡体字）、12字以内、動詞で始める";
+const PLAN_TWIST = {
+  zh: "2回目に起きる展開を学習者に予告する一言（中国語・簡体字、10字以内）。例：「想点的菜卖完了」「课长追问期限」",
+  ja: "その展開を相手役がどう入れるかの指示（日本語、1〜2文）。相手役が言うセリフの例を「」で入れる。難しすぎない、実際によくある展開にする",
+};
+const PlanSchema = z.object({
+  tasks: z.array(z.object({ zh: z.string() })).describe(PLAN_TASKS),
+  twist: z.object({ zh: z.string().describe(PLAN_TWIST.zh), ja: z.string().describe(PLAN_TWIST.ja) }),
+});
+
+const planOf = (p: { tasks: { zh: string }[]; twist: { zh: string; ja: string } }) => {
+  const tasks = p.tasks.map((t) => t.zh.trim()).filter(Boolean).slice(0, 3);
+  return tasks.length === 3 && p.twist.zh.trim() && p.twist.ja.trim() ? { tasks, twist: { zh: p.twist.zh.trim(), ja: p.twist.ja.trim() } } : null;
+};
+
+export async function scenePlan(s: Talk) {
+  const p = await haikuFirst(
+    PlanSchema,
+    `あなたは日本語教材の作者です。学習者は日本に住んで働いている中国人、レベルはJLPT N4〜N3。
+ロールプレイの設定を読んで、この会話で学習者が言うべきことと、2回目の練習で入れる小さな展開を決めてください。`,
+    `場面：${s.talk.setup}
+相手役：${s.talk.aiRole}
+学習者の役：${s.talk.userRole}
+目標：${s.talk.goalZh}
+相手の最初の一言：${s.talk.opening.ja}`,
+    1500,
+  );
+  const plan = planOf(p);
+  if (!plan) throw new Error("AI 返回格式不对，请重试");
+  return plan;
 }
 
 // After a conversation: one thing to fix next time, with the line that shows it, and one phrase to
@@ -213,10 +295,12 @@ const GeneratedSchema = z.object({
     goalZh: z.string().describe("ロールプレイで学習者が達成すること（中国語、1〜2文）"),
     setup: z.string().describe("ロールプレイの状況説明。AI がどう進めるかも含めて（日本語、2〜4文）"),
     opening: z.object({ ja: z.string(), zh: z.string() }).describe("AI の最初の一言"),
+    tasks: z.array(z.object({ zh: z.string() })).describe(PLAN_TASKS),
+    twist: z.object({ zh: z.string().describe(PLAN_TWIST.zh), ja: z.string().describe(PLAN_TWIST.ja) }),
   }),
 });
 
-export type Generated = z.infer<typeof GeneratedSchema>;
+export type Generated = z.infer<typeof GeneratedSchema> & { plan: { tasks: string[]; twist: { zh: string; ja: string } } | null };
 
 export type Photo = { mediaType: "image/jpeg" | "image/png" | "image/webp"; data: string };
 
@@ -247,7 +331,8 @@ export async function generateScenario(topic: string, category: "work" | "life",
   });
   checkStop(res.stop_reason);
   if (!res.parsed_output) throw new Error("AI 返回格式不对，请重试");
-  return res.parsed_output;
+  const g = res.parsed_output;
+  return { ...g, plan: planOf(g.talk) };
 }
 
 // ---- Judging one spoken answer (瞬间说 / 复习) ----
@@ -491,7 +576,8 @@ ${
 // 对话: a quiet note on each line the learner says, without breaking the conversation.
 const TurnCheckSchema = z.object({
   verdict: z.enum(["good", "ok", "off"]).describe("good: この場面で自然。ok: 通じるが直したい所がある。off: 意味が通じない・場面に合わない"),
-  better: z.string().describe("より自然な言い方（日本語、1文）。good なら空文字"),
+  better: z.string().describe("より自然な言い方（日本語、1文）。学習者が言おうとした内容のまま、直す所だけ直す。good なら空文字"),
+  better_kana: z.string().describe("better の全文の読み（ひらがな）。good なら空文字"),
   why_zh: z.string().describe("一言の説明（中国語、1文）。good なら褒める一言"),
   points: PointsSchema,
 });

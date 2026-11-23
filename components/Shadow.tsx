@@ -6,11 +6,16 @@ import { play, setRate, ttsUrl, unlock } from "@/lib/client/player";
 import { transcribe, type SttResult } from "@/lib/client/recorder";
 import { hasCard, recordShadow, recordSpeech, shadowTarget, toggleCard, useProgress, wavSeconds } from "@/lib/client/progress";
 import HoldButton from "./HoldButton";
-import { sfx, verdict } from "@/lib/client/fx";
+import { closeness, sfx, verdict } from "@/lib/client/fx";
+import { byChars, type Part } from "@/lib/say-match";
 import ShadowCoach from "./ShadowCoach";
 import { RatePicker } from "./Listen";
 
-type Attempt = { wavUrl: string; result: SttResult };
+// pron: the pronunciation score while the recogniser gave one (Azure, until 2026-11-16); since then, how
+// much of the line was heard (by its letters or its reading), with the parts not heard marked.
+type Attempt = { wavUrl: string; result: SttResult; pron: number; parts?: Part[] };
+
+const hira = (s: string) => s.normalize("NFKC").replace(/[ァ-ヶ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0x60));
 
 function tone(score: number) {
   return score >= 80 ? "good" : score >= 60 ? "warn" : "bad";
@@ -91,16 +96,16 @@ export default function Shadow({ scenario, active, onNext }: Props) {
         return;
       }
       const wavUrl = URL.createObjectURL(wav);
+      const heard = Math.max(closeness(result.text, line.ja), result.kana ? closeness(hira(result.kana), hira(line.kana)) : 0);
+      const pron = result.scores?.pron ?? Math.round(heard * 100);
+      const parts = !result.scores && pron < 80 ? byChars(line.ja, result.text) : undefined;
       setAttempts((prev) => {
         if (prev[index]) URL.revokeObjectURL(prev[index].wavUrl);
-        return { ...prev, [index]: { wavUrl, result } };
+        return { ...prev, [index]: { wavUrl, result, pron, parts } };
       });
       setPrevBest(best[index]);
-      if (result.scores) {
-        const pron = result.scores.pron;
-        setPassed(pron >= 80);
-        recordShadow(scenario.id, index, pron);
-      }
+      setPassed(pron >= 80);
+      recordShadow(scenario.id, index, pron);
       recordSpeech(wavSeconds(wav), result.scores?.pron);
     } catch (e) {
       setError(e instanceof Error ? e.message : "评分失败");
@@ -164,7 +169,13 @@ export default function Shadow({ scenario, active, onNext }: Props) {
                   {w.word}
                 </span>
               ))
-            : line.ja}
+            : attempt?.parts
+              ? attempt.parts.map((x, i) => (
+                  <span key={`${attempt.wavUrl}-${i}`} className={x.ok ? "" : "word bad"}>
+                    {x.t}
+                  </span>
+                ))
+              : line.ja}
         </div>
         <div className="kana">{line.kana}</div>
         {showZh && <div className="zh">{line.zh}</div>}
@@ -186,15 +197,12 @@ export default function Shadow({ scenario, active, onNext }: Props) {
 
       {attempt && (
         <div className="card">
-          {scores && (
-            <>
-              <Score key={attempt.wavUrl} value={scores.pron} best={prevBest} />
-              {passed && index < scenario.lines.length - 1 && (
-                <button className="primary next-cta" onClick={() => go(1)}>次へ →</button>
-              )}
-            </>
+          <Score key={attempt.wavUrl} value={attempt.pron} best={prevBest} />
+          {passed && index < scenario.lines.length - 1 && (
+            <button className="primary next-cta" onClick={() => go(1)}>次へ →</button>
           )}
-          <ShadowCoach ja={line.ja} kana={line.kana} result={attempt.result} />
+          {/* The coach reads pronunciation scores: with none, there is nothing for it to go on. */}
+          {scores && <ShadowCoach ja={line.ja} kana={line.kana} result={attempt.result} />}
         </div>
       )}
 

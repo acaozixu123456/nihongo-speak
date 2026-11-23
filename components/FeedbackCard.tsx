@@ -24,11 +24,14 @@ export default function FeedbackCard({
   feedback,
   area,
   title,
+  bare,
   children,
 }: {
   feedback: Feedback;
   area: "call" | "scene";
   title: string;
+  // Only the link, for a page that has its own ending around it.
+  bare?: boolean;
   children?: React.ReactNode;
 }) {
   const saved = useRef<Feedback | null>(null);
@@ -45,16 +48,20 @@ export default function FeedbackCard({
       ...(phrase && { lines: [{ ja: phrase.ja, zh: phrase.zh }] }),
     });
   }, [feedback, area, title]);
+  const link = (
+    <Link href={`/me#${area}`} className="to-sensei">
+      <span>
+        <b>老师的点评</b>
+        <small>{feedback.fix.better ? "1 处要改" : "这次没有要改的"}</small>
+      </span>
+      <i>›</i>
+    </Link>
+  );
+  if (bare) return link;
   return (
     <div className="fb-done">
       <div className="fb-done-t">结束了，辛苦了</div>
-      <Link href={`/me#${area}`} className="to-sensei">
-        <span>
-          <b>老师的点评</b>
-          <small>{feedback.fix.better ? "1 处要改" : "这次没有要改的"}</small>
-        </span>
-        <i>›</i>
-      </Link>
+      {link}
       {children && <div className="row">{children}</div>}
     </div>
   );

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { unlock } from "@/lib/client/player";
-import { rehearsalToReport, useProgress } from "@/lib/client/progress";
+import { nextStep, rehearsalToReport, useProgress } from "@/lib/client/progress";
 import { useHydrated } from "@/lib/client/hydrated";
 import { current, heardToday, plan, quietPref, startRoute, useRoute } from "@/lib/client/route";
 import { retellBlocker, retellList } from "@/lib/client/retell-history";
@@ -38,6 +38,8 @@ export default function SpeakTab() {
   const kata = hydrated ? nextOnPath(readSeeds()) : null;
   const mine = hydrated ? readHito() : [];
   const due = hydrated ? dueHito(mine).length : 0;
+  // The scene the learner is in the middle of (or the next one), opened at the step it has got to.
+  const scene = hydrated ? nextStep(p) : null;
 
   return (
     <main className="page">
@@ -67,6 +69,10 @@ export default function SpeakTab() {
             <b>私の一言</b>
             {mine.length > 0 && <span>{mine[0].ja}</span>}
             {due > 0 ? <em className="new">{due}</em> : <em>＋</em>}
+          </Link>
+          <Link href={scene ? `/s/${scene.scenario.id}?step=${scene.step}` : "/scenes"} className="pl" onClick={unlock}>
+            <b>场景对话</b>
+            {scene && <span>{scene.scenario.titleZh}</span>}
           </Link>
         </div>
       )}
@@ -109,7 +115,7 @@ export default function SpeakTab() {
             <b>打电话</b>
           </Link>
           <Link href="/scenes" className="pl">
-            <b>场景对话</b>
+            <b>全部场景</b>
           </Link>
           <Link href="/quick" className="pl">
             <b>马上说</b>

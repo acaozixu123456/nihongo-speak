@@ -22,9 +22,15 @@ export type Scenario = {
     goalZh: string;
     setup: string;
     opening: { ja: string; zh: string };
+    // What has to get said in the conversation, and the turn its second round takes
+    // (content/scene-missions.ts). A scene written before these existed has none: it is given some
+    // the first time it is talked through.
+    tasks?: string[];
+    twist?: { zh: string; ja: string };
   };
 };
 
+import { MISSIONS } from "./scene-missions";
 import { lifeScenes } from "./scenes-life";
 import { workScenes } from "./scenes-work";
 import { HD_MAN, HD_MAN_CALM, HD_WOMAN, HD_WOMAN_POLITE, MAN_2, MAN_3 } from "./voices";
@@ -543,7 +549,7 @@ const firstScenes: Scenario[] = [
 ];
 
 // The first six, then a wider set of everyday work and life scenes.
-export const scenarios: Scenario[] = [...firstScenes, ...workScenes, ...lifeScenes];
+export const scenarios: Scenario[] = [...firstScenes, ...workScenes, ...lifeScenes].map((s) => ({ ...s, talk: { ...s.talk, ...MISSIONS[s.id] } }));
 
 export function getScenario(id: string) {
   return scenarios.find((s) => s.id === id);
